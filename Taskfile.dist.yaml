@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - go build -o bin/agent ./cmd/agent/main.go
+    silent: false
+
+  run:
+    cmds:
+      - go run main.go
+    silent: false
