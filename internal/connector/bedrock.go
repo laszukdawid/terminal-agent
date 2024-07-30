@@ -13,48 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 )
 
-const modelId = "anthropic.claude-3-haiku-20240307-v1:0"
+const defaultBedrockModelId = "anthropic.claude-3-haiku-20240307-v1:0"
 
-type ClaudeResponseContent struct {
-	Responses []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-}
-
-type ClaudeResponse struct {
-	ID           string    `json:"id"`
-	Type         string    `json:"type"`
-	Role         string    `json:"role"`
-	Model        string    `json:"model"`
-	Content      []Content `json:"content"`
-	StopReason   string    `json:"stop_reason"`
-	StopSequence *string   `json:"stop_sequence"` // Using *string to allow null
-	Usage        Usage     `json:"usage"`
-}
-
-type Content struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-type Usage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
-}
-
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type ClaudeRequest struct {
-	Messages          []Message `json:"messages"`
-	AntrhopicVersion  string    `json:"anthropic_version"`
-	MaxTokensToSample int       `json:"max_tokens"`
-	Temperature       float64   `json:"temperature,omitempty"`
-	StopSequences     []string  `json:"stop_sequences,omitempty"`
-}
+// const modelId = "anthropic.claude-v2"
 
 type LlmClient struct {
 	BedrockRuntimeClient *bedrockruntime.Client
@@ -63,7 +24,6 @@ type LlmClient struct {
 // Invokes Anthropic Claude on Amazon Bedrock to run an inference using the input
 // provided in the request body.
 func (wrapper LlmClient) InvokeClaude(prompt string) (string, error) {
-	modelId := "anthropic.claude-v2"
 
 	// Anthropic Claude requires enclosing the prompt as follows:
 	enclosedPrompt := "Human: " + prompt + "\n\nAssistant:"
@@ -80,7 +40,7 @@ func (wrapper LlmClient) InvokeClaude(prompt string) (string, error) {
 	}
 
 	output, err := wrapper.BedrockRuntimeClient.InvokeModel(context.TODO(), &bedrockruntime.InvokeModelInput{
-		ModelId:     aws.String(modelId),
+		ModelId:     aws.String(defaultBedrockModelId),
 		ContentType: aws.String("application/json"),
 		Body:        body,
 	})
@@ -98,7 +58,7 @@ func (wrapper LlmClient) InvokeClaude(prompt string) (string, error) {
 	return "hello", nil
 }
 
-func AskBedrock(question string) {
+func AskBedrock(question string) string {
 
 	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
 	// sdkConfig, err := cloud.NewAwsConfig(context.Background())
@@ -106,7 +66,7 @@ func AskBedrock(question string) {
 	if err != nil {
 		fmt.Println("Couldn't load default configuration. Have you set up your AWS account?")
 		fmt.Println(err)
-		return
+		return ""
 	}
 
 	client := bedrockruntime.NewFromConfig(sdkConfig)
@@ -128,7 +88,7 @@ func AskBedrock(question string) {
 	}
 
 	result, err := client.InvokeModel(context.Background(), &bedrockruntime.InvokeModelInput{
-		ModelId:     aws.String(modelId),
+		ModelId:     aws.String(defaultBedrockModelId),
 		ContentType: aws.String("application/json"),
 		Body:        body,
 	})
@@ -138,7 +98,7 @@ func AskBedrock(question string) {
 		if strings.Contains(errMsg, "no such host") {
 			fmt.Printf("Error: The Bedrock service is not available in the selected region. Please double-check the service availability for your region at https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/.\n")
 		} else if strings.Contains(errMsg, "Could not resolve the foundation model") {
-			fmt.Printf("Error: Could not resolve the foundation model from model identifier: \"%v\". Please verify that the requested model exists and is accessible within the specified region.\n", modelId)
+			fmt.Printf("Error: Could not resolve the foundation model from model identifier: \"%v\". Please verify that the requested model exists and is accessible within the specified region.\n", defaultBedrockModelId)
 		} else {
 			fmt.Printf("Error: Couldn't invoke Anthropic Claude. Here's why: %v\n", err)
 		}
@@ -152,5 +112,5 @@ func AskBedrock(question string) {
 		log.Fatal("failed to unmarshal", err)
 	}
 	fmt.Println("Response from Anthropic Claude")
-	fmt.Println(response.Content[0].Text)
+	return response.Content[0].Text
 }

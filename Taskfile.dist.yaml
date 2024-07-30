@@ -8,5 +8,13 @@ tasks:
 
   run:
     cmds:
-      - go run main.go
+      - go run cmd/agent/main.go
     silent: false
+
+  # Testing models
+  test:anthropic:
+    cmds:
+      - go run cmd/agent/main.go ask 
+        --provider "perplexity" 
+        --model  "llama-3-8b-instruct"
+        --question "What is the meaning of life?"
