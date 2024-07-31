@@ -12,9 +12,16 @@ tasks:
     silent: false
 
   # Testing models
-  test:anthropic:
+  test:perplexity:
     cmds:
       - go run cmd/agent/main.go ask 
         --provider "perplexity" 
         --model  "llama-3-8b-instruct"
+        --question "What is the meaning of life?"
+        
+  test:bedrock:
+    cmds:
+      - go run cmd/agent/main.go ask 
+        --provider "bedrock" 
+        --model  "anthropic.claude-3-haiku-20240307-v1:0"
         --question "What is the meaning of life?"

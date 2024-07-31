@@ -61,9 +61,14 @@ type BedrockUsage struct {
 }
 
 type ClaudeRequest struct {
+	System            string    `json:"system"`
 	Messages          []Message `json:"messages"`
-	AntrhopicVersion  string    `json:"anthropic_version"`
+	AnthropicVersion  string    `json:"anthropic_version"`
 	MaxTokensToSample int       `json:"max_tokens"`
 	Temperature       float64   `json:"temperature,omitempty"`
 	StopSequences     []string  `json:"stop_sequences,omitempty"`
+}
+
+type LLMConnector interface {
+	Query(userPrompt *string, sysPrompt *string) (string, error)
 }

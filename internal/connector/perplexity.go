@@ -12,36 +12,56 @@ import (
 type PerplexityModelId string
 
 const (
-	url                            = "https://api.perplexity.ai/chat/completions"
-	llama3_8b    PerplexityModelId = "llama-3-8b-instruct"
-	llama3_ss32k PerplexityModelId = "llama-3-sonar-small-32k-online"
+	PerplexityProvider = "perplexity"
+
+	// Perplexity API endpoint
+	url = "https://api.perplexity.ai/chat/completions"
+
+	// Supported models: https://docs.perplexity.ai/docs/model-cards
+	llama3_ss128k_chat   PerplexityModelId = "llama-3.1-sonar-small-128k-chat"
+	llama3_ss128k_online PerplexityModelId = "llama-3.1-sonar-small-128k-online"
+	llama3_sl128k_chat   PerplexityModelId = "llama-3.1-sonar-large-128k-chat"
+	llama3_sl128k_online PerplexityModelId = "llama-3.1-sonar-large-128k-online"
 )
 
-type AnthropicRequest struct {
+type PerplexityRequest struct {
 	Model    PerplexityModelId `json:"model"`
 	Messages []Message         `json:"messages"`
 }
 
-// Ask sends a question to the Perplexity API
-// and returns the response.
-func AskPerplexity(question string, modelID *PerplexityModelId) string {
+type PerplexityConnector struct {
+	modelID PerplexityModelId
+	token   string
+}
+
+func NewPerplexityConnector(modelID *PerplexityModelId) *PerplexityConnector {
 	if modelID == nil || *modelID == "" {
-		model := llama3_ss32k
+		model := llama3_ss128k_online
 		modelID = &model
 	}
 
-	token := os.Getenv("PERPLEXITY_KEY")
+	connector := &PerplexityConnector{
+		modelID: *modelID,
+		token:   os.Getenv("PERPLEXITY_KEY"),
+	}
 
-	anthropicRequest := AnthropicRequest{
-		Model: *modelID,
+	return connector
+}
+
+// Ask sends a question to the Perplexity API
+// and returns the response.
+func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
+
+	anthropicRequest := PerplexityRequest{
+		Model: c.modelID,
 		Messages: []Message{
 			{
 				Role:    "system",
-				Content: "Be precise and concise.",
+				Content: *systemPrompt,
 			},
 			{
 				Role:    "user",
-				Content: question,
+				Content: *userPrompt,
 			},
 		},
 	}
@@ -49,28 +69,31 @@ func AskPerplexity(question string, modelID *PerplexityModelId) string {
 	payload, err := json.Marshal(anthropicRequest)
 
 	if err != nil {
-		fmt.Println(err)
-		return ""
+		return "", fmt.Errorf("failed to marshal request: %v", err)
 	}
 
 	req, _ := http.NewRequest("POST", url, bytes.NewReader(payload))
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.token))
 
 	res, err := http.DefaultClient.Do(req)
 
 	if err != nil {
-		fmt.Println(err)
-		return ""
+		return "", fmt.Errorf("failed to send request: %v", err)
 	}
 
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
 
-	s_body := string(body)
+	var response PerplexityResponse
+	err = json.Unmarshal(body, &response)
 
-	return s_body
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %v", err)
+	}
+
+	return response.Choices[0].Message.Content, nil
 
 }
