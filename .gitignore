@@ -1,1 +1,7 @@
+*.jsonl
+*.json
+
 bin/
+
+Taskfile.yaml
+.env

@@ -1,5 +1,8 @@
 version: '3'
 
+dotenv:
+  - .env
+
 tasks:
   build:
     cmds:
@@ -10,16 +13,24 @@ tasks:
     cmds:
       - go run cmd/agent/main.go
     silent: false
+  
+  run:ask:
+    vars:
+      ARGS: '{{.CLI_ARGS}}'
+    description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    cmds:
+      - go run cmd/agent/main.go ask --log --question "{{.ARGS}}"
+    silent: false
 
   # Testing models
-  test:perplexity:
+  test:model:perplexity:
     cmds:
       - go run cmd/agent/main.go ask 
         --provider "perplexity" 
         --model  "llama-3-8b-instruct"
         --question "What is the meaning of life?"
         
-  test:bedrock:
+  test:model:bedrock:
     cmds:
       - go run cmd/agent/main.go ask 
         --provider "bedrock" 
