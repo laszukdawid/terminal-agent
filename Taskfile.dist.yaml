@@ -3,11 +3,39 @@ version: '3'
 dotenv:
   - .env
 
+vars:
+  TEST_IMAGE_NAME: "terminal-test"
+  TEST_TIMEOUT: "5m"
+
 tasks:
   build:
     cmds:
       - go build -o bin/agent ./cmd/agent/main.go
     silent: false
+  
+  env:build:
+    description: Build the test environment
+    cmds:
+      - docker build -t {{.TEST_IMAGE_NAME}} .
+    silent: false
+
+  env:setup:
+    description: Setup the test environment
+    deps:
+      - env:build
+    cmds:
+      - docker container stop {{.TEST_IMAGE_NAME}} || true
+      - docker container rm {{.TEST_IMAGE_NAME}} || true
+      - docker run -d 
+        --volume $(pwd):/agent
+        --name {{.TEST_IMAGE_NAME}} {{.TEST_IMAGE_NAME}}
+        sh -c "while true; do sleep {{.TEST_TIMEOUT}}; done"
+    silent: false
+
+  env:access:
+    description: Access the test environment
+    cmds:
+      - docker exec -it {{.TEST_IMAGE_NAME}} sh
 
   run:
     cmds:
@@ -21,6 +49,18 @@ tasks:
     cmds:
       - go run cmd/agent/main.go ask --log --question "{{.ARGS}}"
     silent: false
+
+  # Tests
+  test:unit:
+    cmd: go test -v ./...
+  
+  test:integration:
+    # deps:
+    #   - env:setup
+    cmds:
+      - docker ps | grep {{.TEST_IMAGE_NAME}}
+      - docker exec {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./...
+      - docker stop {{.TEST_IMAGE_NAME}}
 
   # Testing models
   test:model:perplexity:
