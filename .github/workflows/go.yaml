@@ -26,10 +26,10 @@ jobs:
       run: curl -sL https://taskfile.dev/install.sh | sh
 
     - name: Build
-      run: task build
+      run: ./bin/task build
 
     - name: Unit Test
-      run: task test:unit
+      run: ./bin/task test:unit
 
     - name: Integration Test
-      run: task test:integration
+      run: ./bin/task test:integration
