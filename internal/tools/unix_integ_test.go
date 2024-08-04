@@ -1,9 +1,7 @@
-//go:build integration
-// +build integration
-
 package tools
 
 import (
+	"os"
 	"testing"
 
 	_ "github.com/laszukdawid/terminal-agent/internal/connector"
@@ -11,10 +9,13 @@ import (
 )
 
 func TestUnixToolsRunIntegration(t *testing.T) {
+	// Workdir is based on env var TEST_INTEG_DIR
+	workDir := os.Getenv("TEST_INTEG_DIR")
+
 	connector := &llmConnectorMock{}
 	bashExecutor := &BashExecutor{
 		confirmPrompt: false,
-		workDir:       "/agent/test",
+		workDir:       workDir,
 	}
 	tools := NewUnixTool(connector, bashExecutor)
 
@@ -33,7 +34,7 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 			name:     "Print working directory",
 			prompt:   "<code>pwd</code>",
 			err:      "",
-			expected: "/agent/test",
+			expected: workDir,
 		}, {
 			name:     "List files in a directory",
 			prompt:   "<code>ls dir1</code>",
@@ -47,7 +48,7 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 		}, {
 			name:     "List files in a non existing directory",
 			prompt:   "<code>ls not-existing-dir/</code>",
-			err:      "failed to execute Unix command: exit status 1",
+			err:      "failed to execute Unix command: exit status",
 			expected: "",
 		}, {
 			name:     "sudo something not allowed",

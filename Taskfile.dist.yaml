@@ -3,6 +3,9 @@ version: '3'
 dotenv:
   - .env
 
+env:
+  TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test/"
+
 vars:
   TEST_IMAGE_NAME: "terminal-test"
   TEST_TIMEOUT: "5m"
@@ -13,6 +16,21 @@ tasks:
       - go build -o bin/agent ./cmd/agent/main.go
     silent: false
   
+  # Application related
+  run:
+    cmds:
+      - go run cmd/agent/main.go
+    silent: false
+  
+  run:ask:
+    vars:
+      ARGS: '{{.CLI_ARGS}}'
+    description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    cmds:
+      - go run cmd/agent/main.go ask --log --question "{{.ARGS}}"
+    silent: false
+
+  # Environment related - mainly for testing
   env:build:
     description: Build the test environment
     cmds:
@@ -37,29 +55,25 @@ tasks:
     cmds:
       - docker exec -it {{.TEST_IMAGE_NAME}} sh
 
-  run:
-    cmds:
-      - go run cmd/agent/main.go
-    silent: false
-  
-  run:ask:
-    vars:
-      ARGS: '{{.CLI_ARGS}}'
-    description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
-    cmds:
-      - go run cmd/agent/main.go ask --log --question "{{.ARGS}}"
-    silent: false
-
   # Tests
   test:unit:
     cmd: go test -v ./...
   
   test:integration:
-    # deps:
-    #   - env:setup
+    env:
+      TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
+      # TEST_INTEG_DIR: /home/szakul/projects/terminal-agent/test
+    cmds:
+      - go test -v -tags=integration ./...
+
+  test:integration:env:
+    deps:
+      - env:setup
+    env:
+      TEST_INTEG_DIR: "/agent/test"
     cmds:
       - docker ps | grep {{.TEST_IMAGE_NAME}}
-      - docker exec {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./...
+      - docker exec --env TEST_INTEG_DIR=$TEST_INTEG_DIR {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./...
       - docker stop {{.TEST_IMAGE_NAME}}
 
   # Testing models
