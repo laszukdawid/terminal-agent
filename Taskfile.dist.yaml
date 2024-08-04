@@ -4,7 +4,7 @@ dotenv:
   - .env
 
 env:
-  TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test/"
+  TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
 
 vars:
   TEST_IMAGE_NAME: "terminal-test"
