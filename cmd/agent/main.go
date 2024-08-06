@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/laszukdawid/terminal-agent/internal/commands/ask"
+	"github.com/laszukdawid/terminal-agent/internal/commands/task"
+	u "github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 type exitCode int
@@ -22,6 +26,7 @@ func NewCommand() *cobra.Command {
 		Short: "Terminal Agent is a CLI tool to interact with the terminal",
 		Long:  `Terminal Agent is a CLI tool to interact with the terminal. It can be used to run commands, ask questions, and more.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			u.Logger.Debug("Running command", zap.Strings("args", args))
 			if len(args) == 0 {
 				cmd.Help()
 				// return exitNotOk
@@ -41,16 +46,23 @@ func main() {
 }
 
 func mainRun() exitCode {
+
+	logger := u.InitLogger()
+	defer logger.Sync()
+
 	// Define flags
 	cmd := NewCommand()
 	cmd.AddCommand(ask.NewQuestionCommand())
+	cmd.AddCommand(task.NewTaskCommand())
+
+	ctx := context.Background()
 
 	// Execute the command
-	if err := cmd.Execute(); err != nil {
-		err = fmt.Errorf("execution failed: %w", err)
-		fmt.Printf("Error: %v\n", err)
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		logger.Error("Command execution failed", zap.Error(err))
 		return exitNotOk
 	}
 
+	logger.Info("Command executed successfully")
 	return exitOk
 }

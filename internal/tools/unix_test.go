@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	_ "github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,6 +22,13 @@ func (m *mockBashExecutor) Exec(code string) (string, error) {
 	return "exec: " + code, nil
 }
 
+func TestMain(m *testing.M) {
+	logger := utils.InitLogger()
+	defer logger.Sync()
+
+	m.Run()
+}
+
 func TestUnixToolsRun(t *testing.T) {
 	connector := &llmConnectorMock{}
 	mockExecutor := &mockBashExecutor{}
@@ -35,55 +43,49 @@ func TestUnixToolsRun(t *testing.T) {
 		{
 			name:     "Valid command",
 			prompt:   "garbage",
-			err:      "no <code> tag found in the input",
+			err:      "no code object: no JSON objects found in the input",
 			expected: "",
 		},
 		{
 			name:     "Error from connector",
-			prompt:   "Something <code> but never finished",
-			err:      "no </code> tag found in the input",
+			prompt:   `Something { "code": but never finished`,
+			err:      "no code object",
 			expected: "",
 		},
 		{
 			name:     "Empty code",
-			prompt:   "<code></code>",
-			err:      "no Unix command found",
+			prompt:   "{ \"code\": \"\"}",
+			err:      "no code object found in the input",
 			expected: "",
 		},
 		{
 			name:     "Supported command",
-			prompt:   "<code>ls</code>",
+			prompt:   `{"code": "ls"}`,
 			err:      "",
 			expected: "exec: ls",
 		},
 		{
 			name:     "No files deletion for now",
-			prompt:   "<code>rm *</code>",
-			err:      "invalid Unix command found in the response",
+			prompt:   `{"code": "rm *"}`,
+			err:      "invalid unix command",
 			expected: "",
 		},
 		{
 			name:     "Supported command but contains 'sudo'",
-			prompt:   "<code>sudo rm -rf /</code>",
+			prompt:   `{"code": "sudo rm -rf /"}`,
 			err:      "command requires sudo which is not allowed",
 			expected: "",
 		},
 		{
 			name:     "Hidden sudo command",
-			prompt:   "<code>true && sudo rm -rf /</code>",
+			prompt:   `{"code": "true && sudo rm -rf /"}`,
 			err:      "command requires sudo which is not allowed",
 			expected: "",
 		},
 		{
 			name:     "Unsupported command in code",
-			prompt:   "<code>unsupported some garbage</code>",
-			err:      "invalid Unix command found in the response",
-			expected: "",
-		},
-		{
-			name:     "Code within code",
-			prompt:   "<code><code>execute something else</code></code>",
-			err:      "invalid Unix command found in the response",
+			prompt:   `{"code": "unsupported some garbage"}`,
+			err:      "invalid unix command",
 			expected: "",
 		},
 	}

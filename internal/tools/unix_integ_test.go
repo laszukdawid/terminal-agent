@@ -30,42 +30,42 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 	}{
 		{
 			name:     "List files",
-			prompt:   "<code>ls</code>",
+			prompt:   `{"code": "ls"}`,
 			err:      "",
 			expected: "bash_script.sh\ndir1\ndir2\ntext_file.txt",
 		}, {
 			name:     "Print working directory",
-			prompt:   "<code>pwd</code>",
+			prompt:   `{"code": "pwd"}`,
 			err:      "",
 			expected: workDir,
 		}, {
 			name:     "List files in a directory",
-			prompt:   "<code>ls dir1</code>",
+			prompt:   `{"code": "ls dir1"}`,
 			err:      "",
 			expected: "t1",
 		}, {
 			name:     "Read file",
-			prompt:   "<code>cat text_file.txt</code>",
+			prompt:   `{ "code": "cat text_file.txt"}`,
 			err:      "",
 			expected: "Here be by some text purely for testing",
 		}, {
 			name:     "List files in a non existing directory",
-			prompt:   "<code>ls not-existing-dir/</code>",
+			prompt:   `{"code": "ls not-existing-dir"}`,
 			err:      "failed to execute Unix command: exit status",
 			expected: "",
 		}, {
 			name:     "sudo something not allowed",
-			prompt:   "<code>sudo chmod 777 *</code>",
+			prompt:   `{ "code": "sudo chmod 777"}`,
 			err:      "command requires sudo which is not allowed",
 			expected: "",
 		}, {
 			name:     "Removing files is not supported",
-			prompt:   "<code>rm *</code>",
-			err:      "invalid Unix command found in the response",
+			prompt:   `{ "code": "rm *"}`,
+			err:      "invalid unix command",
 			expected: "",
 		}, {
 			name:     "Never allow deleting root",
-			prompt:   "<code>sudo rm -rf /</code>",
+			prompt:   `{"code": "sudo rm -rf /"}`,
 			err:      "not allowed",
 			expected: "",
 		},
