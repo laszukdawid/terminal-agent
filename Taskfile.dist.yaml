@@ -27,7 +27,18 @@ tasks:
       ARGS: '{{.CLI_ARGS}}'
     description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
-      - go run cmd/agent/main.go ask --log --question "{{.ARGS}}"
+      - go run cmd/agent/main.go ask --log --query "{{.ARGS}}"
+    silent: false
+
+  run:task:
+    vars:
+      ARGS: '{{.CLI_ARGS}}'
+    env:
+      PROVIDER: bedrock
+    description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    cmds:
+      # - go run cmd/agent/main.go task --log --provider $PROVIDER --query "{{.ARGS}}"
+      - go run cmd/agent/main.go task --provider $PROVIDER --query "{{.ARGS}}"
     silent: false
 
   # Environment related - mainly for testing

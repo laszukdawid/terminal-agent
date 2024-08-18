@@ -86,7 +86,7 @@ func (b *BashExecutor) Exec(code string) (string, error) {
 	// Gather cmd results
 	output, err := cmd.CombinedOutput()
 	strOutput := string(output)
-	fmt.Printf("Output: %s\n", strOutput)
+	// fmt.Printf("Output: %s\n", strOutput)
 	if err != nil {
 		return "", err
 	}

@@ -2,34 +2,53 @@ package connector
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	"github.com/laszukdawid/terminal-agent/internal/cloud"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
+	"github.com/laszukdawid/terminal-agent/internal/utils"
+	"go.uber.org/zap"
 )
 
 type BedrockModelID string
 
 const (
 	BedrockProvider = "bedrock"
+	ToolUse         = "tool_use"
 
 	ClaudeHaiku BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
 )
 
-// const modelId = "anthropic.claude-v2"
-
 type BedrockConnector struct {
 	client  *bedrockruntime.Client
 	modelID BedrockModelID
+	logger  zap.Logger
+
+	execTools map[string]tools.Tool
+	toolSpecs []types.ToolSpecification
 }
 
-func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
-	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
+func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
+	sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
 	// sdkConfig, err := cloud.NewAwsConfig(context.Background())
-	sdkConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-east-1"))
+	// sdkConfig, err := cloud.NewLoadDefaultConfig(context.Background(), config.WithRegion("us-east-1"))
+
+	// Define the input schema as a map
+	var toolSpecs []types.ToolSpecification
+	for _, tool := range execTools {
+		toolSpecs = append(toolSpecs, types.ToolSpecification{
+			Name:        aws.String(tool.Name()),
+			Description: aws.String(tool.Description()),
+			InputSchema: &types.ToolInputSchemaMemberJson{
+				Value: document.NewLazyDocument(tool.InputSchema()),
+			},
+		})
+	}
+
 	if err != nil {
 		fmt.Println("Couldn't load default configuration. Have you set up your AWS account?")
 		fmt.Println(err)
@@ -44,41 +63,160 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 	client := bedrockruntime.NewFromConfig(sdkConfig)
 
 	return &BedrockConnector{
-		client:  client,
-		modelID: *modelID,
+		client:    client,
+		modelID:   *modelID,
+		execTools: execTools,
+		toolSpecs: toolSpecs,
+		logger:    *utils.InitLogger(),
 	}
+}
+
+func (bc *BedrockConnector) queryBedrock(ctx context.Context, userPrompt *string, systemPrompt *string, toolConfig *types.ToolConfiguration) (*bedrockruntime.ConverseOutput, error) {
+	systemPromptContent := []types.SystemContentBlock{
+		&types.SystemContentBlockMemberText{Value: *systemPrompt},
+	}
+	userPromptContent := []types.ContentBlock{
+		&types.ContentBlockMemberText{Value: *userPrompt},
+	}
+
+	converseInput := &bedrockruntime.ConverseInput{
+		ModelId: (*string)(&bc.modelID),
+		System:  systemPromptContent,
+		Messages: []types.Message{
+			{Role: "user", Content: userPromptContent},
+		},
+	}
+
+	if toolConfig != nil {
+		converseInput.ToolConfig = toolConfig
+	}
+
+	converseOutput, err := bc.client.Converse(ctx, converseInput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+
+	// Only text output is supported
+	if converseOutput.Output == nil {
+		return nil, fmt.Errorf("model %s returned response is nil", bc.modelID)
+	}
+
+	if _, ok := converseOutput.Output.(*types.ConverseOutputMemberMessage); !ok {
+		return nil, fmt.Errorf("model %s returned unknown response type", bc.modelID)
+	}
+
+	return converseOutput, nil
 }
 
 func (bc *BedrockConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
 
-	request := ClaudeRequest{
-		System: *systemPrompt,
-		Messages: []Message{
-			{Role: "user", Content: *userPrompt}},
-		AnthropicVersion:  "bedrock-2023-05-31",
-		MaxTokensToSample: 200,
-	}
-
-	body, err := json.Marshal(request)
-	if err != nil {
-		log.Panicln("Couldn't marshal the request: ", err)
-	}
-
-	result, err := bc.client.InvokeModel(context.Background(), &bedrockruntime.InvokeModelInput{
-		ModelId:     (*string)(&bc.modelID),
-		ContentType: aws.String("application/json"),
-		Body:        body,
-	})
-
+	converseOutput, err := bc.queryBedrock(context.Background(), userPrompt, systemPrompt, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %v", err)
 	}
 
-	var response ClaudeResponse
-	err = json.Unmarshal(result.Body, &response)
+	// If converseOutput.stopReason ==
+	var response string
+	var msgResponse types.Message
 
-	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %v", err)
+	union := converseOutput.Output
+	if union == nil {
+		return "", fmt.Errorf("model %s returned response is nil", bc.modelID)
 	}
-	return response.Content[0].Text, nil
+
+	if _, ok := union.(*types.ConverseOutputMemberMessage); !ok {
+		return "", fmt.Errorf("model %s returned unknown response type", bc.modelID)
+	}
+	msgResponse = union.(*types.ConverseOutputMemberMessage).Value // Value is types.Message
+	response = msgResponse.Content[0].(*types.ContentBlockMemberText).Value
+
+	return response, nil
+}
+
+func (bc *BedrockConnector) QueryWithTool(userPrompt *string, systemPrompt *string) (string, error) {
+
+	var tools []types.Tool
+	for _, toolSpec := range bc.toolSpecs {
+		tools = append(tools, &types.ToolMemberToolSpec{
+			Value: toolSpec,
+		})
+	}
+
+	toolConfig := types.ToolConfiguration{
+		Tools: tools,
+		// TODO: Add tool choice
+	}
+
+	converseOutput, err := bc.queryBedrock(context.Background(), userPrompt, systemPrompt, &toolConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %v", err)
+	}
+
+	if converseOutput.StopReason == ToolUse {
+		outputMsg := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value
+
+		// Check whether there's any tool used in the output. If so, execute the tool.
+		output, err := bc.findAndUseTool(outputMsg)
+
+		if err != nil {
+			return "", fmt.Errorf("failed to find and use tool: %v", err)
+		}
+
+		return output, nil
+	}
+
+	var response string
+	var msgResponse types.Message
+
+	union := converseOutput.Output
+	if union == nil {
+		return "", fmt.Errorf("model %s returned response is nil", bc.modelID)
+	}
+
+	if _, ok := union.(*types.ConverseOutputMemberMessage); !ok {
+		return "", fmt.Errorf("model %s returned unknown response type", bc.modelID)
+	}
+	msgResponse = union.(*types.ConverseOutputMemberMessage).Value // Value is types.Message
+	response = msgResponse.Content[0].(*types.ContentBlockMemberText).Value
+
+	return response, nil
+}
+
+// findAndUseTool finds the tool use in the output message and executes the tool.
+// If the tool is not supported then it returns an error.
+// For supported tools, it executes `tool.RunSchema` method of the tool and returns the command to be executed.
+//
+// TODO: Only executes a single, first tool. Should be able to execute multiple tools.
+func (bc *BedrockConnector) findAndUseTool(outputMessage types.Message) (string, error) {
+
+	// First find the content that actully has the tool use
+	for blockIdx, content := range outputMessage.Content {
+		bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
+
+		// Only interested in ToolUse content
+		if _, ok := content.(*types.ContentBlockMemberToolUse); !ok {
+			continue
+		}
+
+		var toolUse types.ToolUseBlock = content.(*types.ContentBlockMemberToolUse).Value
+
+		// Check if the tool is supported
+		execTool := bc.execTools[*toolUse.Name]
+
+		if execTool == nil {
+			return "", fmt.Errorf("tool %s is not supported", *toolUse.Name)
+		}
+
+		var inputMap map[string]interface{}
+		err := toolUse.Input.UnmarshalSmithyDocument(&inputMap)
+		if err != nil {
+			return "", fmt.Errorf("failed to unmarshal tool input: %v", err)
+		}
+		bc.logger.Sugar().Infow("Tool use", "tool", *toolUse.Name, "input", inputMap)
+
+		// Execute the tool and return the output
+		return execTool.RunSchema(inputMap)
+	}
+
+	return "", fmt.Errorf("no tool use found in the output")
 }

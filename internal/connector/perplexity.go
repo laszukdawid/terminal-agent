@@ -97,3 +97,7 @@ func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (s
 	return response.Choices[0].Message.Content, nil
 
 }
+
+func (c *PerplexityConnector) QueryWithTool(userPrompt *string, systemPrompt *string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}

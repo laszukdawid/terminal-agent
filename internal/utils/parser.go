@@ -3,6 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+
+	"go.uber.org/zap"
 )
 
 type CodeObject struct {
@@ -51,10 +53,16 @@ func FindToolQuery(input *string) (*ToolQuery, error) {
 
 	var toolQuery *ToolQuery
 	for _, preToolQuery := range preToolQueries {
-
+		Logger.Debug("preToolQuery", zap.String("preToolQuery", preToolQuery))
 		toolQuery = &ToolQuery{}
 		err := json.Unmarshal([]byte(preToolQuery), toolQuery)
-		if err == nil && toolQuery.Tool != "" {
+		if err != nil {
+			Logger.Debug("error", zap.Error(err))
+			continue
+		}
+
+		Logger.Debug("toolQuery", zap.Any("toolQuery", toolQuery))
+		if toolQuery.Tool != "" {
 			return toolQuery, nil
 		}
 	}

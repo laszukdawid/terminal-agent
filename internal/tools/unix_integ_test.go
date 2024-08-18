@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	_ "github.com/laszukdawid/terminal-agent/internal/connector"
+	// _ "github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/stretchr/testify/assert"
 )
 

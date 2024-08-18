@@ -3,7 +3,6 @@ package tools
 import (
 	"testing"
 
-	_ "github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -30,9 +29,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestUnixToolsRun(t *testing.T) {
-	connector := &llmConnectorMock{}
+	// connector := &llmConnectorMock{}
 	mockExecutor := &mockBashExecutor{}
-	tools := NewUnixTool(connector, mockExecutor)
+	// tools := NewUnixTool(connector, mockExecutor)
+	tools := NewUnixTool(mockExecutor)
 
 	tests := []struct {
 		name     string
