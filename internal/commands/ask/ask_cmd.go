@@ -23,8 +23,10 @@ func NewQuestionCommand() *cobra.Command {
 	var modelID *string
 
 	cmd := &cobra.Command{
-		Use:  "ask",
-		Long: "Sends a question to the underlying LLM model",
+		Use: "ask",
+		// SilenceErrors: true,
+		SilenceUsage: true,
+		Long:         "Sends a question to the underlying LLM model",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			connector := connector.NewConnector(*provider, *modelID)

@@ -71,4 +71,5 @@ type ClaudeRequest struct {
 
 type LLMConnector interface {
 	Query(userPrompt *string, sysPrompt *string) (string, error)
+	QueryWithTool(userPrompt *string, sysPrompt *string) (string, error)
 }

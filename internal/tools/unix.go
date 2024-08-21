@@ -3,7 +3,6 @@ package tools
 import (
 	"fmt"
 
-	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
@@ -12,6 +11,15 @@ const (
 	unixToolDescription = `Unix tool provide the ability to design and run Unix commands.
 	The input to the tool is a summary of the Unix command. The tool then provides Unix
 	command best associated with that intent and runs the command.`
+
+	// inputSchema = `{
+	// 	"type": "object",
+	// 	"properties": {
+	// 		"command": {
+	// 			"type": "string"
+	// 		}
+	// 	}
+	// }`
 
 	systemPrompt = `You design and execute Unix commands best associated with the intent.
 	The input is provided in English and you provide the Unix command.
@@ -37,14 +45,23 @@ const (
 type UnixTool struct {
 	name         string
 	description  string
+	inputSchema  map[string]interface{}
 	systemPrompt string
 
-	llmClient connector.LLMConnector
-	executor  CodeExecutor
+	executor CodeExecutor
 }
 
 // NewUnix returns a new UnixTool
-func NewUnixTool(llmClient connector.LLMConnector, codeExecutor CodeExecutor) *UnixTool {
+func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
+
+	inputSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"command": map[string]string{
+				"type": "string",
+			},
+		},
+	}
 
 	// Set default code executor
 	if codeExecutor == nil {
@@ -56,8 +73,8 @@ func NewUnixTool(llmClient connector.LLMConnector, codeExecutor CodeExecutor) *U
 	return &UnixTool{
 		name:         unixToolName,
 		description:  unixToolDescription,
+		inputSchema:  inputSchema,
 		systemPrompt: systemPrompt,
-		llmClient:    llmClient,
 		executor:     codeExecutor,
 	}
 }
@@ -70,10 +87,20 @@ func (u *UnixTool) Description() string {
 	return u.description
 }
 
-func (u *UnixTool) DetectTool(input *string) bool {
-	// TODO: ????
+func (u *UnixTool) InputSchema() map[string]interface{} {
+	return u.inputSchema
+}
 
-	return false
+// DetectTool method of Unix Tool
+// In case the tool can be used, the method returns the Unix command and nil error.
+// Otherwise, it returns an error.
+func (u *UnixTool) DetectTool(input *string) (string, error) {
+	codeObject, err := utils.FindCodeObject(input)
+	if err != nil {
+		return "", err
+	}
+
+	return codeObject.Code, nil
 }
 
 func (u *UnixTool) ExecCode(code string) (string, error) {
@@ -97,22 +124,16 @@ func (u *UnixTool) ExecCode(code string) (string, error) {
 }
 
 // Run method of Unix Tool
-func (u *UnixTool) Run(input *string) (string, error) {
-	sugar := utils.Logger.Sugar()
+func (u *UnixTool) Run(cmd *string) (string, error) {
+	return u.ExecCode(*cmd)
+}
 
-	// Query the model with provided instruction
-	res, err := u.llmClient.Query(input, &u.systemPrompt)
-	sugar.Debugw("Result of Query", "res", res, "err", err, "input", *input)
-	if err != nil {
-		return "", err
+func (u *UnixTool) RunSchema(input map[string]interface{}) (string, error) {
+	// Extract command from input
+	cmd, ok := input["command"].(string)
+	if !ok {
+		return "", fmt.Errorf("failed to extract command from tool input")
 	}
 
-	// Parse response for `codeObject`
-	codeObject, err := utils.FindCodeObject(&res)
-	sugar.Debugw("Result of FindCodeObject", "codeObject", codeObject, "err", err)
-	if err != nil {
-		return "", err
-	}
-
-	return u.ExecCode(codeObject.Code)
+	return u.ExecCode(cmd)
 }

@@ -23,7 +23,7 @@ func NewAgent(connector connector.LLMConnector) *Agent {
 	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader, 1)
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
-	unixTool := tools.NewUnixTool(connector, nil)
+	unixTool := tools.NewUnixTool(nil)
 
 	return &Agent{
 		Connector:        connector,
@@ -45,43 +45,16 @@ func (a *Agent) Question(ctx context.Context, s string) (string, error) {
 	return res, nil
 }
 
+// Task is about asking and executing.
+// The query is sent to the model with relevant tools.
+// The model then decides whether and which tools to use.
+// Each tool has its own way of executing the task.
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 	sugar := utils.Logger.Sugar()
 
-	// First ask the model for the task
-	res, err := a.Connector.Query(&s, a.systemPromptTask)
-	sugar.Debugw("First query response", "res", res, "err", err)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to query model: %w", err)
-	}
-
-	// Check whether the provided instruction is the solution
-	toolQuery, err := utils.FindToolQuery(&res)
-	sugar.Debugw("Result of FindToolQuery", "codeObject", toolQuery, "err", err)
-
-	// If no error, then the toolQuery is found.
-	// Check also if the toolQuery is solved.
-	if err == nil && toolQuery.Solved {
-		// If solved then execute the instruction as a code
-		return a.UnixTool.ExecCode(toolQuery.Instruction)
-	}
-
-	// If no code found then we check whether tool needs to be used
-	sugar.Infoln("No code found, checking for tool")
-	toolRes, err := a.UnixTool.Run(&res)
-	sugar.Debugw("Tool response", "toolRes", toolRes, "err", err)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to run tool: %w", err)
-	}
-
-	toolQuery, err = utils.FindToolQuery(&toolRes)
-	sugar.Infow("Code object from FindCodeObject", "toolQuery", toolQuery)
-	if err == nil {
-		return a.UnixTool.ExecCode(toolQuery.Instruction)
-	}
-
-	sugar.Debugw("Returning anything", "codeObject", toolQuery)
-	return toolQuery.Instruction, nil
+	// Query the model with the task
+	// TODO: There's only a single iterations with tools; either get it or not.
+	res, err := a.Connector.QueryWithTool(&s, a.systemPromptTask)
+	sugar.Debugw("Query response", "res", res, "err", err)
+	return res, err
 }

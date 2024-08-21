@@ -63,6 +63,5 @@ func mainRun() exitCode {
 		return exitNotOk
 	}
 
-	logger.Info("Command executed successfully")
 	return exitOk
 }
