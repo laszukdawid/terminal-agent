@@ -46,19 +46,7 @@ Available tools and their optimal use cases:
 
 Tool Usage Guidelines:
 - You decide whether a tool is needed.
-- If you decide that a tool is needed, provide a consise summary of the requested task in <INSTRUCTION> field.
 - Always use the most appropriate tool for the task at hand.
-- The instruction needs to be provided in JSON format specified below.
-- Selected tool should be marked in <TOOL> and the task should be provided in <INSTRUCTION> field.
-- In case you can solve the task, provide the exact, consise solution in <INSTRUCTION> field and mark it as true in <SOLVED> field.
-
-
-Examples:
-- {"tool": "unix", "instruction": "Recursively all 'go' type files in ~/projects directory"}
-- {"tool": "python", "instruction": "Write a simple HTTP server in Python using FastAPI"}
-- {"tool": "describe", "instruction": "Summarize content of all pdf files in current directory"}
-- {"tool": "unix", "instruction": "ls -la"}
-- {"tool": "python", "instruction": "print('hello')"}
 
 Prefer unix commands over anything else, then Python, then any popular scripting language.
 </tools>

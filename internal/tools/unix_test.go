@@ -29,9 +29,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestUnixToolsRun(t *testing.T) {
-	// connector := &llmConnectorMock{}
 	mockExecutor := &mockBashExecutor{}
-	// tools := NewUnixTool(connector, mockExecutor)
 	tools := NewUnixTool(mockExecutor)
 
 	tests := []struct {
@@ -41,50 +39,38 @@ func TestUnixToolsRun(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "Valid command",
-			prompt:   "garbage",
-			err:      "no code object: no JSON objects found in the input",
-			expected: "",
-		},
-		{
-			name:     "Error from connector",
-			prompt:   `Something { "code": but never finished`,
-			err:      "no code object",
-			expected: "",
-		},
-		{
 			name:     "Empty code",
 			prompt:   "{ \"code\": \"\"}",
-			err:      "no code object found in the input",
+			err:      "invalid unix command",
 			expected: "",
 		},
 		{
 			name:     "Supported command",
-			prompt:   `{"code": "ls"}`,
+			prompt:   `ls`,
 			err:      "",
 			expected: "exec: ls",
 		},
 		{
 			name:     "No files deletion for now",
-			prompt:   `{"code": "rm *"}`,
+			prompt:   `rm *`,
 			err:      "invalid unix command",
 			expected: "",
 		},
 		{
 			name:     "Supported command but contains 'sudo'",
-			prompt:   `{"code": "sudo rm -rf /"}`,
+			prompt:   `sudo rm -rf /`,
 			err:      "command requires sudo which is not allowed",
 			expected: "",
 		},
 		{
 			name:     "Hidden sudo command",
-			prompt:   `{"code": "true && sudo rm -rf /"}`,
+			prompt:   `true && sudo rm -rf /`,
 			err:      "command requires sudo which is not allowed",
 			expected: "",
 		},
 		{
 			name:     "Unsupported command in code",
-			prompt:   `{"code": "unsupported some garbage"}`,
+			prompt:   `unsupported some garbage`,
 			err:      "invalid unix command",
 			expected: "",
 		},
