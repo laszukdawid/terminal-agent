@@ -10,11 +10,13 @@ An LLM Agent to help you from and within the terminal.
 
 ## Philosphy
 
+```
 The agent is not you.
 You interact with the agent.
 The agent knows about the tools.
 The agent can use tools.
 Tools are independent from the agent.
+```
 
 ## Development
 

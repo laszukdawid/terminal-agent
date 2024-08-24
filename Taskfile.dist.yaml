@@ -27,7 +27,7 @@ tasks:
       ARGS: '{{.CLI_ARGS}}'
     description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
-      - go run cmd/agent/main.go ask --log --query "{{.ARGS}}"
+      - go run cmd/agent/main.go --loglevel debug ask --log --query "{{.ARGS}}"
     silent: false
 
   run:task:

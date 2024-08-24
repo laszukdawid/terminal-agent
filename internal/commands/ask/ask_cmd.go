@@ -2,6 +2,7 @@ package ask
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
@@ -62,8 +63,15 @@ func NewQuestionCommand() *cobra.Command {
 
 	cmd.MarkFlagRequired("question")
 	userQuestion = cmd.Flags().StringP("query", "q", "", "The question to ask the model")
-	provider = cmd.Flags().StringP("provider", "p", connector.PerplexityProvider, "The provider to use for the question")
+	provider = cmd.Flags().StringP("provider", "p", "", "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", "", "The model ID to use for the question")
+
+	if *provider == "" {
+		*provider = os.Getenv("PROVIDER")
+	}
+	if *provider == "" {
+		*provider = connector.PerplexityProvider
+	}
 
 	// 'print' flag whether to print response to the stdout (default: true)
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")

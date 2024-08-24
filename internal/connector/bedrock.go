@@ -33,6 +33,8 @@ type BedrockConnector struct {
 }
 
 func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
+	logger := *utils.GetLogger()
+	logger.Debug("NewBedrockConnector")
 	sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
 	// sdkConfig, err := cloud.NewAwsConfig(context.Background())
 	// sdkConfig, err := cloud.NewLoadDefaultConfig(context.Background(), config.WithRegion("us-east-1"))
@@ -67,11 +69,13 @@ func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Too
 		modelID:   *modelID,
 		execTools: execTools,
 		toolSpecs: toolSpecs,
-		logger:    *utils.InitLogger(),
+		logger:    logger,
 	}
 }
 
-func (bc *BedrockConnector) queryBedrock(ctx context.Context, userPrompt *string, systemPrompt *string, toolConfig *types.ToolConfiguration) (*bedrockruntime.ConverseOutput, error) {
+func (bc *BedrockConnector) queryBedrock(
+	ctx context.Context, userPrompt *string, systemPrompt *string, toolConfig *types.ToolConfiguration,
+) (*bedrockruntime.ConverseOutput, error) {
 	systemPromptContent := []types.SystemContentBlock{
 		&types.SystemContentBlockMemberText{Value: *systemPrompt},
 	}
@@ -109,6 +113,7 @@ func (bc *BedrockConnector) queryBedrock(ctx context.Context, userPrompt *string
 }
 
 func (bc *BedrockConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
+	bc.logger.Sugar().Debugw("Query", "model", bc.modelID)
 
 	converseOutput, err := bc.queryBedrock(context.Background(), userPrompt, systemPrompt, nil)
 	if err != nil {
@@ -134,6 +139,7 @@ func (bc *BedrockConnector) Query(userPrompt *string, systemPrompt *string) (str
 }
 
 func (bc *BedrockConnector) QueryWithTool(userPrompt *string, systemPrompt *string) (string, error) {
+	bc.logger.Sugar().Debugw("Query with tool", "model", bc.modelID)
 
 	var tools []types.Tool
 	for _, toolSpec := range bc.toolSpecs {

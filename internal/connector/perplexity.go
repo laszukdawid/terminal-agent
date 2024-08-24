@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+
+	u "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 type PerplexityModelId string
@@ -51,6 +53,7 @@ func NewPerplexityConnector(modelID *PerplexityModelId) *PerplexityConnector {
 // Ask sends a question to the Perplexity API
 // and returns the response.
 func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
+	u.Logger.Sugar().Debugw("Query", "model", c.modelID, "provider", PerplexityProvider, "userPrompt", *userPrompt)
 
 	anthropicRequest := PerplexityRequest{
 		Model: c.modelID,

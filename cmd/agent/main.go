@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var loglevel string
+
 type exitCode int
 
 const (
@@ -25,6 +27,16 @@ func NewCommand() *cobra.Command {
 		Use:   "agent",
 		Short: "Terminal Agent is a CLI tool to interact with the terminal",
 		Long:  `Terminal Agent is a CLI tool to interact with the terminal. It can be used to run commands, ask questions, and more.`,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			logger, err := u.InitLogger(&loglevel)
+
+			if err != nil {
+				fmt.Println("Failed to initialize logger")
+				os.Exit(1)
+			}
+			defer logger.Sync()
+
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			u.Logger.Debug("Running command", zap.Strings("args", args))
 			if len(args) == 0 {
@@ -36,6 +48,7 @@ func NewCommand() *cobra.Command {
 			}
 		},
 	}
+	cmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "set the log level (debug, info, warn, error, dpanic, panic, fatal)")
 
 	return cmd
 }
@@ -46,10 +59,6 @@ func main() {
 }
 
 func mainRun() exitCode {
-
-	logger := u.InitLogger()
-	defer logger.Sync()
-
 	// Define flags
 	cmd := NewCommand()
 	cmd.AddCommand(ask.NewQuestionCommand())
@@ -59,6 +68,7 @@ func mainRun() exitCode {
 
 	// Execute the command
 	if err := cmd.ExecuteContext(ctx); err != nil {
+		logger := u.GetLogger()
 		logger.Error("Command execution failed", zap.Error(err))
 		return exitNotOk
 	}

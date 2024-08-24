@@ -5,6 +5,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 type llmConnectorMock struct {
@@ -22,7 +23,8 @@ func (m *mockBashExecutor) Exec(code string) (string, error) {
 }
 
 func TestMain(m *testing.M) {
-	logger := utils.InitLogger()
+	loglevel := zap.DebugLevel.String()
+	logger, _ := utils.InitLogger(&loglevel)
 	defer logger.Sync()
 
 	m.Run()
