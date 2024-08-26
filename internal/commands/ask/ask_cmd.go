@@ -36,7 +36,8 @@ func NewQuestionCommand() *cobra.Command {
 
 			response, err := agent.Question(ctx, *userQuestion)
 			if err != nil {
-				return fmt.Errorf("failed to ask question: %w", err)
+				handleError(err)
+				return nil
 			}
 
 			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
@@ -80,4 +81,18 @@ func NewQuestionCommand() *cobra.Command {
 	cmd.Flags().BoolP("log", "l", false, "Log the input and output to a file")
 
 	return cmd
+}
+
+func handleError(err error) {
+	if err == nil {
+		panic("handleError called with nil error")
+	}
+	switch err {
+	case agent.ErrEmptyQuery:
+		fmt.Println("Query is empty")
+	case connector.ErrPerplexityForbidden:
+		fmt.Println("Couldn't authenticate with the Perplexity API. Make sure you have the correct API key in the environment variable PERPLEXITY_KEY")
+	}
+	fmt.Println(err)
+	os.Exit(1)
 }

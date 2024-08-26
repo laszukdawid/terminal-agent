@@ -68,8 +68,6 @@ func mainRun() exitCode {
 
 	// Execute the command
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		logger := u.GetLogger()
-		logger.Error("Command execution failed", zap.Error(err))
 		return exitNotOk
 	}
 

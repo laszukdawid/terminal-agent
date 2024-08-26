@@ -15,17 +15,22 @@ tasks:
     cmds:
       - go build -o bin/agent ./cmd/agent/main.go
     silent: false
-  
+
+  install:
+    cmds:
+      - task: build
+      - sudo cp bin/agent /usr/local/bin/agent
+
   # Application related
   run:
     cmds:
       - go run cmd/agent/main.go
     silent: false
-  
+
   run:ask:
     vars:
       ARGS: '{{.CLI_ARGS}}'
-    description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
       - go run cmd/agent/main.go --loglevel debug ask --log --query "{{.ARGS}}"
     silent: false
@@ -35,7 +40,7 @@ tasks:
       ARGS: '{{.CLI_ARGS}}'
     env:
       PROVIDER: bedrock
-    description: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
       # - go run cmd/agent/main.go task --log --provider $PROVIDER --query "{{.ARGS}}"
       - go run cmd/agent/main.go task --provider $PROVIDER --query "{{.ARGS}}"
@@ -43,33 +48,33 @@ tasks:
 
   # Environment related - mainly for testing
   env:build:
-    description: Build the test environment
+    desc: Build the test environment
     cmds:
       - docker build -t {{.TEST_IMAGE_NAME}} .
     silent: false
 
   env:setup:
-    description: Setup the test environment
+    desc: Setup the test environment
     deps:
       - env:build
     cmds:
       - docker container stop {{.TEST_IMAGE_NAME}} || true
       - docker container rm {{.TEST_IMAGE_NAME}} || true
-      - docker run -d 
+      - docker run -d
         --volume $(pwd):/agent
         --name {{.TEST_IMAGE_NAME}} {{.TEST_IMAGE_NAME}}
         sh -c "while true; do sleep {{.TEST_TIMEOUT}}; done"
     silent: false
 
   env:access:
-    description: Access the test environment
+    desc: Access the test environment
     cmds:
       - docker exec -it {{.TEST_IMAGE_NAME}} sh
 
   # Tests
   test:unit:
     cmd: go test -v ./...
-  
+
   test:integration:
     env:
       TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
@@ -93,18 +98,22 @@ tasks:
       Q: "What command shows disk usage in human readable form?"
     cmds:
       - "echo Question: $Q"
-      - go run cmd/agent/main.go ask 
-        --provider "perplexity" 
+      - go run cmd/agent/main.go
+        --loglevel debug
+        ask
+        --provider "perplexity"
         --model  "llama-3-8b-instruct"
         --query "$Q"
-        
+
   test:model:ask:bedrock:
     env:
       Q: "What command shows disk usage in human readable form?"
     cmds:
       - "echo Question: $Q"
-      - go run cmd/agent/main.go ask 
-        --provider "bedrock" 
+      - go run cmd/agent/main.go
+        --loglevel debug
+        ask
+        --provider "bedrock"
         --model  "anthropic.claude-3-haiku-20240307-v1:0"
         --query "$Q"
 
@@ -112,16 +121,16 @@ tasks:
     env:
       Q: "List all files in home directory"
     cmds:
-      - go run cmd/agent/main.go task 
-        --provider "perplexity" 
+      - go run cmd/agent/main.go task
+        --provider "perplexity"
         --model  "llama-3-8b-instruct"
         --query "$Q"
-        
+
   test:model:task:bedrock:
     env:
       Q: "List all files in home directory"
     cmds:
-      - go run cmd/agent/main.go task 
-        --provider "bedrock" 
+      - go run cmd/agent/main.go task
+        --provider "bedrock"
         --model  "anthropic.claude-3-haiku-20240307-v1:0"
         --query "$Q"

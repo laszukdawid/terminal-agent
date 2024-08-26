@@ -10,6 +10,9 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
+// ErrEmptyQuery is returned when the query is empty.
+var ErrEmptyQuery = fmt.Errorf("empty query")
+
 type Agent struct {
 	Connector connector.LLMConnector
 	UnixTool  tools.UnixTool
@@ -37,12 +40,11 @@ func NewAgent(connector connector.LLMConnector) *Agent {
 // It queries the model using the provided question string and the system prompt.
 // If an error occurs during the query, it returns an empty string and an error.
 func (a *Agent) Question(ctx context.Context, s string) (string, error) {
-	res, err := a.Connector.Query(&s, a.systemPromptAsk)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to query model: %w", err)
+	if s == "" {
+		return "", ErrEmptyQuery
 	}
-	return res, nil
+	res, err := a.Connector.Query(&s, a.systemPromptAsk)
+	return res, err
 }
 
 // Task is about asking and executing.

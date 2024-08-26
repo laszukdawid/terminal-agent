@@ -3,6 +3,7 @@ package connector
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,14 @@ const (
 	llama3_ss128k_online PerplexityModelId = "llama-3.1-sonar-small-128k-online"
 	llama3_sl128k_chat   PerplexityModelId = "llama-3.1-sonar-large-128k-chat"
 	llama3_sl128k_online PerplexityModelId = "llama-3.1-sonar-large-128k-online"
+)
+
+// Errors dependent on the http status code.
+var (
+	ErrPerplexityBadRequest = errors.New("perplexity - bad request")
+	ErrPerplexityForbidden  = errors.New("perplexity - forbidden")
+	ErrPerplexityNotFound   = errors.New("perplexity - not found")
+	ErrPerplexityInternal   = errors.New("perplexity - internal server error")
 )
 
 type PerplexityRequest struct {
@@ -58,17 +67,12 @@ func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (s
 	anthropicRequest := PerplexityRequest{
 		Model: c.modelID,
 		Messages: []Message{
-			{
-				Role:    "system",
-				Content: *systemPrompt,
-			},
-			{
-				Role:    "user",
-				Content: *userPrompt,
-			},
+			{Role: "system", Content: *systemPrompt},
+			{Role: "user", Content: *userPrompt},
 		},
 	}
 
+	u.Logger.Sugar().Debugw("Request", "anthropicRequest", anthropicRequest)
 	payload, err := json.Marshal(anthropicRequest)
 
 	if err != nil {
@@ -88,8 +92,17 @@ func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (s
 	}
 
 	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusUnauthorized {
+		return "", ErrPerplexityForbidden
+	}
+	if res.StatusCode == http.StatusNotFound {
+		return "", ErrPerplexityNotFound
+	}
+
 	body, _ := io.ReadAll(res.Body)
 
+	u.Logger.Sugar().Debugw("Response", "body", string(body))
 	var response PerplexityResponse
 	err = json.Unmarshal(body, &response)
 
