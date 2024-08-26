@@ -32,7 +32,7 @@ tasks:
       ARGS: '{{.CLI_ARGS}}'
     desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
-      - go run cmd/agent/main.go --loglevel debug ask --log --query "{{.ARGS}}"
+      - go run cmd/agent/main.go --loglevel debug ask --log {{.ARGS}}
     silent: false
 
   run:task:
@@ -43,7 +43,7 @@ tasks:
     desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
       # - go run cmd/agent/main.go task --log --provider $PROVIDER --query "{{.ARGS}}"
-      - go run cmd/agent/main.go task --provider $PROVIDER --query "{{.ARGS}}"
+      - go run cmd/agent/main.go task --provider $PROVIDER {{.ARGS}}
     silent: false
 
   # Environment related - mainly for testing
@@ -103,7 +103,7 @@ tasks:
         ask
         --provider "perplexity"
         --model  "llama-3-8b-instruct"
-        --query "$Q"
+        $Q
 
   test:model:ask:bedrock:
     env:
@@ -115,7 +115,7 @@ tasks:
         ask
         --provider "bedrock"
         --model  "anthropic.claude-3-haiku-20240307-v1:0"
-        --query "$Q"
+        $Q
 
   test:model:task:perplexity:
     env:
@@ -124,7 +124,7 @@ tasks:
       - go run cmd/agent/main.go task
         --provider "perplexity"
         --model  "llama-3-8b-instruct"
-        --query "$Q"
+        $Q
 
   test:model:task:bedrock:
     env:
@@ -133,4 +133,4 @@ tasks:
       - go run cmd/agent/main.go task
         --provider "bedrock"
         --model  "anthropic.claude-3-haiku-20240307-v1:0"
-        --query "$Q"
+        $Q

@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
@@ -35,13 +36,15 @@ func (m *mockConnector) Query(userPrompt *string, sysPrompt *string) (string, er
 }
 
 func NewTaskCommand() *cobra.Command {
-	var userRequest *string
 	var provider *string
 	var modelID *string
 
 	cmd := &cobra.Command{
-		Use:  "task",
-		Long: "Execute a task using the underlying LLM model",
+		Use:   "task",
+		Short: "Execute a task using the underlying LLM model",
+		Long: `Execute a task using the underlying LLM model
+
+		Any remaining argument that isn't captured by the flags will be concatenated to form the query.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			connector := *connector.NewConnector(*provider, *modelID)
@@ -49,7 +52,10 @@ func NewTaskCommand() *cobra.Command {
 			agent := agent.NewAgent(connector)
 			flags := cmd.Flags()
 
-			response, err := agent.Task(ctx, *userRequest)
+			// Concatenate all remaining args to form the query
+			userRequest := strings.Join(args, " ")
+
+			response, err := agent.Task(ctx, userRequest)
 			if err != nil {
 				return fmt.Errorf("failed to request a task: %w", err)
 			}
@@ -62,7 +68,7 @@ func NewTaskCommand() *cobra.Command {
 				// Write the response to the jsonl file
 				l := queryLog{
 					Method:    "task",
-					Request:   *userRequest,
+					Request:   userRequest,
 					Answer:    response,
 					Timestamp: time.Now().Format(time.RFC3339),
 				}
@@ -74,10 +80,10 @@ func NewTaskCommand() *cobra.Command {
 
 			return nil
 		},
+		Args: cobra.MinimumNArgs(1),
 	}
 
 	cmd.MarkFlagRequired("task")
-	userRequest = cmd.Flags().StringP("query", "q", "", "The task to perform")
 	provider = cmd.Flags().StringP("provider", "p", connector.PerplexityProvider, "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", "", "The model ID to use for the question")
 

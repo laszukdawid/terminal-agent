@@ -3,6 +3,7 @@ package ask
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
@@ -19,22 +20,26 @@ type queryLog struct {
 }
 
 func NewQuestionCommand() *cobra.Command {
-	var userQuestion *string
 	var provider *string
 	var modelID *string
 
 	cmd := &cobra.Command{
-		Use: "ask",
-		// SilenceErrors: true,
+		Use:          "ask",
 		SilenceUsage: true,
-		Long:         "Sends a question to the underlying LLM model",
+		Short:        "Sends a question to the underlying LLM model",
+		Long: `Sends a question to the underlying LLM model
+
+		Any remaining argument that isn't captured by the flags will be concatenated to form the question.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			connector := connector.NewConnector(*provider, *modelID)
 			agent := agent.NewAgent(*connector)
 			flags := cmd.Flags()
 
-			response, err := agent.Question(ctx, *userQuestion)
+			// Concatenate all remaining args to form the query
+			userQuestion := strings.Join(args, " ")
+
+			response, err := agent.Question(ctx, userQuestion)
 			if err != nil {
 				handleError(err)
 				return nil
@@ -48,7 +53,7 @@ func NewQuestionCommand() *cobra.Command {
 				// Write the response to the jsonl file
 				l := queryLog{
 					Method:    "ask",
-					Query:     *userQuestion,
+					Query:     userQuestion,
 					Answer:    response,
 					Timestamp: time.Now().Format(time.RFC3339),
 				}
@@ -60,10 +65,10 @@ func NewQuestionCommand() *cobra.Command {
 
 			return nil
 		},
+		Args: cobra.MinimumNArgs(1),
 	}
 
 	cmd.MarkFlagRequired("question")
-	userQuestion = cmd.Flags().StringP("query", "q", "", "The question to ask the model")
 	provider = cmd.Flags().StringP("provider", "p", "", "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", "", "The model ID to use for the question")
 
