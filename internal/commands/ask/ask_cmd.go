@@ -96,7 +96,9 @@ func handleError(err error) {
 	case agent.ErrEmptyQuery:
 		fmt.Println("Query is empty")
 	case connector.ErrPerplexityForbidden:
-		fmt.Println("Couldn't authenticate with the Perplexity API. Make sure you have the correct API key in the environment variable PERPLEXITY_KEY")
+		fmt.Println("Couldn't authenticate with the Perplexity API. Make sure you have the correct API key in the environment variable PERPLEXITY_KEY.")
+	case connector.ErrBedrockForbidden:
+		fmt.Println("Couldn't authenticate with the Bedrock API. Make sure you have the correct AWS credentials set up.")
 	}
 	fmt.Println(err)
 	os.Exit(1)

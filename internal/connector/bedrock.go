@@ -2,9 +2,12 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
@@ -21,6 +24,10 @@ const (
 	ToolUse         = "tool_use"
 
 	ClaudeHaiku BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
+)
+
+var (
+	ErrBedrockForbidden = fmt.Errorf("bedrock - forbidden")
 )
 
 type BedrockConnector struct {
@@ -97,6 +104,15 @@ func (bc *BedrockConnector) queryBedrock(
 
 	converseOutput, err := bc.client.Converse(ctx, converseInput)
 	if err != nil {
+		var re *awshttp.ResponseError
+		if errors.As(err, &re) {
+			log.Printf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
+		}
+
+		if re.ResponseError.HTTPStatusCode() == 403 {
+			return nil, ErrBedrockForbidden
+		}
+
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
@@ -117,7 +133,7 @@ func (bc *BedrockConnector) Query(userPrompt *string, systemPrompt *string) (str
 
 	converseOutput, err := bc.queryBedrock(context.Background(), userPrompt, systemPrompt, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %v", err)
+		return "", err
 	}
 
 	// If converseOutput.stopReason ==
