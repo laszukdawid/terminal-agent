@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/laszukdawid/terminal-agent/internal/commands/ask"
-	"github.com/laszukdawid/terminal-agent/internal/commands/task"
+	"github.com/laszukdawid/terminal-agent/internal/commands"
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	u "github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -59,10 +59,17 @@ func main() {
 }
 
 func mainRun() exitCode {
+
+	c, err := config.LoadConfig()
+	if err != nil {
+		c = config.NewDefaultConfig()
+	}
+
 	// Define flags
 	cmd := NewCommand()
-	cmd.AddCommand(ask.NewQuestionCommand())
-	cmd.AddCommand(task.NewTaskCommand())
+	cmd.AddCommand(commands.NewQuestionCommand(c))
+	cmd.AddCommand(commands.NewTaskCommand(c))
+	cmd.AddCommand(commands.ConfigCommand(c))
 
 	ctx := context.Background()
 

@@ -1,4 +1,4 @@
-package ask
+package commands
 
 import (
 	"fmt"
@@ -7,19 +7,20 @@ import (
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
 )
 
-type queryLog struct {
+type askQueryLog struct {
 	Method    string `json:"method"`
 	Timestamp string `json:"timestamp"`
 	Query     string `json:"query"`
 	Answer    string `json:"answer"`
 }
 
-func NewQuestionCommand() *cobra.Command {
+func NewQuestionCommand(config config.Config) *cobra.Command {
 	var provider *string
 	var modelID *string
 
@@ -51,7 +52,7 @@ func NewQuestionCommand() *cobra.Command {
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
 				// Write the response to the jsonl file
-				l := queryLog{
+				l := askQueryLog{
 					Method:    "ask",
 					Query:     userQuestion,
 					Answer:    response,
@@ -69,8 +70,8 @@ func NewQuestionCommand() *cobra.Command {
 	}
 
 	cmd.MarkFlagRequired("question")
-	provider = cmd.Flags().StringP("provider", "p", "", "The provider to use for the question")
-	modelID = cmd.Flags().StringP("model", "m", "", "The model ID to use for the question")
+	provider = cmd.Flags().StringP("provider", "p", config.GetDefaultProvider(), "The provider to use for the question")
+	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
 
 	if *provider == "" {
 		*provider = os.Getenv("PROVIDER")

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
@@ -42,9 +43,9 @@ type BedrockConnector struct {
 func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("NewBedrockConnector")
-	sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
-	// sdkConfig, err := cloud.NewAwsConfig(context.Background())
-	// sdkConfig, err := cloud.NewLoadDefaultConfig(context.Background(), config.WithRegion("us-east-1"))
+	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
+	// sdkConfig, err := cloud.NewDefaultAwsConfig(context.Background())
+	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion("us-east-1"))
 
 	// Define the input schema as a map
 	var toolSpecs []types.ToolSpecification

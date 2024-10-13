@@ -1,4 +1,4 @@
-package task
+package commands
 
 import (
 	"fmt"
@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
 )
 
-type queryLog struct {
+type taskQueryLog struct {
 	Method    string `json:"method"`
 	Timestamp string `json:"timestamp"`
 	Request   string `json:"request"`
@@ -35,7 +36,7 @@ func (m *mockConnector) Query(userPrompt *string, sysPrompt *string) (string, er
 	return "prompt: " + *userPrompt, nil
 }
 
-func NewTaskCommand() *cobra.Command {
+func NewTaskCommand(config config.Config) *cobra.Command {
 	var provider *string
 	var modelID *string
 
@@ -66,7 +67,7 @@ func NewTaskCommand() *cobra.Command {
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
 				// Write the response to the jsonl file
-				l := queryLog{
+				l := taskQueryLog{
 					Method:    "task",
 					Request:   userRequest,
 					Answer:    response,
