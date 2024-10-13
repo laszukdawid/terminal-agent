@@ -24,12 +24,50 @@ const (
 	BedrockProvider = "bedrock"
 	ToolUse         = "tool_use"
 
-	ClaudeHaiku BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
+	// Supported models https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html
+	ClaudeHaiku      BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
+	JambaMini        BedrockModelID = "ai21.jamba-1-5-mini-v1:0"
+	MistralSmall2402 BedrockModelID = "mistral.mistral-small-2402-v1:0"
+	MistralLarge2402 BedrockModelID = "mistral.mistral-large-2402-v1:0"
 )
 
 var (
 	ErrBedrockForbidden = fmt.Errorf("bedrock - forbidden")
+
+	// All prices are per 1k tokens
+	ModelPrices = map[BedrockModelID]map[string]float64{
+		ClaudeHaiku: {
+			"input":  0.00025,
+			"output": 0.00125,
+		},
+		JambaMini: {
+			"input":  0.0002,
+			"output": 0.0004,
+		},
+		MistralSmall2402: {
+			"input":  0.001,
+			"output": 0.003,
+		},
+		MistralLarge2402: {
+			"input":  0.004,
+			"output": 0.012,
+		},
+	}
 )
+
+/*
+Pricing from https://aws.amazon.com/bedrock/pricing/
+
+Model                  | Input per 1k tokens | Output per 1k tokens
+-----------------------|---------------------|----------------------
+Haiku                  | $0.00025            | $0.00125
+Llama 3.2 (1B)         | $0.0001             | $0.0001
+Llama 3.2 (3B)         | $0.00015            | $0.00015
+Llama 3 (8B)           | $0.0003             | $0.0006
+Mistral Small (24.02)  | $0.001              | $0.003
+Mistral Large (24.02)  | $0.004              | $0.012
+Jamba 1.5 Mini         | $0.0002             | $0.0004
+*/
 
 type BedrockConnector struct {
 	client  *bedrockruntime.Client
@@ -38,6 +76,26 @@ type BedrockConnector struct {
 
 	execTools map[string]tools.Tool
 	toolSpecs []types.ToolSpecification
+}
+
+type BedrockPrice struct {
+	InputPrice  float64
+	OutputPrice float64
+	TotalPrice  float64
+}
+
+func computePrice(modelId BedrockModelID, usage *BedrockUsage) *BedrockPrice {
+	prices, exists := ModelPrices[modelId]
+	if !exists {
+		return nil
+	}
+	ip := prices["input"] * float64(usage.InputTokens) / 1000
+	op := prices["output"] * float64(usage.OutputTokens) / 1000
+	return &BedrockPrice{
+		InputPrice:  ip,
+		OutputPrice: op,
+		TotalPrice:  ip + op,
+	}
 }
 
 func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
@@ -120,6 +178,16 @@ func (bc *BedrockConnector) queryBedrock(
 	// Only text output is supported
 	if converseOutput.Output == nil {
 		return nil, fmt.Errorf("model %s returned response is nil", bc.modelID)
+	}
+	if converseOutput.Usage != nil {
+		usage := converseOutput.Usage
+		price := computePrice(bc.modelID, &BedrockUsage{
+			InputTokens:  *usage.InputTokens,
+			OutputTokens: *usage.OutputTokens,
+			TotalTokens:  *usage.TotalTokens,
+		})
+
+		bc.logger.Sugar().Debugw("Usage", "usage", converseOutput.Usage, "price", price)
 	}
 
 	if _, ok := converseOutput.Output.(*types.ConverseOutputMemberMessage); !ok {

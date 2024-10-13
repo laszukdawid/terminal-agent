@@ -56,8 +56,9 @@ type Content struct {
 }
 
 type BedrockUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens  int32 `json:"inputTokens"`
+	OutputTokens int32 `json:"outputTokens"`
+	TotalTokens  int32 `json:"totalTokens"`
 }
 
 type ClaudeRequest struct {

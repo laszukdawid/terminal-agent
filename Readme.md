@@ -18,6 +18,19 @@ The agent can use tools.
 Tools are independent from the agent.
 ```
 
+## Configuration
+
+Each request can have its own configuration, and there are defaults provided.
+To see default execute `terminal-agent config get all`.
+
+To override defaults, use `config set` command, e.g.
+
+```sh
+$ terminal-agent config set model ai21.jamba-1-5-mini-v1:0
+```
+
+The config is stored in json file at `$HOME/.config/terminal-agent/config.json`.
+
 ## Development
 
 ### Setup
