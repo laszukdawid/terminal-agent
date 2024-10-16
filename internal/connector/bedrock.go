@@ -35,7 +35,7 @@ var (
 	ErrBedrockForbidden = fmt.Errorf("bedrock - forbidden")
 
 	// All prices are per 1k tokens
-	ModelPrices = map[BedrockModelID]map[string]float64{
+	ModelPricesBedrock = map[BedrockModelID]map[string]float64{
 		ClaudeHaiku: {
 			"input":  0.00025,
 			"output": 0.00125,
@@ -78,33 +78,21 @@ type BedrockConnector struct {
 	toolSpecs []types.ToolSpecification
 }
 
-type BedrockPrice struct {
-	InputPrice  float64
-	OutputPrice float64
-	TotalPrice  float64
-}
-
-func computePrice(modelId BedrockModelID, usage *BedrockUsage) *BedrockPrice {
-	prices, exists := ModelPrices[modelId]
+func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice {
+	prices, exists := ModelPricesBedrock[modelId]
 	if !exists {
 		return nil
 	}
 	ip := prices["input"] * float64(usage.InputTokens) / 1000
 	op := prices["output"] * float64(usage.OutputTokens) / 1000
-	return &BedrockPrice{
+	return &LLMPrice{
 		InputPrice:  ip,
 		OutputPrice: op,
 		TotalPrice:  ip + op,
 	}
 }
 
-func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
-	logger := *utils.GetLogger()
-	logger.Debug("NewBedrockConnector")
-	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
-	// sdkConfig, err := cloud.NewDefaultAwsConfig(context.Background())
-	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion("us-east-1"))
-
+func convertToolsToBedrock(execTools map[string]tools.Tool) []types.ToolSpecification {
 	// Define the input schema as a map
 	var toolSpecs []types.ToolSpecification
 	for _, tool := range execTools {
@@ -116,6 +104,15 @@ func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Too
 			},
 		})
 	}
+	return toolSpecs
+}
+
+func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
+	logger := *utils.GetLogger()
+	logger.Debug("NewBedrockConnector")
+	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
+	// sdkConfig, err := cloud.NewDefaultAwsConfig(context.Background())
+	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion("us-east-1"))
 
 	if err != nil {
 		fmt.Println("Couldn't load default configuration. Have you set up your AWS account?")
@@ -134,7 +131,7 @@ func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Too
 		client:    client,
 		modelID:   *modelID,
 		execTools: execTools,
-		toolSpecs: toolSpecs,
+		toolSpecs: convertToolsToBedrock(execTools),
 		logger:    logger,
 	}
 }
@@ -181,7 +178,7 @@ func (bc *BedrockConnector) queryBedrock(
 	}
 	if converseOutput.Usage != nil {
 		usage := converseOutput.Usage
-		price := computePrice(bc.modelID, &BedrockUsage{
+		price := computePriceBedrock(bc.modelID, &BedrockUsage{
 			InputTokens:  *usage.InputTokens,
 			OutputTokens: *usage.OutputTokens,
 			TotalTokens:  *usage.TotalTokens,

@@ -1,5 +1,11 @@
 package connector
 
+type LLMPrice struct {
+	InputPrice  float64
+	OutputPrice float64
+	TotalPrice  float64
+}
+
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`

@@ -38,12 +38,10 @@ tasks:
   run:task:
     vars:
       ARGS: '{{.CLI_ARGS}}'
-    env:
-      PROVIDER: bedrock
-    desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    desc: Run the agent with a task, e.g. `task run:task -- "List all files in home directory"`
     cmds:
       # - go run cmd/agent/main.go task --log --provider $PROVIDER --query "{{.ARGS}}"
-      - go run cmd/agent/main.go task --provider $PROVIDER {{.ARGS}}
+      - go run cmd/agent/main.go task --loglevel debug --provider $PROVIDER {{.ARGS}}
     silent: false
 
   # Environment related - mainly for testing
