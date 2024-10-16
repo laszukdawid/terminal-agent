@@ -37,10 +37,21 @@ $ terminal-agent config set provider bedrock
 $ terminal-agent config set llama-3.1-8b-instruct
 ```
 
+### OpenAI
+
+To use `terminal-agent` with OpenAI, you need to set the `OPENAI_API_KEY` environment variable with your individual key, and then set the provider to `openai`.
+
+Setting `openai` provider with `gpt-4o-mini` model can be done via:
+
+```sh
+$ terminal-agent config set provider openai
+$ terminal-agent config set model gpt-4o-mini
+```
+
 ## Features
 
-- [x] **ask**: Ask general questions via terminal
-- [x] **task**: Ability to propose and execute a command
+- [x] **ask**: Ask general questions via terminal (all models)
+- [x] **task**: Ability to propose and execute a command (expect Perplexity)
 - [ ] **unix**: Designs and evaluates a unix command
 - [ ] **python**: Designs and evaluates a python command
 - [ ] **git**: Designs and evaluates a git command
