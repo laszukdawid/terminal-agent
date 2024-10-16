@@ -194,8 +194,106 @@ func (bc *BedrockConnector) queryBedrock(
 	return converseOutput, nil
 }
 
+func (bc *BedrockConnector) queryBedrockStream(
+	ctx context.Context, qParams *QueryParams, toolConfig *types.ToolConfiguration,
+) (string, error) {
+	systemPromptContent := []types.SystemContentBlock{
+		&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
+	}
+	userPromptContent := []types.ContentBlock{
+		&types.ContentBlockMemberText{Value: *qParams.UserPrompt},
+	}
+
+	converseInput := &bedrockruntime.ConverseStreamInput{
+		ModelId: (*string)(&bc.modelID),
+		System:  systemPromptContent,
+		Messages: []types.Message{
+			{Role: "user", Content: userPromptContent},
+		},
+	}
+
+	if toolConfig != nil {
+		converseInput.ToolConfig = toolConfig
+	}
+
+	converseOutput, err := bc.client.ConverseStream(ctx, converseInput)
+	if err != nil {
+		var re *awshttp.ResponseError
+		if errors.As(err, &re) {
+			log.Printf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
+		}
+
+		if re.ResponseError.HTTPStatusCode() == 403 {
+			return "", ErrBedrockForbidden
+		}
+
+		return "", fmt.Errorf("failed to send request: %v", err)
+	}
+
+	var acc string
+
+	stream := converseOutput.GetStream()
+	// var stream <-chan types.ConverseStreamOutput = converseOutput.GetStream()
+	var events <-chan types.ConverseStreamOutput = stream.Events()
+
+	for _event := range events {
+		switch event := _event.(type) {
+
+		// Message start contains info about "role"
+		case *types.ConverseStreamOutputMemberMessageStart:
+			v := event.Value
+			if v.Role != "assistant" {
+				bc.logger.Sugar().Debugw("Weird MessageStart", "role", v.Role)
+			}
+
+		// Message stop contains info about "stopReason" and "additionalModelResponseFields"
+		case *types.ConverseStreamOutputMemberMessageStop:
+			v := event.Value
+			bc.logger.Sugar().Debugw("MessageStop",
+				"stopReason", v.StopReason, "additionalModelResponseFields", v.AdditionalModelResponseFields)
+
+		case *types.ConverseStreamOutputMemberContentBlockStart:
+			start := event.Value.Start
+			bc.logger.Debug("ContentBlockStart", zap.Any("start", start))
+			fmt.Println()
+
+		case *types.ConverseStreamOutputMemberContentBlockStop:
+			stop := event.Value
+			bc.logger.Debug("ContentBlockStart", zap.Any("stop", stop))
+			fmt.Println()
+
+		case *types.ConverseStreamOutputMemberContentBlockDelta:
+			chunk, isText := event.Value.Delta.(*types.ContentBlockDeltaMemberText)
+			if !isText {
+				continue
+			}
+			fmt.Print(chunk.Value)
+			acc += chunk.Value
+
+		case *types.ConverseStreamOutputMemberMetadata:
+			usage := event.Value.Usage
+			price := computePriceBedrock(bc.modelID, &BedrockUsage{
+				InputTokens:  *usage.InputTokens,
+				OutputTokens: *usage.OutputTokens,
+				TotalTokens:  *usage.TotalTokens,
+			})
+
+			bc.logger.Sugar().Debugw("Usage", "usage", usage, "price", price)
+
+		default:
+			bc.logger.Warn("union is nil or unknown type", zap.Any("event", event))
+		}
+	}
+
+	return acc, nil
+}
+
 func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	bc.logger.Sugar().Debugw("Query", "model", bc.modelID)
+
+	if qParams.Stream {
+		return bc.queryBedrockStream(ctx, qParams, nil)
+	}
 
 	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, nil)
 	if err != nil {

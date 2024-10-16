@@ -19,7 +19,7 @@ const (
 
 var (
 	// https://openai.com/api/pricing/
-	ModelPricesOpenai = map[string]map[string]float64{
+	ModelPricesOpenai = map[openai.ChatModel]map[string]float64{
 		openai.ChatModelGPT4o: {
 			"input":  0.00025,
 			"output": 0.01000,

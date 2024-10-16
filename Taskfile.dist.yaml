@@ -52,6 +52,18 @@ tasks:
       - go run cmd/agent/main.go task --loglevel debug --provider $PROVIDER {{.ARGS}}
     silent: false
 
+  run:set:openai:
+    desc: Set the provider to openai
+    cmds:
+      - go run cmd/agent/main.go config set provider openai
+      - go run cmd/agent/main.go config set model gpt-4o-mini-2024-07-18
+
+  run:set:bedrock:
+    desc: Set the provider to bedrock
+    cmds:
+      - go run cmd/agent/main.go config set provider bedrock
+      - go run cmd/agent/main.go config set model anthropic.claude-3-haiku-20240307-v1:0
+
   # Environment related - mainly for testing
   env:build:
     desc: Build the test environment
