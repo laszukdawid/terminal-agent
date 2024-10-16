@@ -9,6 +9,7 @@ env:
 vars:
   TEST_IMAGE_NAME: "terminal-test"
   TEST_TIMEOUT: "5m"
+  SHELL_CFG: "~/.bashrc"
 
 tasks:
   build:
@@ -20,6 +21,17 @@ tasks:
     cmds:
       - task: build
       - sudo cp bin/agent /usr/local/bin/agent
+
+  install:alias:
+    desc: Install the alias for the agent
+    preconditions:
+      - sh: test -f {{.SHELL_CFG}}
+        msg: "Auto-alias only works for bash shell. Please add the alias manually."
+    status:
+      - grep -q 'terminal-agent alias' {{.SHELL_CFG}}
+    cmds:
+      - printf '\n# terminal-agent alias\n' >> {{.SHELL_CFG}}
+      - printf 'alias aa="agent ask\n' >> {{.SHELL_CFG}}
 
   # Application related
   run:

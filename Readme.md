@@ -2,13 +2,45 @@
 
 An LLM Agent to help you from and within the terminal.
 
+## Usage
+
+Recommended way of using the `terminal-agent` is by compiling the code into an `agent` binary, and placing it within your `$PATH`. This can be achieved through executing the [Taskfile](https://taskfile.dev/installation/) command `task install` which builds the binary and copies it to `/usr/local/bin/agent`.
+
+For majority of cases, do check out the `Taskfile.dist.yaml` as it has most relevant tasks / receipies.
+
+### Ask
+
+Intended for general questions.
+
+```sh
+agent ask what is a file descriptor?
+```
+
+If you like to see characters appearing in terminal, add `--stream` flag.
+
+**Life hack**: If you set alias `alias aa="agent ask"` you'll have a quick shortcut to ask questions from terminal. It's quicker than opening browser to search! Execute `task install:alias` for auto-setup.
+
+### Task
+
+Generates code for execution, and asks for execution permissions.
+
+```sh
+agent task list files 3 dirs up
+```
+
+**Note**: Since more testing is required, there are only a few methods allowed.
+
+### Config
+
+Given that a few providers and their models are supported, there's a rudamentry configuration support. Whole config 
+
 ## Providers supported
 
 To change the provider (to `$PROVIDER`) and model (to `$MODEL`) do
 
 ```sh
-$ terminal-agent config set provider $PROVIDER
-$ terminal-agent config set model $MODEL
+$ agent config set provider $PROVIDER
+$ agent config set model $MODEL
 ```
 
 ### (Amazon) Bedrock
@@ -20,38 +52,39 @@ To use these models you need to make sure that you have valid aws credentials se
 Setting `bedrock` provider with Anthropic Haiku model can be done via
 
 ```sh
-$ terminal-agent config set provider bedrock
-$ terminal-agent config set anthropic.claude-3-haiku-20240307-v1:0 
+$ agent config set provider bedrock
+$ agent config set anthropic.claude-3-haiku-20240307-v1:0 
 ```
 
 ### Perplexity AI
 
 Perplexity AI has an "in development" functionality to provide access to models via their API. To read more on this visit their (documentation)[https://docs.perplexity.ai/guides/getting-started].
 
-To use `terminal-agent` with Perplexity AI, you need to set `PERPLEXITY_KEY` env variable with your individual key, and then set the provider to `perplexity`.
+To use `agent` with Perplexity AI, you need to set `PERPLEXITY_KEY` env variable with your individual key, and then set the provider to `perplexity`.
 
 Setting `perplexity` provider with `llama-3.1-8b-instruct` model can be done via
 
 ```sh
-$ terminal-agent config set provider bedrock
-$ terminal-agent config set llama-3.1-8b-instruct
+$ agent config set provider bedrock
+$ agent config set llama-3.1-8b-instruct
 ```
 
 ### OpenAI
 
-To use `terminal-agent` with OpenAI, you need to set the `OPENAI_API_KEY` environment variable with your individual key, and then set the provider to `openai`.
+To use `agent` with OpenAI, you need to set the `OPENAI_API_KEY` environment variable with your individual key, and then set the provider to `openai`.
 
 Setting `openai` provider with `gpt-4o-mini` model can be done via:
 
 ```sh
-$ terminal-agent config set provider openai
-$ terminal-agent config set model gpt-4o-mini
+$ agent config set provider openai
+$ agent config set model gpt-4o-mini
 ```
 
 ## Features
 
 - [x] **ask**: Ask general questions via terminal (all models)
 - [x] **task**: Ability to propose and execute a command (expect Perplexity)
+- [x] **stream**: OpenAI and Bedrock models support streaming (Ask only)
 - [ ] **unix**: Designs and evaluates a unix command
 - [ ] **python**: Designs and evaluates a python command
 - [ ] **git**: Designs and evaluates a git command
@@ -69,12 +102,12 @@ Tools are independent from the agent.
 ## Configuration
 
 Each request can have its own configuration, and there are defaults provided.
-To see default execute `terminal-agent config get all`.
+To see default execute `agent config get all`.
 
 To override defaults, use `config set` command, e.g.
 
 ```sh
-$ terminal-agent config set model ai21.jamba-1-5-mini-v1:0
+$ agent config set model ai21.jamba-1-5-mini-v1:0
 ```
 
 The config is stored in json file at `$HOME/.config/terminal-agent/config.json`.
