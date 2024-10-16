@@ -35,6 +35,14 @@ tasks:
       - go run cmd/agent/main.go --loglevel debug ask --log {{.ARGS}}
     silent: false
 
+  run:ask:stream:
+    vars:
+      ARGS: '{{.CLI_ARGS}}'
+    desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
+    cmds:
+      - go run cmd/agent/main.go  --loglevel debug ask --stream --log {{.ARGS}}
+    silent: false
+
   run:task:
     vars:
       ARGS: '{{.CLI_ARGS}}'

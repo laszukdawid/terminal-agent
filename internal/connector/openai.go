@@ -119,17 +119,54 @@ func NewOpenAIConnector(modelID *string, execTools map[string]tools.Tool) *OpenA
 	return connector
 }
 
-func (oc *OpenAIConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
+func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCompletionNewParams) (*string, error) {
 
-	params := openai.ChatCompletionNewParams{
+	stream := oc.client.Chat.Completions.NewStreaming(ctx, params)
+
+	acc := openai.ChatCompletionAccumulator{}
+
+	for stream.Next() {
+		chunk := stream.Current()
+		acc.AddChunk(chunk)
+
+		// if using tool calls
+		if tool, ok := acc.JustFinishedToolCall(); ok {
+			println("Tool call stream finished:", tool.Index, tool.Name, tool.Arguments)
+		}
+
+		if refusal, ok := acc.JustFinishedRefusal(); ok {
+			println("Refusal stream finished:", refusal)
+		}
+
+		// it's best to use chunks after handling JustFinished events
+		if len(chunk.Choices) > 0 {
+			print(chunk.Choices[0].Delta.Content)
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+
+	return &acc.Choices[0].Message.Content, nil
+}
+
+func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+
+	oParams := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(*systemPrompt),
-			openai.UserMessage(*userPrompt),
+			openai.SystemMessage(*qParams.SysPrompt),
+			openai.UserMessage(*qParams.UserPrompt),
 		}),
 		Model: openai.F(oc.modelID),
 	}
 
-	completion, err := oc.client.Chat.Completions.New(context.TODO(), params)
+	if qParams.Stream {
+		s, err := oc.streamQuery(ctx, oParams)
+		return *s, err
+	}
+
+	completion, err := oc.client.Chat.Completions.New(ctx, oParams)
 	if err != nil {
 		return "", err
 	}
@@ -142,23 +179,21 @@ func (oc *OpenAIConnector) Query(userPrompt *string, systemPrompt *string) (stri
 	return completion.Choices[0].Message.Content, nil
 }
 
-func (oc *OpenAIConnector) QueryWithTool(userPrompt *string, systemPrompt *string) (string, error) {
-	ctx := context.TODO()
-
+func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
 	client := openai.NewClient(
 		option.WithAPIKey(oc.token),
 	)
 
-	params := openai.ChatCompletionNewParams{
+	oParams := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(*systemPrompt),
-			openai.UserMessage(*userPrompt),
+			openai.SystemMessage(*qParams.SysPrompt),
+			openai.UserMessage(*qParams.UserPrompt),
 		}),
 		Tools: openai.F(oc.toolSpecs),
 		Model: openai.F(oc.modelID),
 	}
 
-	completion, _ := client.Chat.Completions.New(ctx, params)
+	completion, _ := client.Chat.Completions.New(ctx, oParams)
 
 	if completion != nil {
 		price := computePriceOpenai(oc.modelID, &completion.Usage)

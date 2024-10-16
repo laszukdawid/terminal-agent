@@ -33,21 +33,28 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 		Any remaining argument that isn't captured by the flags will be concatenated to form the question.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			flags := cmd.Flags()
+
+			// Check if this is streaming response
+			streamFlag, _ := flags.GetBool("stream")
+
 			connector := connector.NewConnector(*provider, *modelID)
 			agent := agent.NewAgent(*connector)
-			flags := cmd.Flags()
 
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")
 
-			response, err := agent.Question(ctx, userQuestion)
+			response, err := agent.Question(ctx, userQuestion, streamFlag)
 			if err != nil {
 				handleError(err)
 				return nil
 			}
 
-			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
-				fmt.Println(response)
+			// Print only if not streaming, and explicitly asked for printing
+			if !streamFlag {
+				if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
+					fmt.Println(response)
+				}
 			}
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
@@ -85,6 +92,9 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 	// 'log' flag whether to log the input and output to a file (default: false)
 	cmd.Flags().BoolP("log", "l", false, "Log the input and output to a file")
+
+	// 'stream' flag whether to stream the response to the stdout (default: false)
+	cmd.Flags().BoolP("stream", "s", false, "Stream the response to the stdout")
 
 	return cmd
 }

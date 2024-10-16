@@ -39,11 +39,16 @@ func NewAgent(connector connector.LLMConnector) *Agent {
 // Question sends a question to the agent and returns the response.
 // It queries the model using the provided question string and the system prompt.
 // If an error occurs during the query, it returns an empty string and an error.
-func (a *Agent) Question(ctx context.Context, s string) (string, error) {
+func (a *Agent) Question(ctx context.Context, s string, isStream bool) (string, error) {
 	if s == "" {
 		return "", ErrEmptyQuery
 	}
-	res, err := a.Connector.Query(&s, a.systemPromptAsk)
+	qParams := connector.QueryParams{
+		UserPrompt: &s,
+		SysPrompt:  a.systemPromptAsk,
+		Stream:     isStream,
+	}
+	res, err := a.Connector.Query(ctx, &qParams)
 	return res, err
 }
 
@@ -54,9 +59,14 @@ func (a *Agent) Question(ctx context.Context, s string) (string, error) {
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 	sugar := utils.Logger.Sugar()
 
+	qParams := connector.QueryParams{
+		UserPrompt: &s,
+		SysPrompt:  a.systemPromptAsk,
+	}
+
 	// Query the model with the task
 	// TODO: There's only a single iterations with tools; either get it or not.
-	res, err := a.Connector.QueryWithTool(&s, a.systemPromptTask)
+	res, err := a.Connector.QueryWithTool(ctx, &qParams)
 	sugar.Debugw("Query response", "res", res, "err", err)
 	return res, err
 }

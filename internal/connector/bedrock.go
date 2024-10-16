@@ -194,10 +194,10 @@ func (bc *BedrockConnector) queryBedrock(
 	return converseOutput, nil
 }
 
-func (bc *BedrockConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
+func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	bc.logger.Sugar().Debugw("Query", "model", bc.modelID)
 
-	converseOutput, err := bc.queryBedrock(context.Background(), userPrompt, systemPrompt, nil)
+	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, nil)
 	if err != nil {
 		return "", err
 	}
@@ -220,7 +220,7 @@ func (bc *BedrockConnector) Query(userPrompt *string, systemPrompt *string) (str
 	return response, nil
 }
 
-func (bc *BedrockConnector) QueryWithTool(userPrompt *string, systemPrompt *string) (string, error) {
+func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
 	bc.logger.Sugar().Debugw("Query with tool", "model", bc.modelID)
 
 	var tools []types.Tool
@@ -235,7 +235,7 @@ func (bc *BedrockConnector) QueryWithTool(userPrompt *string, systemPrompt *stri
 		// TODO: Add tool choice
 	}
 
-	converseOutput, err := bc.queryBedrock(context.Background(), userPrompt, systemPrompt, &toolConfig)
+	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, &toolConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %v", err)
 	}

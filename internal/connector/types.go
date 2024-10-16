@@ -1,5 +1,9 @@
 package connector
 
+import (
+	"context"
+)
+
 type LLMPrice struct {
 	InputPrice  float64
 	OutputPrice float64
@@ -76,7 +80,13 @@ type ClaudeRequest struct {
 	StopSequences     []string  `json:"stop_sequences,omitempty"`
 }
 
+type QueryParams struct {
+	UserPrompt *string
+	SysPrompt  *string
+	Stream     bool
+}
+
 type LLMConnector interface {
-	Query(userPrompt *string, sysPrompt *string) (string, error)
-	QueryWithTool(userPrompt *string, sysPrompt *string) (string, error)
+	Query(ctx context.Context, params *QueryParams) (string, error)
+	QueryWithTool(ctx context.Context, params *QueryParams) (string, error)
 }

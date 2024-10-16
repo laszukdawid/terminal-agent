@@ -2,6 +2,7 @@ package connector
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -61,14 +62,14 @@ func NewPerplexityConnector(modelID *PerplexityModelId) *PerplexityConnector {
 
 // Ask sends a question to the Perplexity API
 // and returns the response.
-func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (string, error) {
-	u.Logger.Sugar().Debugw("Query", "model", c.modelID, "provider", PerplexityProvider, "userPrompt", *userPrompt)
+func (c *PerplexityConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+	u.Logger.Sugar().Debugw("Query", "model", c.modelID, "provider", PerplexityProvider, "userPrompt", *qParams.UserPrompt)
 
 	anthropicRequest := PerplexityRequest{
 		Model: c.modelID,
 		Messages: []Message{
-			{Role: "system", Content: *systemPrompt},
-			{Role: "user", Content: *userPrompt},
+			{Role: "system", Content: *qParams.SysPrompt},
+			{Role: "user", Content: *qParams.UserPrompt},
 		},
 	}
 
@@ -114,6 +115,6 @@ func (c *PerplexityConnector) Query(userPrompt *string, systemPrompt *string) (s
 
 }
 
-func (c *PerplexityConnector) QueryWithTool(userPrompt *string, systemPrompt *string) (string, error) {
+func (c *PerplexityConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
