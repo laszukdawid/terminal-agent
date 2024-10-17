@@ -36,6 +36,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "ask",
 		SilenceUsage: true,
+		Args:         cobra.MinimumNArgs(1),
 		Short:        "Sends a question to the underlying LLM model",
 		Long: `Sends a question to the underlying LLM model
 
@@ -83,7 +84,6 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 			return nil
 		},
-		Args: cobra.MinimumNArgs(1),
 	}
 
 	cmd.MarkFlagRequired("question")

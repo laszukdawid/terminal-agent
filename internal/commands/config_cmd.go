@@ -7,6 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	cmdProvider = "provider"
+	cmdModel    = "model"
+)
+
 func ConfigCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -36,12 +41,13 @@ func ConfigGetCommand(config config.Config) *cobra.Command {
 
 			key := args[0]
 			switch key {
-			case "provider":
+			case cmdProvider:
 				fmt.Println(config.GetDefaultProvider())
-			case "model":
+			case cmdModel:
 				fmt.Println(config.GetDefaultModelId())
 			default:
 				fmt.Println("Unknown key:", key)
+				cmd.Help()
 			}
 		},
 	}
@@ -68,10 +74,10 @@ For example: terminal-agent config set provider bedrock`,
 			value := args[1]
 
 			switch key {
-			case "provider":
+			case cmdProvider:
 				config.SetDefaultProvider(value)
 				fmt.Println("Default provider set to:", value)
-			case "model":
+			case cmdModel:
 				config.SetDefaultModelId(value)
 				fmt.Println("Default model ID set to:", value)
 			default:
