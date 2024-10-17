@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // WriteToJSONLFile appends a JSON-encoded representation of the given data to the specified file.
@@ -17,9 +18,16 @@ import (
 // Returns:
 //
 //	An error if the file could not be created or written to, otherwise nil.
-func WriteToJSONLFile(file string, data interface{}) error {
+func WriteToJSONLFile(filePath string, data interface{}) error {
+	dir := filepath.Dir(filePath)
+
+	// Make sure the directory exists
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
 	// Open file for writing
-	f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}

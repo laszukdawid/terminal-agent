@@ -20,7 +20,8 @@ tasks:
   install:
     cmds:
       - task: build
-      - sudo cp bin/agent /usr/local/bin/agent
+      - mkdir -p ~/.local/bin
+      - cp bin/agent ~/.local/bin/agent
 
   install:alias:
     desc: Install the alias for the agent
@@ -31,7 +32,7 @@ tasks:
       - grep -q 'terminal-agent alias' {{.SHELL_CFG}}
     cmds:
       - printf '\n# terminal-agent alias\n' >> {{.SHELL_CFG}}
-      - printf 'alias aa="agent ask\n' >> {{.SHELL_CFG}}
+      - printf 'alias aa="agent ask"\n' >> {{.SHELL_CFG}}
 
   # Application related
   run:

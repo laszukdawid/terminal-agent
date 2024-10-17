@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,6 +12,14 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
+)
+
+const (
+	logFile = "query_log.jsonl"
+)
+
+var (
+	logDir = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
 )
 
 type askQueryLog struct {
@@ -66,7 +75,8 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 					Timestamp: time.Now().Format(time.RFC3339),
 				}
 
-				if err := utils.WriteToJSONLFile("query_log.jsonl", l); err != nil {
+				logPath := filepath.Join(logDir, logFile)
+				if err := utils.WriteToJSONLFile(logPath, l); err != nil {
 					return fmt.Errorf("failed to write to jsonl file: %w", err)
 				}
 			}
