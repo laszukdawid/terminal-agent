@@ -70,9 +70,15 @@ tasks:
     cmds:
       - go run cmd/agent/main.go config set provider openai
       - go run cmd/agent/main.go config set model gpt-4o-mini-2024-07-18
+  
+  run:set:anthropic:
+    desc: Set the provider to anthropic
+    cmds:
+      - go run cmd/agent/main.go config set provider anthropic
+      - go run cmd/agent/main.go config set model claude-3-haiku-20240307
 
   run:set:bedrock:
-    desc: Set the provider to bedrock
+    desc: Set the provider to bedrock 
     cmds:
       - go run cmd/agent/main.go config set provider bedrock
       - go run cmd/agent/main.go config set model anthropic.claude-3-haiku-20240307-v1:0

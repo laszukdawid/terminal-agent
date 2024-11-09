@@ -84,6 +84,7 @@ type QueryParams struct {
 	UserPrompt *string
 	SysPrompt  *string
 	Stream     bool
+	MaxTokens  int
 }
 
 type LLMConnector interface {

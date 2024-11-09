@@ -47,6 +47,7 @@ func (a *Agent) Question(ctx context.Context, s string, isStream bool) (string, 
 		UserPrompt: &s,
 		SysPrompt:  a.systemPromptAsk,
 		Stream:     isStream,
+		MaxTokens:  200,
 	}
 	res, err := a.Connector.Query(ctx, &qParams)
 	return res, err
