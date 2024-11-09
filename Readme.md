@@ -43,18 +43,37 @@ $ agent config set provider $PROVIDER
 $ agent config set model $MODEL
 ```
 
+### Anthropic
+
+Anthropic is best known for their Sonnet and Haiku models. From subjective experience, they're one of the best commercially available models. One can use them either directly, or via [Amazon Bedrock](#amazon-bedrock).
+
+To use directly, check out their [Getting Started](https://docs.anthropic.com/en/api/getting-started#accessing-the-api) page. Primarely what you need is to create an account, then create an API key, and set it as your env variable, e.g.
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-api00-something-something
+```
+
+Once you have the key set, then configure the terminal-agent to use your preferred provider and model. To see all available models, check [User Guide -> Models](https://docs.anthropic.com/en/docs/about-claude/models).
+
+Setting the provider can be done using `task run:set:anthropic` or directly
+```sh
+$ agent config set provider anthropic
+$ agent config set anthropic.claude-3-haiku-20240307
+```
+
 ### (Amazon) Bedrock
 
 Terminal Agent uses the Bedrock [Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-call.html) and thus supports the same models. These include models from Anthropic (newer than the Instance v1) and Llama 3+ version.
 
 To use these models you need to make sure that you have valid aws credentials set. We support having auth via local credentials or via SSO.
 
-Setting `bedrock` provider with Anthropic Haiku model can be done via
+Setting `bedrock` provider with Anthropic Haiku model can be done with `task run:set:bedrock` or directly
 
 ```sh
 $ agent config set provider bedrock
 $ agent config set anthropic.claude-3-haiku-20240307-v1:0 
 ```
+
 
 ### Perplexity AI
 
@@ -62,7 +81,7 @@ Perplexity AI has an "in development" functionality to provide access to models 
 
 To use `agent` with Perplexity AI, you need to set `PERPLEXITY_KEY` env variable with your individual key, and then set the provider to `perplexity`.
 
-Setting `perplexity` provider with `llama-3.1-8b-instruct` model can be done via
+Setting `perplexity` provider with `llama-3.1-8b-instruct` model can be done with `task run:set:perplexity` or directly
 
 ```sh
 $ agent config set provider bedrock
@@ -73,7 +92,7 @@ $ agent config set llama-3.1-8b-instruct
 
 To use `agent` with OpenAI, you need to set the `OPENAI_API_KEY` environment variable with your individual key, and then set the provider to `openai`.
 
-Setting `openai` provider with `gpt-4o-mini` model can be done via:
+Setting `openai` provider with `gpt-4o-mini` model can be done with `task run:set:openai` or directly
 
 ```sh
 $ agent config set provider openai
@@ -84,7 +103,7 @@ $ agent config set model gpt-4o-mini
 
 - [x] **ask**: Ask general questions via terminal (all models)
 - [x] **task**: Ability to propose and execute a command (expect Perplexity)
-- [x] **stream**: OpenAI and Bedrock models support streaming (Ask only)
+- [x] **stream**: Ask only (except Perplexity)
 - [ ] **unix**: Designs and evaluates a unix command
 - [ ] **python**: Designs and evaluates a python command
 - [ ] **git**: Designs and evaluates a git command

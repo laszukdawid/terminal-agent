@@ -1,13 +1,15 @@
 package connector
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
-	"github.com/laszukdawid/anthropic-go-sdk/client"
+	anthropic "github.com/laszukdawid/anthropic-go-sdk/client"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
@@ -25,17 +27,28 @@ var anthropicVersion string = "2023-06-01"
 type AnthropicConnector struct {
 	modelID string
 	logger  zap.Logger
-	client  *client.ClientWithResponses
+	client  *anthropic.ClientWithResponses
 
 	apiKey    string
 	execTools map[string]tools.Tool
+}
+
+type StreamMessage struct {
+	Type    string            `json:"type"`
+	Message anthropic.Message `json:"message,omitempty"`
+	Delta   ContentBlockDelta `json:"delta,omitempty"`
+}
+
+type ContentBlockDelta struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
 }
 
 func NewAnthropicConnector(modelID *string, execTools map[string]tools.Tool) *AnthropicConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("Creating new Anthropic connector", zap.Any("model", modelID))
 
-	apiClient, err := client.NewClientWithResponses(apiUrl)
+	apiClient, err := anthropic.NewClientWithResponses(apiUrl)
 	if err != nil {
 		logger.Fatal("Failed to create client", zap.Error(err))
 		return nil
@@ -54,30 +67,101 @@ func NewAnthropicConnector(modelID *string, execTools map[string]tools.Tool) *An
 	}
 }
 
+func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, params anthropic.MessagesPostParams, body anthropic.CreateMessageParams) (string, error) {
+	response, err := ac.client.MessagesPost(ctx, &params, body)
+	if err != nil {
+		return "", err
+	}
+	ac.logger.Sugar().Debugw("Anthropic response", "status", response.StatusCode)
+
+	reader := bufio.NewReader(response.Body)
+	defer response.Body.Close()
+
+	var acc string
+
+	for {
+		// Read line by line
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				return acc, nil
+			}
+			return acc, err
+		}
+
+		// Skip empty lines
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Remove "data: " prefix
+		data := strings.TrimPrefix(line, "data: ")
+
+		// Check for end of stream
+		if data == "[DONE]" {
+			return acc, nil
+		}
+
+		// Parse the message
+		var streamMsg StreamMessage
+		if err := json.Unmarshal([]byte(data), &streamMsg); err != nil {
+			return acc, err
+		}
+
+		// Handle different message types
+		switch streamMsg.Type {
+		case "message_start":
+			// Handle start of message
+			ac.logger.Sugar().Debugf("Started message: %s\n", streamMsg.Message.Id)
+		case "content_block_start":
+			// Handle start of content block
+			ac.logger.Debug("Started content block\n")
+		case "content_block_delta":
+			// Handle content update
+			fmt.Print(streamMsg.Delta.Text)
+			acc += streamMsg.Delta.Text
+		case "message_delta":
+			// Handle message update
+			ac.logger.Sugar().Debugln("Message delta")
+		case "message_stop":
+			// Handle end of message
+			ac.logger.Sugar().Debugln("Message complete")
+		}
+	}
+
+}
+
 func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	ac.logger.Sugar().Debugw("Query", "model", ac.modelID)
-	var content client.InputMessage_Content
+	var content anthropic.InputMessage_Content
 	content.FromInputMessageContent0(*qParams.UserPrompt)
 
-	var system client.CreateMessageParams_System
+	var system anthropic.CreateMessageParams_System
 	err := system.FromCreateMessageParamsSystem0(*qParams.SysPrompt)
 	if err != nil {
 		return "", err
 	}
 
-	var model client.Model
+	var model anthropic.Model
 	model.FromModel0(ac.modelID)
 
-	body := client.CreateMessageParams{
+	body := anthropic.CreateMessageParams{
 		MaxTokens: 100,
 		System:    &system,
-		Messages: []client.InputMessage{
+		Messages: []anthropic.InputMessage{
 			{Role: "user", Content: content},
 		},
-		Model: model,
+		Model:  model,
+		Stream: &qParams.Stream,
 	}
 
-	params := client.MessagesPostParams{AnthropicVersion: &anthropicVersion, XApiKey: &ac.apiKey}
+	params := anthropic.MessagesPostParams{AnthropicVersion: &anthropicVersion, XApiKey: &ac.apiKey}
+
+	if qParams.Stream {
+		return ac.queryAnthropicStream(ctx, params, body)
+	}
+
 	response, err := ac.client.MessagesPost(context.Background(), &params, body)
 	if err != nil {
 		return "", err
@@ -91,7 +175,7 @@ func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (
 		return "", fmt.Errorf("model %s returned status code %d: %s", ac.modelID, response.StatusCode, string(bodyBytes))
 	}
 
-	var msg client.Message
+	var msg anthropic.Message
 	json.Unmarshal(bodyBytes, &msg)
 
 	var outText string
