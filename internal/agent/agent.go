@@ -22,6 +22,9 @@ type Agent struct {
 }
 
 func NewAgent(connector connector.LLMConnector) *Agent {
+	if connector == nil {
+		panic("connector is nil")
+	}
 
 	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader, 1)
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)

@@ -83,6 +83,12 @@ tasks:
       - go run cmd/agent/main.go config set provider bedrock
       - go run cmd/agent/main.go config set model anthropic.claude-3-haiku-20240307-v1:0
 
+  run:generate:
+    desc: Execute generation
+    cmds:
+      - go build -tags=tools -o bin/generate 
+      - go generate ./...
+
   # Environment related - mainly for testing
   env:build:
     desc: Build the test environment
@@ -171,3 +177,10 @@ tasks:
         --provider "bedrock"
         --model  "anthropic.claude-3-haiku-20240307-v1:0"
         $Q
+
+  # Misc
+  misc:download-spec:antrhopic:
+    desc: Download the spec for the bedrock model
+    cmds:
+      - mkdir -p specs
+      - curl -o specs/anthropic-spec.yaml https://raw.githubusercontent.com/laszukdawid/anthropic-openapi-spec/refs/heads/main/hosted_spec.json
