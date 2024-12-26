@@ -3,21 +3,13 @@ package commands
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
-	"github.com/laszukdawid/terminal-agent/internal/utils"
+	"github.com/laszukdawid/terminal-agent/internal/history"
 	"github.com/spf13/cobra"
 )
-
-type taskQueryLog struct {
-	Method    string `json:"method"`
-	Timestamp string `json:"timestamp"`
-	Request   string `json:"request"`
-	Answer    string `json:"answer"`
-}
 
 // Simple mock connector for the task command
 type mockConnector struct {
@@ -66,17 +58,8 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			}
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
-				// Write the response to the jsonl file
-				l := taskQueryLog{
-					Method:    "task",
-					Request:   userRequest,
-					Answer:    response,
-					Timestamp: time.Now().Format(time.RFC3339),
-				}
-
-				if err := utils.WriteToJSONLFile("query_log.jsonl", l); err != nil {
-					return fmt.Errorf("failed to write to jsonl file: %w", err)
-				}
+				hClient := history.NewHistory(getLogPath())
+				hClient.Log("task", userRequest, response)
 			}
 
 			return nil

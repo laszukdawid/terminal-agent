@@ -4,7 +4,18 @@ An LLM Agent to help you from and within the terminal.
 
 ## Usage
 
-Recommended way of using the `terminal-agent` is by compiling the code into an `agent` binary, and placing it within your `$PATH`. This can be achieved through executing the [Taskfile](https://taskfile.dev/installation/) command `task install` which builds the binary and copies it to `/usr/local/bin/agent`.
+### Recommended (download)
+
+Recommended way of using the `terminal-agent` is to download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
+(Remember to set execution permissions with `chmod u+x agent`.)
+To test the executability type `agent --help`.
+
+### Compile source
+
+Alternatively, you can compile the code yourself.
+To do so, make sure you have golang installed for compilation and we recommend using [Taskfile](https://taskfile.dev/installation/) for task execution.
+If you only want to compile the repo then execute `task build`.
+In case you want to both build and set it in your path then execute `task install` which will put binary into `~/.local/bin/agent`.
 
 For majority of cases, do check out the `Taskfile.dist.yaml` as it has most relevant tasks / receipies.
 

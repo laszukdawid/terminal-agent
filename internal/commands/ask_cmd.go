@@ -3,31 +3,14 @@ package commands
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
-	"github.com/laszukdawid/terminal-agent/internal/utils"
+	"github.com/laszukdawid/terminal-agent/internal/history"
 	"github.com/spf13/cobra"
 )
-
-const (
-	logFile = "query_log.jsonl"
-)
-
-var (
-	logDir = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
-)
-
-type askQueryLog struct {
-	Method    string `json:"method"`
-	Timestamp string `json:"timestamp"`
-	Query     string `json:"query"`
-	Answer    string `json:"answer"`
-}
 
 func NewQuestionCommand(config config.Config) *cobra.Command {
 	var provider *string
@@ -68,18 +51,8 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			}
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
-				// Write the response to the jsonl file
-				l := askQueryLog{
-					Method:    "ask",
-					Query:     userQuestion,
-					Answer:    response,
-					Timestamp: time.Now().Format(time.RFC3339),
-				}
-
-				logPath := filepath.Join(logDir, logFile)
-				if err := utils.WriteToJSONLFile(logPath, l); err != nil {
-					return fmt.Errorf("failed to write to jsonl file: %w", err)
-				}
+				hClient := history.NewHistory(getLogPath())
+				hClient.Log("ask", userQuestion, response)
 			}
 
 			return nil
