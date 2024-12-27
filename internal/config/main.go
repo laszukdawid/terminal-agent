@@ -24,8 +24,8 @@ type Config interface {
 
 type config struct {
 	LogLevel        string
-	DefaultProvider string `json:"default_provider"`
-	DefaultModelId  string `json:"default_model_id"`
+	DefaultProvider string            `json:"default_provider"`
+	Providers       map[string]string `json:"providers"`
 }
 
 func ensurePathExists(path string) error {
@@ -51,7 +51,12 @@ func ensurePathExists(path string) error {
 func NewDefaultConfig() *config {
 	return &config{
 		DefaultProvider: "bedrock",
-		DefaultModelId:  "anthropic.claude-3-haiku-20240307-v1:0",
+		Providers: map[string]string{
+			"anthropic":  "anthropic.claude-3-haiku-20240307-v1:0",
+			"bedrock":    "anthropic.claude-3-haiku-20240307-v1:0",
+			"perplexity": "llama-3-8b-instruct",
+			"openai":     "gpt-4o-mini",
+		},
 	}
 }
 
@@ -112,12 +117,12 @@ func (config *config) SetDefaultProvider(provider string) error {
 }
 
 func (config *config) GetDefaultModelId() string {
-	return config.DefaultModelId
+	return config.Providers[config.DefaultProvider]
 }
 
 func (config *config) SetDefaultModelId(modelId string) error {
 	log.Println("Setting default model ID to:", modelId)
-	config.DefaultModelId = modelId
+	config.Providers[config.DefaultProvider] = modelId
 	return SaveConfig(config)
 }
 

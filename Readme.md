@@ -95,7 +95,7 @@ To use `agent` with Perplexity AI, you need to set `PERPLEXITY_KEY` env variable
 Setting `perplexity` provider with `llama-3.1-8b-instruct` model can be done with `task run:set:perplexity` or directly
 
 ```sh
-$ agent config set provider bedrock
+$ agent config set provider perplexity
 $ agent config set llama-3.1-8b-instruct
 ```
 
