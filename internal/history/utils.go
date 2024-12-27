@@ -47,7 +47,7 @@ func strToTime(input string) (*time.Time, error) {
 	// If the input was in TimeOnly format, set the date to today
 	if layout == time.TimeOnly {
 		now := time.Now()
-		t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+		t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), 0, t.Location())
 	}
 
 	return &t, nil
