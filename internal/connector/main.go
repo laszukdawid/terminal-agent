@@ -5,6 +5,9 @@ import (
 )
 
 func NewConnector(provider string, modelID string) *LLMConnector {
+	if modelID == "" {
+		panic("modelID is empty")
+	}
 
 	// Define the tools that the agent can use
 	toolsMap := map[string]tools.Tool{
