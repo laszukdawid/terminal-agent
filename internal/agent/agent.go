@@ -15,7 +15,8 @@ var ErrEmptyQuery = fmt.Errorf("empty query")
 
 type Agent struct {
 	Connector connector.LLMConnector
-	UnixTool  tools.UnixTool
+	// UnixTool  tools.UnixTool
+	Tools map[string]tools.Tool
 
 	systemPromptAsk  *string
 	systemPromptTask *string
@@ -30,10 +31,15 @@ func NewAgent(connector connector.LLMConnector) *Agent {
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
 	unixTool := tools.NewUnixTool(nil)
+	websearchTool := tools.NewWebsearchTool()
+	tools := map[string]tools.Tool{
+		unixTool.Name():      unixTool,
+		websearchTool.Name(): websearchTool,
+	}
 
 	return &Agent{
 		Connector:        connector,
-		UnixTool:         *unixTool,
+		Tools:            tools,
 		systemPromptAsk:  &spAsk,
 		systemPromptTask: &spTask,
 	}

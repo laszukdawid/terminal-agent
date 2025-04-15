@@ -9,9 +9,12 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 		panic("modelID is empty")
 	}
 
+	unixTool := tools.NewUnixTool(nil)
+
 	// Define the tools that the agent can use
 	toolsMap := map[string]tools.Tool{
-		"unix": tools.NewUnixTool(nil),
+		unixTool.Name():                 unixTool,
+		tools.NewWebsearchTool().Name(): tools.NewWebsearchTool(),
 	}
 
 	var connector LLMConnector

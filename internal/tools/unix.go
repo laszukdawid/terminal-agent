@@ -2,8 +2,6 @@ package tools
 
 import (
 	"fmt"
-
-	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 const (
@@ -45,7 +43,7 @@ const (
 type UnixTool struct {
 	name         string
 	description  string
-	inputSchema  map[string]interface{}
+	inputSchema  map[string]any
 	systemPrompt string
 
 	executor CodeExecutor
@@ -54,9 +52,9 @@ type UnixTool struct {
 // NewUnix returns a new UnixTool
 func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 
-	inputSchema := map[string]interface{}{
+	inputSchema := map[string]any{
 		"type": "object",
-		"properties": map[string]interface{}{
+		"properties": map[string]any{
 			"command": map[string]string{
 				"type": "string",
 			},
@@ -87,20 +85,8 @@ func (u *UnixTool) Description() string {
 	return u.description
 }
 
-func (u *UnixTool) InputSchema() map[string]interface{} {
+func (u *UnixTool) InputSchema() map[string]any {
 	return u.inputSchema
-}
-
-// DetectTool method of Unix Tool
-// In case the tool can be used, the method returns the Unix command and nil error.
-// Otherwise, it returns an error.
-func (u *UnixTool) DetectTool(input *string) (string, error) {
-	codeObject, err := utils.FindCodeObject(input)
-	if err != nil {
-		return "", err
-	}
-
-	return codeObject.Code, nil
 }
 
 func (u *UnixTool) ExecCode(code string) (string, error) {
@@ -128,7 +114,7 @@ func (u *UnixTool) Run(cmd *string) (string, error) {
 	return u.ExecCode(*cmd)
 }
 
-func (u *UnixTool) RunSchema(input map[string]interface{}) (string, error) {
+func (u *UnixTool) RunSchema(input map[string]any) (string, error) {
 	// Extract command from input
 	cmd, ok := input["command"].(string)
 	if !ok {

@@ -29,8 +29,7 @@ type AnthropicConnector struct {
 	logger  zap.Logger
 	client  *anthropic.ClientWithResponses
 
-	apiKey    string
-	execTools map[string]tools.Tool
+	apiKey string
 }
 
 type StreamMessage struct {

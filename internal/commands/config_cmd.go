@@ -12,7 +12,7 @@ const (
 	cmdModel    = "model"
 )
 
-func ConfigCommand(config config.Config) *cobra.Command {
+func NewConfigCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage the terminal-agent configuration",

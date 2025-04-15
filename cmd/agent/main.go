@@ -97,7 +97,8 @@ func mainRun() exitCode {
 	cmd := NewCommand()
 	cmd.AddCommand(commands.NewQuestionCommand(c))
 	cmd.AddCommand(commands.NewHistoryCommand(c))
-	cmd.AddCommand(commands.ConfigCommand(c))
+	cmd.AddCommand(commands.NewConfigCommand(c))
+	cmd.AddCommand(commands.NewToolCommand(c))
 
 	ctx := context.Background()
 
