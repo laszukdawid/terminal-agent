@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
@@ -30,6 +31,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 			// Check if this is streaming response
 			streamFlag, _ := flags.GetBool("stream")
+			plainFlag, _ := flags.GetBool("plain")
 
 			connector := connector.NewConnector(*provider, *modelID)
 			agent := agent.NewAgent(*connector)
@@ -46,6 +48,9 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			// Print only if not streaming, and explicitly asked for printing
 			if !streamFlag {
 				if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
+					if !plainFlag {
+						response = handleMarkdown(response)
+					}
 					fmt.Println(response)
 				}
 			}
@@ -79,7 +84,32 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	// 'stream' flag whether to stream the response to the stdout (default: false)
 	cmd.Flags().BoolP("stream", "s", false, "Stream the response to the stdout")
 
+	// 'plain' flag whether to render the response as plain text (default: false)
+	cmd.Flags().BoolP("plain", "k", false, "Render the response as plain text")
+
 	return cmd
+}
+
+func handleMarkdown(inString string) string {
+	var response string
+	if inString == "" {
+		return ""
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
+	)
+	if err != nil {
+		fmt.Println("Error rendering markdown:", err)
+		return ""
+	}
+	// Render the response as markdown into the response variable
+	response, err = r.Render(inString)
+	if err != nil {
+		fmt.Println("Error rendering markdown:", err)
+		return ""
+	}
+	return response
 }
 
 func handleError(err error) {

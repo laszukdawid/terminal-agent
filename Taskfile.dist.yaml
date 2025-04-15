@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 dotenv:
   - .env
@@ -31,8 +31,14 @@ tasks:
     status:
       - grep -q 'terminal-agent alias' {{.SHELL_CFG}}
     cmds:
-      - printf '\n# terminal-agent alias\n' >> {{.SHELL_CFG}}
-      - printf 'alias aa="agent ask"\n' >> {{.SHELL_CFG}}
+      - printf '\n# BEGIN terminal-agent alias\n' >> {{.SHELL_CFG}}
+      - printf 'alias aa="agent ask --markdown "\n' >> {{.SHELL_CFG}}
+      - printf '\n# END terminal-agent alias\n' >> {{.SHELL_CFG}}
+
+  uninstall:alias:
+    desc: Remove aliases for the agent
+    cmds:
+      - sed -i -n -e '/^# BEGIN/,/^# END/!p' {{.SHELL_CFG}}
 
   # Application related
   run:
@@ -42,7 +48,7 @@ tasks:
 
   run:ask:
     vars:
-      ARGS: '{{.CLI_ARGS}}'
+      ARGS: "{{.CLI_ARGS}}"
     desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
       - go run cmd/agent/main.go --loglevel debug ask --log {{.ARGS}}
@@ -50,7 +56,7 @@ tasks:
 
   run:ask:stream:
     vars:
-      ARGS: '{{.CLI_ARGS}}'
+      ARGS: "{{.CLI_ARGS}}"
     desc: Run the agent with a question, e.g. `task run:ask -- "What is the meaning of life?"`
     cmds:
       - go run cmd/agent/main.go  --loglevel debug ask --stream --log {{.ARGS}}
@@ -58,7 +64,7 @@ tasks:
 
   run:task:
     vars:
-      ARGS: '{{.CLI_ARGS}}'
+      ARGS: "{{.CLI_ARGS}}"
     desc: Run the agent with a task, e.g. `task run:task -- "List all files in home directory"`
     cmds:
       # - go run cmd/agent/main.go task --log --provider $PROVIDER --query "{{.ARGS}}"
@@ -70,7 +76,7 @@ tasks:
     cmds:
       - go run cmd/agent/main.go config set provider openai
       - go run cmd/agent/main.go config set model gpt-4o-mini-2024-07-18
-  
+
   run:set:anthropic:
     desc: Set the provider to anthropic
     cmds:
@@ -78,7 +84,7 @@ tasks:
       - go run cmd/agent/main.go config set model claude-3-haiku-20240307
 
   run:set:bedrock:
-    desc: Set the provider to bedrock 
+    desc: Set the provider to bedrock
     cmds:
       - go run cmd/agent/main.go config set provider bedrock
       - go run cmd/agent/main.go config set model anthropic.claude-3-haiku-20240307-v1:0
@@ -86,7 +92,7 @@ tasks:
   run:generate:
     desc: Execute generation
     cmds:
-      - go build -tags=tools -o bin/generate 
+      - go build -tags=tools -o bin/generate
       - go generate ./...
 
   # Environment related - mainly for testing

@@ -27,7 +27,7 @@ Intended for general questions.
 agent ask what is a file descriptor?
 ```
 
-If you like to see characters appearing in terminal, add `--stream` flag.
+If you like to see characters appearing in terminal, add `--stream` flag. By default, all results are formatted as a markdown using [glamour](https://github.com/charmbracelet/glamour).
 
 **Life hack**: If you set alias `alias aa="agent ask"` you'll have a quick shortcut to ask questions from terminal. It's quicker than opening browser to search! Execute `task install:alias` for auto-setup.
 
