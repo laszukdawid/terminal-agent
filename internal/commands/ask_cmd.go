@@ -51,7 +51,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 					if !plainFlag {
 						response = handleMarkdown(response)
 					}
-					fmt.Println(response)
+					cmd.Println(response)
 				}
 			}
 

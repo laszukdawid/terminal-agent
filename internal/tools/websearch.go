@@ -1,13 +1,17 @@
 package tools
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
+	"os"
 	"strings"
 
-	"github.com/laszukdawid/terminal-agent/internal/utils"
+	tavilygo "github.com/diverged/tavily-go"
+	"github.com/diverged/tavily-go/client"
+	"github.com/diverged/tavily-go/models"
+)
+
+const (
+	NpxTavilyMcpServer = "npx-tavily-mcp-server"
 )
 
 const (
@@ -33,6 +37,8 @@ type WebsearchTool struct {
 	description  string
 	inputSchema  map[string]any
 	systemPrompt string
+
+	tavily *client.TavilyClient
 }
 
 // NewWebsearchTool returns a new WebsearchTool
@@ -59,11 +65,18 @@ func NewWebsearchTool() *WebsearchTool {
     </examples>
     `
 
+	tavilyKey := os.Getenv("TAVILY_KEY")
+	if tavilyKey == "" {
+		fmt.Println("TAVILY_KEY is not set! This won't work.")
+	}
+	tavily := tavilygo.NewClient(tavilyKey)
+
 	return &WebsearchTool{
 		name:         websearchToolName,
 		description:  websearchToolDescription,
 		inputSchema:  inputSchema,
 		systemPrompt: systemPrompt,
+		tavily:       tavily,
 	}
 }
 
@@ -81,55 +94,37 @@ func (w *WebsearchTool) InputSchema() map[string]interface{} {
 
 // Run method of Websearch Tool
 func (w *WebsearchTool) Run(query *string) (string, error) {
-	return w.searchDuckDuckGo(*query)
+	return w.searchTavily(*query)
 }
 
-func (w *WebsearchTool) RunSchema(input map[string]interface{}) (string, error) {
+func (w *WebsearchTool) RunSchema(input map[string]any) (string, error) {
 	// Extract query from input
 	query, ok := input["query"].(string)
 	if !ok {
 		return "", fmt.Errorf("failed to extract query from tool input")
 	}
 
-	return w.searchDuckDuckGo(query)
+	return w.searchTavily(query)
 }
 
-func (w *WebsearchTool) searchDuckDuckGo(query string) (string, error) {
-	sugar := utils.Logger.Sugar()
-	escapedQuery := url.QueryEscape(query)
-	apiURL := fmt.Sprintf(duckduckgoAPIURL, escapedQuery)
-	sugar.Debugf("DuckDuckGo API URL: %s", apiURL)
+func (w *WebsearchTool) searchTavily(query string) (string, error) {
+	searchReq := models.SearchRequest{
+		Query:       query,
+		SearchDepth: "basic",
+	}
 
-	resp, err := http.Get(apiURL)
+	response, err := tavilygo.Search(w.tavily, searchReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to make DuckDuckGo API request: %w", err)
+		return "", fmt.Errorf("failed to make Tavily API request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("DuckDuckGo API request failed with status code: %d", resp.StatusCode)
-	}
-
-	var duckduckgoResponse DuckDuckGoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&duckduckgoResponse); err != nil {
-		return "", fmt.Errorf("failed to decode DuckDuckGo API response: %w", err)
-	}
-	sugar.Debugf("DuckDuckGo API response: %+v", duckduckgoResponse)
-	if len(duckduckgoResponse.Results) == 0 {
-		return "No results found.", nil
+	if response == nil {
+		return "", fmt.Errorf("tavily API response is nil")
 	}
 
 	var results strings.Builder
-	for i, result := range duckduckgoResponse.Results {
-		if i >= numResults {
-			break
-		}
-		results.WriteString(fmt.Sprintf("- [%s](%s)\n", result.Heading, result.FirstURL))
-	}
+	for _, result := range response.Results {
+		results.WriteString(fmt.Sprintf("- [%s](%s)\n", result.Title, result.URL))
 
-	if results.String() == "" {
-		return "No results found.", nil
 	}
-
 	return results.String(), nil
 }

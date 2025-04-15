@@ -41,6 +41,7 @@ func NewToolCommand(config config.Config) *cobra.Command {
 				return fmt.Errorf("failed to execute tool %s: %w", toolName, err)
 			}
 
+			result = handleMarkdown(result)
 			cmd.Println(result)
 			return nil
 		},

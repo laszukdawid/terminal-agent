@@ -2,6 +2,11 @@
 
 An LLM Agent to help you from and within the terminal.
 
+## Example
+
+![answer to how to attach an image to Readme](/docs/assets/aa-how-to-attach-image.png)
+![example of streaming in terminal](/docs/assets/stream-example.gif)
+
 ## Usage
 
 ### Recommended (download)
@@ -115,6 +120,8 @@ $ agent config set model gpt-4o-mini
 - [x] **ask**: Ask general questions via terminal (all models)
 - [x] **task**: Ability to propose and execute a command (expect Perplexity)
 - [x] **stream**: Ask only (except Perplexity)
+- [x] **markdown**: By default, provide nicely formatted outputs in terminal
+- [x] **websearch**: Can search the web and display links
 - [ ] **unix**: Designs and evaluates a unix command
 - [ ] **python**: Designs and evaluates a python command
 - [ ] **git**: Designs and evaluates a git command
