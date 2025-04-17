@@ -82,12 +82,12 @@ func convertToolsToOpenAI(execTools map[string]tools.Tool) []openai.ChatCompleti
 		inputSchema := tool.InputSchema()
 
 		toolSpecs = append(toolSpecs, openai.ChatCompletionToolParam{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F(tool.Name()),
-				Description: openai.F(tool.Description()),
-				Parameters:  openai.F(openai.FunctionParameters(inputSchema)),
-			}),
+			// Type: openai.ChatCompletionToolTypeFunction,
+			Function: openai.FunctionDefinitionParam{
+				Name:        tool.Name(),
+				Description: openai.Opt(tool.Description()),
+				Parameters:  openai.FunctionParameters(inputSchema),
+			},
 		})
 	}
 
@@ -108,7 +108,7 @@ func NewOpenAIConnector(modelID *string, execTools map[string]tools.Tool) *OpenA
 	)
 
 	connector := &OpenAIConnector{
-		client:    client,
+		client:    &client,
 		logger:    logger,
 		modelID:   *modelID,
 		token:     token,
@@ -154,11 +154,11 @@ func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCo
 func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 
 	oParams := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(*qParams.SysPrompt),
 			openai.UserMessage(*qParams.UserPrompt),
-		}),
-		Model: openai.F(oc.modelID),
+		},
+		Model: oc.modelID,
 	}
 
 	if qParams.Stream {
@@ -185,12 +185,12 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	)
 
 	oParams := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(*qParams.SysPrompt),
 			openai.UserMessage(*qParams.UserPrompt),
-		}),
-		Tools: openai.F(oc.toolSpecs),
-		Model: openai.F(oc.modelID),
+		},
+		Tools: oc.toolSpecs,
+		Model: oc.modelID,
 	}
 
 	completion, _ := client.Chat.Completions.New(ctx, oParams)
