@@ -42,7 +42,7 @@ func NewGoogleConnector(modelID *string) *GoogleConnector {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("error creating Google AI client: %w", err))
+		logger.Fatal(fmt.Sprintf("error creating Google AI client: %v", err))
 		return nil
 	}
 
