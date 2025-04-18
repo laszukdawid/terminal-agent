@@ -8,6 +8,7 @@ import (
 	tavilygo "github.com/diverged/tavily-go"
 	"github.com/diverged/tavily-go/client"
 	"github.com/diverged/tavily-go/models"
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 const (
@@ -20,6 +21,17 @@ const (
     The input to the tool is a search query. The tool then provides a markdown list of the first few results.`
 	duckduckgoAPIURL = "https://api.duckduckgo.com/?q=%s&format=json&pretty=1"
 	numResults       = 5 // Number of results to return
+
+	websearchSystemPrompt = `You use the websearch tool to find relevant information based on the user's query.
+    The input is provided in English and you provide the search query.
+    Your output is a markdown list of the first few results.
+    Below are some examples where the query is prefixed with "Q:".
+
+    <examples>
+    Q: What is the capital of France?
+    - Paris: https://en.wikipedia.org/wiki/Paris
+    </examples>
+    `
 )
 
 type DuckDuckGoResult struct {
@@ -43,6 +55,7 @@ type WebsearchTool struct {
 
 // NewWebsearchTool returns a new WebsearchTool
 func NewWebsearchTool() *WebsearchTool {
+	logger := *utils.GetLogger()
 	inputSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -54,20 +67,10 @@ func NewWebsearchTool() *WebsearchTool {
 		"required": []string{"query"},
 	}
 
-	systemPrompt := `You use the websearch tool to find relevant information based on the user's query.
-    The input is provided in English and you provide the search query.
-    Your output is a markdown list of the first few results.
-    Below are some examples where the query is prefixed with "Q:".
-
-    <examples>
-    Q: What is the capital of France?
-    - Paris: https://en.wikipedia.org/wiki/Paris
-    </examples>
-    `
-
 	tavilyKey := os.Getenv("TAVILY_KEY")
 	if tavilyKey == "" {
-		fmt.Println("TAVILY_KEY is not set! This won't work.")
+		logger.Warn("Websearch tool requires TAVILY_KEY environment variable to be set")
+		return nil
 	}
 	tavily := tavilygo.NewClient(tavilyKey)
 
@@ -75,7 +78,7 @@ func NewWebsearchTool() *WebsearchTool {
 		name:         websearchToolName,
 		description:  websearchToolDescription,
 		inputSchema:  inputSchema,
-		systemPrompt: systemPrompt,
+		systemPrompt: websearchSystemPrompt,
 		tavily:       tavily,
 	}
 }

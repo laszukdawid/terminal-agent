@@ -89,6 +89,12 @@ tasks:
       - go run cmd/agent/main.go config set provider bedrock
       - go run cmd/agent/main.go config set model anthropic.claude-3-haiku-20240307-v1:0
 
+  run:set:google:
+    desc: Set the provider to google
+    cmds:
+      - go run cmd/agent/main.go config set provider google
+      - go run cmd/agent/main.go config set model gemini-2.0-flash-lite
+
   run:generate:
     desc: Execute generation
     cmds:
