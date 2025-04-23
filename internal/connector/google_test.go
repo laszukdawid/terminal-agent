@@ -6,6 +6,7 @@ import (
 
 	genai "github.com/google/generative-ai-go/genai"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConvertToolsToGoogle(t *testing.T) {
@@ -102,14 +103,13 @@ func TestNewGoogleConnector(t *testing.T) {
 }
 
 func TestNewGoogleConnectorNoKey(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
 	modelID := "gemini-2.0-flash-lite"
 	execTools := map[string]tools.Tool{}
 
 	connector := NewGoogleConnector(&modelID, execTools)
 
-	if connector == nil {
-		t.Fatal("Expected connector to be created, got nil")
-	}
+	assert.Nil(t, connector, "Expected connector to be nil when GEMINI_API_KEY is not set")
 }
 
 func TestNewGoogleConnectorNoModelID(t *testing.T) {
