@@ -7,6 +7,7 @@ import (
 )
 
 func TestWebsearchToolHelpText(t *testing.T) {
+	t.Setenv("TAVILY_KEY", "test_key")
 	// Create a new WebsearchTool instance
 	websearchTool := NewWebsearchTool()
 
