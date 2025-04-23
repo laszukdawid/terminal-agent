@@ -20,12 +20,15 @@ type Config interface {
 	GetDefaultModelId() string
 	SetDefaultProvider(string) error
 	SetDefaultModelId(string) error
+	GetMcpFilePath() string
+	SetMcpFilePath(string) error
 }
 
 type config struct {
 	LogLevel        string
 	DefaultProvider string            `json:"default_provider"`
 	Providers       map[string]string `json:"providers"`
+	McpFilePath     string            `json:"mcp_file_path"`
 }
 
 func ensurePathExists(path string) error {
@@ -123,6 +126,16 @@ func (config *config) GetDefaultModelId() string {
 func (config *config) SetDefaultModelId(modelId string) error {
 	log.Println("Setting default model ID to:", modelId)
 	config.Providers[config.DefaultProvider] = modelId
+	return SaveConfig(config)
+}
+
+func (config *config) GetMcpFilePath() string {
+	return config.McpFilePath
+}
+
+func (config *config) SetMcpFilePath(path string) error {
+	log.Println("Setting MCP file path to:", path)
+	config.McpFilePath = path
 	return SaveConfig(config)
 }
 

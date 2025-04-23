@@ -81,8 +81,26 @@ Available subcommands:
 Usage requires at least two positional arguments:
   1. toolName: The name of the tool to use
   2. query: One or more words forming the query to send to the tool`,
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// If no arguments, show help
+			if len(args) == 0 {
+				cmd.Help()
+				return nil
+			}
+
+			// Check if the first argument is "list" or a tool name
+			if args[0] == "list" {
+				// Let the list subcommand handle it
+				return nil
+			}
+
+			// This is a direct tool execution, treat the first arg as a tool name
+			// and the rest as the query
+			if len(args) < 2 {
+				return fmt.Errorf("not enough arguments, expected: tool [tool-name] [query]")
+			}
+
 			toolName := args[0]
 
 			// Check if the tool exists
@@ -94,12 +112,18 @@ Usage requires at least two positional arguments:
 				return fmt.Errorf("query required for executing tool %s", toolName)
 			}
 
-			query := strings.Join(args[1:], " ")
-			tool, ok := allTools[toolName]
+			// Get the MCP file path from config
+			mcpFilePath := config.GetMcpFilePath()
 
+			// Get all tools including those from MCP file if available
+			allTools := tools.GetAllToolsWithMCP(mcpFilePath)
+
+			query := strings.Join(args[1:], " ")
 			fmt.Println("Tool name:", toolName)
 			fmt.Println("Query:", query)
 
+			// Check if the tool exists
+			tool, ok := allTools[toolName]
 			if !ok {
 				return fmt.Errorf("tool %s not found", toolName)
 			}
@@ -120,4 +144,41 @@ Usage requires at least two positional arguments:
 	cmd.AddCommand(listCmd, helpCmd, execCmd)
 
 	return cmd
+}
+
+// NewToolListCommand creates a command to list available tools
+func NewToolListCommand(config config.Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all available tools",
+		Long:  `List all available tools, including built-in tools and tools from the MCP file if configured.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Get the MCP file path from config
+			mcpFilePath := config.GetMcpFilePath()
+
+			// Get all tools including those from MCP file if available
+			allTools := tools.GetAllToolsWithMCP(mcpFilePath)
+
+			if len(allTools) == 0 {
+				fmt.Println("No tools available")
+				return nil
+			}
+
+			fmt.Println("Available tools:")
+			fmt.Println("----------------")
+
+			for name, tool := range allTools {
+				fmt.Printf("- %s: %s\n", name, tool.Description())
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+// Adapt the original tool command to maintain backward compatibility
+func init() {
+	// This will be automatically added to the main command based on path structure
 }
