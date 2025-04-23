@@ -29,7 +29,7 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 	case AnthropicProvider:
 		connector = NewAnthropicConnector(&modelID, toolsMap)
 	case GoogleProvider:
-		connector = NewGoogleConnector(&modelID)
+		connector = NewGoogleConnector(&modelID, toolsMap)
 	}
 
 	return &connector
