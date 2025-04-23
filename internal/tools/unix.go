@@ -37,6 +37,38 @@ const (
 
 	Remember to provide the Unix command within <code> xml tag, and the <response> tag above is just for illustrative purposes.
 	`
+
+	unixToolHelp = `UNIX TOOL HELP
+==============
+
+NAME
+    unix - Execute Unix/bash commands
+
+DESCRIPTION
+    The unix tool provides a way to execute Unix/bash commands directly from the terminal agent.
+    It takes a command string as input and returns the output from executing that command.
+
+USAGE
+    terminal-agent tool exec unix [command]
+    
+    Examples:
+      terminal-agent tool exec unix "ls -la"
+      terminal-agent tool exec unix "cat file.txt | grep pattern"
+      terminal-agent tool exec unix "find . -name \"*.go\" -type f | wc -l"
+
+INPUT SCHEMA
+    {
+      "command": "The Unix command to execute (string)"
+    }
+
+OUTPUT
+    The tool returns the standard output and standard error from executing the command.
+    
+SECURITY NOTES
+    - Commands are executed in the current user's context
+    - Use with caution as it can modify your file system
+    - Commands requiring elevated privileges will fail unless the terminal agent is running with those privileges
+`
 )
 
 // UnixTool Tool implements the Tool interface
@@ -45,6 +77,7 @@ type UnixTool struct {
 	description  string
 	inputSchema  map[string]any
 	systemPrompt string
+	helpText     string
 
 	executor CodeExecutor
 }
@@ -57,6 +90,8 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 		"properties": map[string]any{
 			"command": map[string]string{
 				"type": "string",
+				"description": "The Unix command to execute. " +
+					"Please provide the command in a single line without any new lines.",
 			},
 		},
 	}
@@ -73,6 +108,7 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 		description:  unixToolDescription,
 		inputSchema:  inputSchema,
 		systemPrompt: systemPrompt,
+		helpText:     unixToolHelp,
 		executor:     codeExecutor,
 	}
 }
@@ -87,6 +123,11 @@ func (u *UnixTool) Description() string {
 
 func (u *UnixTool) InputSchema() map[string]any {
 	return u.inputSchema
+}
+
+// HelpText returns detailed help information for the unix tool
+func (u *UnixTool) HelpText() string {
+	return u.helpText
 }
 
 func (u *UnixTool) ExecCode(code string) (string, error) {

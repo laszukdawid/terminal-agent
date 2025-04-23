@@ -68,8 +68,8 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	}
 
 	cmd.MarkFlagRequired("task")
-	provider = cmd.Flags().StringP("provider", "p", connector.PerplexityProvider, "The provider to use for the question")
-	modelID = cmd.Flags().StringP("model", "m", "", "The model ID to use for the question")
+	provider = cmd.Flags().StringP("provider", "p", config.GetDefaultProvider(), "The provider to use for the question")
+	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
 
 	// 'print' flag whether to print response to the stdout (default: true)
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")

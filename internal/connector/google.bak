@@ -39,7 +39,7 @@ func NewGoogleConnector(modelID *string, execTools map[string]tools.Tool) *Googl
 
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		logger.Error("GEMINI_API_KEY is required to use Google Gemini models")
+		logger.Fatal("GEMINI_API_KEY is required to use Google Gemini models")
 		return nil
 	}
 
