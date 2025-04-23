@@ -87,6 +87,17 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	// 'plain' flag whether to render the response as plain text (default: false)
 	cmd.Flags().BoolP("plain", "k", false, "Render the response as plain text")
 
+	// Add help subcommand that shows the same help as the parent command
+	helpCmd := &cobra.Command{
+		Use:   "help",
+		Short: "Help about the ask command",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Display the parent command's help
+			cmd.Parent().Help()
+		},
+	}
+	cmd.AddCommand(helpCmd)
+
 	return cmd
 }
 

@@ -57,6 +57,8 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 		"properties": map[string]any{
 			"command": map[string]string{
 				"type": "string",
+				"description": "The Unix command to execute. " +
+					"Please provide the command in a single line without any new lines.",
 			},
 		},
 	}
