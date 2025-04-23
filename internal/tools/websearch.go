@@ -32,6 +32,40 @@ const (
     - Paris: https://en.wikipedia.org/wiki/Paris
     </examples>
     `
+	websearchToolHelp = `WEBSEARCH TOOL HELP
+==================
+
+NAME
+    websearch - Search the web and retrieve relevant results
+
+DESCRIPTION
+    The websearch tool allows searching the internet for up-to-date information.
+    It takes a search query as input and returns a markdown-formatted list of relevant search results
+    from the web. The tool uses the Tavily search API to perform web searches.
+
+USAGE
+    terminal-agent tool exec websearch [query]
+    
+    Examples:
+      terminal-agent tool exec websearch "latest golang release"
+      terminal-agent tool exec websearch "weather in New York"
+      terminal-agent tool exec websearch "how to implement rate limiting in go"
+
+INPUT SCHEMA
+    {
+      "query": "The search query to use for the web search (string)"
+    }
+
+OUTPUT
+    The tool returns a markdown-formatted list of search results, each with a title and URL:
+    
+    - [Result Title 1](https://url1.example.com)
+    - [Result Title 2](https://url2.example.com)
+    - ...
+
+REQUIREMENTS
+    - Requires a Tavily API key set as the TAVILY_KEY environment variable
+`
 )
 
 type DuckDuckGoResult struct {
@@ -49,6 +83,7 @@ type WebsearchTool struct {
 	description  string
 	inputSchema  map[string]any
 	systemPrompt string
+	helpText     string
 
 	tavily *client.TavilyClient
 }
@@ -78,7 +113,8 @@ func NewWebsearchTool() *WebsearchTool {
 		name:         websearchToolName,
 		description:  websearchToolDescription,
 		inputSchema:  inputSchema,
-		systemPrompt: websearchSystemPrompt,
+		systemPrompt: systemPrompt,
+		helpText:     websearchToolHelp,
 		tavily:       tavily,
 	}
 }
@@ -93,6 +129,11 @@ func (w *WebsearchTool) Description() string {
 
 func (w *WebsearchTool) InputSchema() map[string]interface{} {
 	return w.inputSchema
+}
+
+// HelpText returns detailed help information for the websearch tool
+func (w *WebsearchTool) HelpText() string {
+	return w.helpText
 }
 
 // Run method of Websearch Tool

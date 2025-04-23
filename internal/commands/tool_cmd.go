@@ -52,12 +52,22 @@ Available subcommands:
 			}
 
 			toolName := args[0]
-			if _, ok := allTools[toolName]; !ok {
+			tool, ok := allTools[toolName]
+			if !ok {
 				return fmt.Errorf("tool %s not found", toolName)
 			}
 
-			fmt.Printf("Help for tool '%s'\n", toolName)
-			// Here you can add more specific help for each tool if available
+			// Display the detailed help text for the specific tool
+			helpText := tool.HelpText()
+			if helpText != "" {
+				cmd.Println(helpText)
+			} else {
+				// Fallback to basic information if no specific help text is available
+				cmd.Printf("Help for tool '%s'\n\n", toolName)
+				cmd.Printf("Description: %s\n\n", tool.Description())
+				cmd.Println("Input Schema:")
+				cmd.Printf("%v\n", tool.InputSchema())
+			}
 			return nil
 		},
 	}

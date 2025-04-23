@@ -11,6 +11,9 @@ type Tool interface {
 	Name() string
 	Description() string
 	InputSchema() map[string]any
+
+	// HelpText returns detailed help information for the tool
+	HelpText() string
 }
 
 type CodeExecutor interface {
