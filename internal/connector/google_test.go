@@ -1,7 +1,6 @@
 package connector
 
 import (
-	"reflect"
 	"testing"
 
 	genai "github.com/google/generative-ai-go/genai"
@@ -10,7 +9,6 @@ import (
 )
 
 func TestConvertToolsToGoogle(t *testing.T) {
-	t.Skip("Skipping test for now")
 	// Mock UnixTool
 	unixTool := tools.NewUnixTool(nil)
 
@@ -19,7 +17,8 @@ func TestConvertToolsToGoogle(t *testing.T) {
 	}
 
 	// Call convertToolsToGoogle
-	toolSpecs := convertToolsToGoogle(execTools)
+	toolSpecs, err := convertToolsToGoogle(execTools)
+	assert.NoError(t, err, "Expected no error, got %v", err)
 
 	// Assert the results
 	if len(toolSpecs) != 1 {
@@ -35,55 +34,154 @@ func TestConvertToolsToGoogle(t *testing.T) {
 	if toolSpec.FunctionDeclarations[0].Description != unixTool.Description() {
 		t.Errorf("Expected tool description to be '%s', got '%s'", unixTool.Description(), toolSpec.FunctionDeclarations[0].Description)
 	}
-
-	expectedParams := convertToGenaiSchema(unixTool.InputSchema())
-	if !reflect.DeepEqual(toolSpec.FunctionDeclarations[0].Parameters, expectedParams) {
-		t.Errorf("Expected tool parameters to be '%v', got '%v'", expectedParams, toolSpec.FunctionDeclarations[0].Parameters)
-	}
 }
 
 func TestConvertToGenaiSchema(t *testing.T) {
-	inputSchema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"command": map[string]any{
-				"type":        "string",
-				"description": "The Unix command to execute.",
+
+	// Define test cases
+	tests := []struct {
+		name     string
+		input    map[string]any
+		expected genai.Schema
+	}{
+		{name: "Empty schema",
+
+			input: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+				"required":   []string{},
+			},
+			expected: genai.Schema{
+				Type:        genai.TypeObject,
+				Description: "",
+				Properties:  map[string]*genai.Schema{},
+				Required:    []string{},
 			},
 		},
-		"required": []string{"command"},
+		{name: "Missing required",
+			input: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"command": map[string]any{
+						"type": "string",
+
+						"description": "The Unix command to execute.",
+					},
+				},
+			},
+			expected: genai.Schema{
+				Type:        genai.TypeObject,
+				Description: "",
+				Properties: map[string]*genai.Schema{
+					"command": {
+						Type:        genai.TypeString,
+						Description: "The Unix command to execute.",
+					},
+				},
+				Required: []string{},
+			},
+		},
+		{name: "Single command property",
+			input: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"command": map[string]any{
+						"type":        "string",
+						"description": "The Unix command to execute.",
+					},
+				},
+				"required": []string{"command"},
+			},
+			expected: genai.Schema{
+				Type:        genai.TypeObject,
+				Description: "",
+				Properties: map[string]*genai.Schema{
+					"command": {
+						Type:        genai.TypeString,
+						Description: "The Unix command to execute.",
+					},
+				},
+				Required: []string{"command"},
+			},
+		},
+		{name: "Multiple properties",
+			input: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"foo": map[string]any{
+						"type":        "integer",
+						"description": "An integer property.",
+					},
+					"bar": map[string]any{
+						"type":        "boolean",
+						"description": "A boolean property.",
+					},
+					"baz": map[string]any{
+						"type":        "array",
+						"description": "An array property.",
+						"items": map[string]any{
+							"type":        "string",
+							"description": "An item in the array.",
+						},
+					},
+				},
+			},
+			expected: genai.Schema{
+				Type:        genai.TypeObject,
+				Description: "",
+				Properties: map[string]*genai.Schema{
+					"foo": {
+						Type:        genai.TypeInteger,
+						Description: "An integer property.",
+					},
+					"bar": {
+						Type:        genai.TypeBoolean,
+						Description: "A boolean property.",
+					},
+					"baz": {
+						Type:        genai.TypeArray,
+						Description: "An array property.",
+						Items: &genai.Schema{
+							Type:        genai.TypeString,
+							Description: "An item in the array.",
+						},
+					},
+				},
+				Required: []string{},
+			},
+		},
 	}
 
-	genaiSchema := convertToGenaiSchema(inputSchema)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Call the function to test
+			result, err := convertInputSchemaToGenaiSchema(test.input)
+			assert.NoError(t, err, "Expected no error, got %v", err)
 
-	if genaiSchema.Type != genai.TypeObject {
-		t.Errorf("Expected type to be TypeObject, got %v", genaiSchema.Type)
+			// Check if the result matches the expected output
+			assert.Equal(t, test.expected.Type, result.Type, "Expected type to be %v, got %v", test.expected.Type, result.Type)
+			assert.Equal(t, test.expected.Description, result.Description, "Expected description to be %v, got %v", test.expected.Description, result.Description)
+			assert.Equal(t, test.expected.Required, result.Required, "Expected required to be %v, got %v", test.expected.Required, result.Required)
+			assert.Equal(t, len(test.expected.Properties), len(result.Properties), "Expected %d properties, got %d", len(test.expected.Properties), len(result.Properties))
+			for key, expectedProp := range test.expected.Properties {
+				actualProp, ok := result.Properties[key]
+				if !ok {
+					t.Errorf("Expected property '%s' to exist", key)
+					continue
+				}
+				assert.Equal(t, expectedProp.Type, actualProp.Type, "Expected property '%s' type to be %v, got %v", key, expectedProp.Type, actualProp.Type)
+				assert.Equal(t, expectedProp.Description, actualProp.Description, "Expected property '%s' description to be %v, got %v", key, expectedProp.Description, actualProp.Description)
+				if expectedProp.Items != nil {
+					assert.NotNil(t, actualProp.Items, "Expected property '%s' to have items", key)
+					assert.Equal(t, expectedProp.Items.Type, actualProp.Items.Type, "Expected property '%s' items type to be %v, got %v", key, expectedProp.Items.Type, actualProp.Items.Type)
+					assert.Equal(t, expectedProp.Items.Description, actualProp.Items.Description, "Expected property '%s' items description to be %v, got %v", key, expectedProp.Items.Description, actualProp.Items.Description)
+				} else {
+					assert.Nil(t, actualProp.Items, "Expected property '%s' to not have items", key)
+				}
+			}
+		})
 	}
 
-	if len(genaiSchema.Properties) != 1 {
-		t.Errorf("Expected 1 property, got %d", len(genaiSchema.Properties))
-	}
-
-	commandProp, ok := genaiSchema.Properties["command"]
-	if !ok {
-		t.Errorf("Expected property 'command' to exist")
-	}
-
-	if commandProp.Type != genai.TypeString {
-		t.Errorf("Expected command type to be TypeString, got %v", commandProp.Type)
-	}
-
-	if commandProp.Description != "The Unix command to execute." {
-		t.Errorf("Expected command description to be 'The Unix command to execute.', got %v", commandProp.Description)
-	}
-
-	if len(genaiSchema.Required) != 1 {
-		t.Errorf("Expected 1 required field, got %d", len(genaiSchema.Required))
-	}
-
-	if genaiSchema.Required[0] != "command" {
-		t.Errorf("Expected required field to be 'command', got %v", genaiSchema.Required[0])
-	}
 }
 
 func TestNewGoogleConnector(t *testing.T) {

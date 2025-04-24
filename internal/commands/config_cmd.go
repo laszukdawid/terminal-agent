@@ -10,13 +10,14 @@ import (
 const (
 	cmdProvider = "provider"
 	cmdModel    = "model"
+	cmdMcpPath  = "mcp-path"
 )
 
 func NewConfigCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage the terminal-agent configuration",
-		Long:  `Manage the terminal-agent configuration. You can set the log level, default provider, and default model ID.`,
+		Long:  `Manage the terminal-agent configuration. You can set the log level, default provider, default model ID, and MCP file path.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 		},
@@ -45,6 +46,8 @@ func ConfigGetCommand(config config.Config) *cobra.Command {
 				fmt.Println(config.GetDefaultProvider())
 			case cmdModel:
 				fmt.Println(config.GetDefaultModelId())
+			case cmdMcpPath:
+				fmt.Println(config.GetMcpFilePath())
 			default:
 				fmt.Println("Unknown key:", key)
 				cmd.Help()
@@ -61,9 +64,11 @@ func ConfigSetCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set the configuration",
-		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model.
+		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path.
 
-For example: terminal-agent config set provider bedrock`,
+For example: 
+  terminal-agent config set provider bedrock
+  terminal-agent config set mcp-path /path/to/mcp.json`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 2 {
 				cmd.Help()
@@ -80,6 +85,9 @@ For example: terminal-agent config set provider bedrock`,
 			case cmdModel:
 				config.SetDefaultModelId(value)
 				fmt.Println("Default model ID set to:", value)
+			case cmdMcpPath:
+				config.SetMcpFilePath(value)
+				fmt.Println("MCP file path set to:", value)
 			default:
 				fmt.Println("Unknown key:", key)
 			}
@@ -95,8 +103,9 @@ func ConfigGetAll(config config.Config) *cobra.Command {
 		Short: "Get all configuration values",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Print each key and value on a new line
-			fmt.Println("Default provider:", config.GetDefaultProvider())
-			fmt.Println("Default model ID:", config.GetDefaultModelId())
+			fmt.Println("Default provider: ", cmdProvider, "=", config.GetDefaultProvider())
+			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
+			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 		},
 	}
 

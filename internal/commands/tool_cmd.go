@@ -16,26 +16,36 @@ func NewToolCommand(config config.Config) *cobra.Command {
 		Use:          "tool",
 		SilenceUsage: true,
 		Short:        "Manage and execute tools",
-		Long: `Manage and execute tools.
-
-Available subcommands:
-  - list: Lists all available tools
-  - help: Shows help information for specific tools
-  - exec: Executes a query in the specified tool`,
+		Long:         `Manage and execute tools.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// When no arguments or subcommands are provided, print help
 			return cmd.Help()
 		},
 	}
 
-	// Add list subcommand
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "Lists all available tools",
+		Short: "List all available tools",
+		Long:  `List all available tools, including built-in tools and tools from the MCP file if configured.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			for name := range allTools {
-				fmt.Println(name)
+			// Get the MCP file path from config
+			mcpFilePath := config.GetMcpFilePath()
+
+			// Get all tools including those from MCP file if available
+			allTools := tools.GetAllToolsWithMCP(mcpFilePath)
+
+			if len(allTools) == 0 {
+				fmt.Println("No tools available")
+				return nil
 			}
+
+			fmt.Println("Available tools:")
+			fmt.Println("----------------")
+
+			for name, tool := range allTools {
+				fmt.Printf("- %s: %s\n", name, tool.Description())
+			}
+
 			return nil
 		},
 	}
@@ -81,8 +91,26 @@ Available subcommands:
 Usage requires at least two positional arguments:
   1. toolName: The name of the tool to use
   2. query: One or more words forming the query to send to the tool`,
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// If no arguments, show help
+			if len(args) == 0 {
+				cmd.Help()
+				return nil
+			}
+
+			// Check if the first argument is "list" or a tool name
+			if args[0] == "list" {
+				// Let the list subcommand handle it
+				return nil
+			}
+
+			// This is a direct tool execution, treat the first arg as a tool name
+			// and the rest as the query
+			if len(args) < 2 {
+				return fmt.Errorf("not enough arguments, expected: tool [tool-name] [query]")
+			}
+
 			toolName := args[0]
 
 			// Check if the tool exists
@@ -94,12 +122,18 @@ Usage requires at least two positional arguments:
 				return fmt.Errorf("query required for executing tool %s", toolName)
 			}
 
-			query := strings.Join(args[1:], " ")
-			tool, ok := allTools[toolName]
+			// Get the MCP file path from config
+			mcpFilePath := config.GetMcpFilePath()
 
+			// Get all tools including those from MCP file if available
+			allTools := tools.GetAllToolsWithMCP(mcpFilePath)
+
+			query := strings.Join(args[1:], " ")
 			fmt.Println("Tool name:", toolName)
 			fmt.Println("Query:", query)
 
+			// Check if the tool exists
+			tool, ok := allTools[toolName]
 			if !ok {
 				return fmt.Errorf("tool %s not found", toolName)
 			}

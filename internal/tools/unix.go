@@ -49,12 +49,12 @@ DESCRIPTION
     It takes a command string as input and returns the output from executing that command.
 
 USAGE
-    terminal-agent tool exec unix [command]
+    agent tool exec unix [command]
     
     Examples:
-      terminal-agent tool exec unix "ls -la"
-      terminal-agent tool exec unix "cat file.txt | grep pattern"
-      terminal-agent tool exec unix "find . -name \"*.go\" -type f | wc -l"
+      agent tool exec unix "ls -la"
+      agent tool exec unix "cat file.txt | grep pattern"
+      agent tool exec unix "find . -name \"*.go\" -type f | wc -l"
 
 INPUT SCHEMA
     {

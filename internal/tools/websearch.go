@@ -12,15 +12,10 @@ import (
 )
 
 const (
-	NpxTavilyMcpServer = "npx-tavily-mcp-server"
-)
-
-const (
 	websearchToolName        = "websearch"
-	websearchToolDescription = `Websearch tool provides the ability to search the web using DuckDuckGo.
+	websearchToolDescription = `Websearch tool provides the ability to search the web using Tavily.
     The input to the tool is a search query. The tool then provides a markdown list of the first few results.`
-	duckduckgoAPIURL = "https://api.duckduckgo.com/?q=%s&format=json&pretty=1"
-	numResults       = 5 // Number of results to return
+	numResults = 5 // Number of results to return
 
 	websearchSystemPrompt = `You use the websearch tool to find relevant information based on the user's query.
     The input is provided in English and you provide the search query.
@@ -44,12 +39,12 @@ DESCRIPTION
     from the web. The tool uses the Tavily search API to perform web searches.
 
 USAGE
-    terminal-agent tool exec websearch [query]
+    agent tool exec websearch [query]
     
     Examples:
-      terminal-agent tool exec websearch "latest golang release"
-      terminal-agent tool exec websearch "weather in New York"
-      terminal-agent tool exec websearch "how to implement rate limiting in go"
+      agent tool exec websearch "latest golang release"
+      agent tool exec websearch "weather in Warsaw"
+      agent tool exec websearch "how to implement rate limiting in go"
 
 INPUT SCHEMA
     {
@@ -67,15 +62,6 @@ REQUIREMENTS
     - Requires a Tavily API key set as the TAVILY_KEY environment variable
 `
 )
-
-type DuckDuckGoResult struct {
-	Heading  string `json:"Heading"`
-	FirstURL string `json:"FirstURL"`
-}
-
-type DuckDuckGoResponse struct {
-	Results []DuckDuckGoResult `json:"Results"`
-}
 
 // WebsearchTool Tool implements the Tool interface
 type WebsearchTool struct {
