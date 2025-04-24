@@ -53,13 +53,19 @@ func NewGoogleConnector(modelID *string, execTools map[string]tools.Tool) *Googl
 	model := client.GenerativeModel(*modelID)
 	// model.SetTemperature(0.9) //configurable?
 
+	toolSpecs, err := convertToolsToGoogle(execTools)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("error converting tools to Google AI: %v", err))
+		return nil
+	}
+
 	connector := &GoogleConnector{
 		client:    client,
 		model:     model,
 		logger:    logger,
 		modelID:   *modelID,
 		execTools: execTools,
-		toolSpecs: convertToolsToGoogle(execTools),
+		toolSpecs: toolSpecs,
 	}
 
 	return connector
@@ -84,13 +90,13 @@ func deduceGenaiType(typeStr string) genai.Type {
 	}
 }
 
-func convertInputSchemaToGenaiSchema(inputSchema map[string]any) *genai.Schema {
+func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema, error) {
 	if inputSchema == nil {
-		return nil
+		return nil, fmt.Errorf("input schema is nil")
 	}
 	// Check if the input schema is of type object
 	if inputSchema["type"] != "object" {
-		return nil
+		return nil, fmt.Errorf("input schema is not of type object")
 	}
 	// Create a new GenAI schema
 	schema := &genai.Schema{
@@ -101,7 +107,7 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) *genai.Schema {
 
 	properties, ok := inputSchema["properties"].(map[string]any)
 	if !ok {
-		return schema
+		return schema, fmt.Errorf("properties are not defined in the input schema")
 	}
 
 	for propName, propDef := range properties {
@@ -129,8 +135,7 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) *genai.Schema {
 			}
 		} else if genaiSchema.Type == genai.TypeObject {
 			err := fmt.Errorf("nested objects are not supported in Google AI schema conversion")
-			fmt.Printf("%v", err)
-			continue
+			return nil, err
 		}
 
 		schema.Properties[propName] = genaiSchema
@@ -145,24 +150,29 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) *genai.Schema {
 		}
 	}
 
-	return schema
+	return schema, nil
 }
 
-func convertToolsToGoogle(execTools map[string]tools.Tool) []*genai.Tool {
+func convertToolsToGoogle(execTools map[string]tools.Tool) ([]*genai.Tool, error) {
 	// Define the input schema as a map
 	var toolSpecs []*genai.Tool
 	for _, tool := range execTools {
 		// Create the tool specification
+		toolParams, err := convertInputSchemaToGenaiSchema(tool.InputSchema())
+		if err != nil {
+			err = fmt.Errorf("error converting tool input schema: %w", err)
+			return nil, err
+		}
 		toolSpec := &genai.Tool{
 			FunctionDeclarations: []*genai.FunctionDeclaration{{
 				Name:        tool.Name(),
 				Description: tool.Description(),
-				Parameters:  convertInputSchemaToGenaiSchema(tool.InputSchema()),
+				Parameters:  toolParams,
 			}},
 		}
 		toolSpecs = append(toolSpecs, toolSpec)
 	}
-	return toolSpecs
+	return toolSpecs, nil
 }
 
 func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {

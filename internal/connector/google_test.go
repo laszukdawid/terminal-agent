@@ -17,7 +17,8 @@ func TestConvertToolsToGoogle(t *testing.T) {
 	}
 
 	// Call convertToolsToGoogle
-	toolSpecs := convertToolsToGoogle(execTools)
+	toolSpecs, err := convertToolsToGoogle(execTools)
+	assert.NoError(t, err, "Expected no error, got %v", err)
 
 	// Assert the results
 	if len(toolSpecs) != 1 {
@@ -154,9 +155,10 @@ func TestConvertToGenaiSchema(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Call the function to test
-			result := convertInputSchemaToGenaiSchema(test.input)
-			// Check if the result matches the expected output
+			result, err := convertInputSchemaToGenaiSchema(test.input)
+			assert.NoError(t, err, "Expected no error, got %v", err)
 
+			// Check if the result matches the expected output
 			assert.Equal(t, test.expected.Type, result.Type, "Expected type to be %v, got %v", test.expected.Type, result.Type)
 			assert.Equal(t, test.expected.Description, result.Description, "Expected description to be %v, got %v", test.expected.Description, result.Description)
 			assert.Equal(t, test.expected.Required, result.Required, "Expected required to be %v, got %v", test.expected.Required, result.Required)
