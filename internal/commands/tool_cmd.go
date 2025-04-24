@@ -23,7 +23,32 @@ func NewToolCommand(config config.Config) *cobra.Command {
 		},
 	}
 
-	listCmd := NewToolListCommand(config)
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all available tools",
+		Long:  `List all available tools, including built-in tools and tools from the MCP file if configured.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Get the MCP file path from config
+			mcpFilePath := config.GetMcpFilePath()
+
+			// Get all tools including those from MCP file if available
+			allTools := tools.GetAllToolsWithMCP(mcpFilePath)
+
+			if len(allTools) == 0 {
+				fmt.Println("No tools available")
+				return nil
+			}
+
+			fmt.Println("Available tools:")
+			fmt.Println("----------------")
+
+			for name, tool := range allTools {
+				fmt.Printf("- %s: %s\n", name, tool.Description())
+			}
+
+			return nil
+		},
+	}
 
 	// Add help subcommand
 	helpCmd := &cobra.Command{
@@ -127,38 +152,6 @@ Usage requires at least two positional arguments:
 
 	// Add subcommands to the main command
 	cmd.AddCommand(listCmd, helpCmd, execCmd)
-
-	return cmd
-}
-
-// NewToolListCommand creates a command to list available tools
-func NewToolListCommand(config config.Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all available tools",
-		Long:  `List all available tools, including built-in tools and tools from the MCP file if configured.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Get the MCP file path from config
-			mcpFilePath := config.GetMcpFilePath()
-
-			// Get all tools including those from MCP file if available
-			allTools := tools.GetAllToolsWithMCP(mcpFilePath)
-
-			if len(allTools) == 0 {
-				fmt.Println("No tools available")
-				return nil
-			}
-
-			fmt.Println("Available tools:")
-			fmt.Println("----------------")
-
-			for name, tool := range allTools {
-				fmt.Printf("- %s: %s\n", name, tool.Description())
-			}
-
-			return nil
-		},
-	}
 
 	return cmd
 }
