@@ -3,77 +3,61 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
+	"os/exec"
+	"strings"
 )
 
-// MCPDefinition represents a Model Context Protocol definition file structure
-type MCPDefinition struct {
-	Schema     string        `json:"schema"`
-	Name       string        `json:"name"`
-	Functions  []MCPFunction `json:"functions"`
-	Properties MCPProperties `json:"properties"`
+// MCPFileSchema represents a Model Context Protocol definition file structure
+type MCPFileSchema struct {
+	Inputs  []MCPInput           `json:"inputs"`
+	Servers map[string]MCPServer `json:"servers"`
 }
 
-// MCPFunction represents a function in the MCP definition
-type MCPFunction struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Parameters  MCPParameters `json:"parameters"`
+type MCPInput struct {
+	Type        string `json:"type"`
+	Id          string `json:"id,omitempty"`
+	Description string `json:"description,omitempty"`
+	Password    bool   `json:"password,omitempty"`
 }
 
-// MCPParameters represents the parameters of an MCP function
-type MCPParameters struct {
-	Type       string                 `json:"type"`
-	Properties map[string]MCPProperty `json:"properties"`
-	Required   []string               `json:"required"`
+// MCPServer represents a server configuration
+type MCPServer struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env,omitempty"`
 }
 
-// MCPProperty represents a property in the MCP parameters
-type MCPProperty struct {
-	Type        string      `json:"type"`
-	Description string      `json:"description"`
-	Enum        []string    `json:"enum,omitempty"`
-	Items       *MCPItem    `json:"items,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
-}
-
-// MCPItem represents an item in a property array
-type MCPItem struct {
-	Type string `json:"type"`
-}
-
-// MCPProperties represents the top-level properties in an MCP definition
-type MCPProperties struct {
-	MaxTokens MCPProperty `json:"max_tokens"`
-}
-
-// MCPTool is a wrapper that adapts an MCP function to the Tool interface
+// MCPTool is a wrapper that adapts an MCP server to the Tool interface
 type MCPTool struct {
-	function MCPFunction
+	name        string
+	description string
+	server      MCPServer
 }
 
 // Name returns the name of the MCP tool
 func (t *MCPTool) Name() string {
-	return t.function.Name
+	return t.name
 }
 
 // Description returns the description of the MCP tool
 func (t *MCPTool) Description() string {
-	return t.function.Description
+	return t.description
 }
 
 // InputSchema returns the input schema of the MCP tool
 func (t *MCPTool) InputSchema() map[string]any {
 	return map[string]any{
-		"type":       "object",
-		"properties": t.function.Parameters.Properties,
-		"required":   t.function.Parameters.Required,
+		"type":        "string",
+		"description": "Input for the MCP tool",
 	}
 }
 
 // HelpText returns the help text for the MCP tool
 func (t *MCPTool) HelpText() string {
-	return fmt.Sprintf("Help for %s: %s\n%s", t.Name(), t.Description(), t.function.Parameters)
+	return fmt.Sprintf("Help for %s: %s\n\nServer: %s %s",
+		t.Name(), t.Description(), t.server.Command, strings.Join(t.server.Args, " "))
 }
 
 // Run processes a string input for the MCP tool
@@ -81,16 +65,44 @@ func (t *MCPTool) Run(input *string) (string, error) {
 	if input == nil {
 		return "", fmt.Errorf("input is nil")
 	}
-	return fmt.Sprintf("MCP tool %s invoked with: %s", t.Name(), *input), nil
+
+	// Prepare the command
+	cmd := exec.Command(t.server.Command, t.server.Args...)
+
+	// Set environment variables
+	if t.server.Env != nil {
+		cmd.Env = os.Environ()
+		for key, value := range t.server.Env {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	// Prepare the input
+	cmd.Stdin = strings.NewReader(*input)
+
+	// Execute the command
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("error executing MCP server: %w\nOutput: %s", err, string(output))
+	}
+
+	return string(output), nil
 }
 
 // RunSchema processes a structured input for the MCP tool
 func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
-	return fmt.Sprintf("MCP tool %s executed with structured input", t.Name()), nil
+	// Convert input to JSON
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		return "", fmt.Errorf("error encoding input to JSON: %w", err)
+	}
+
+	inputStr := string(inputJSON)
+	return t.Run(&inputStr)
 }
 
-// LoadMCPFromFile loads an MCP definition from a JSON file
-func LoadMCPFromFile(filePath string) (*MCPDefinition, error) {
+// LoadMCPFileSchema loads an MCP configuration from a JSON file
+func LoadMCPFileSchema(filePath string) (*MCPFileSchema, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("no MCP file path provided")
 	}
@@ -102,23 +114,28 @@ func LoadMCPFromFile(filePath string) (*MCPDefinition, error) {
 	}
 
 	// Parse the JSON
-	var mcp MCPDefinition
-	if err := json.Unmarshal(data, &mcp); err != nil {
+	var mcpConfig MCPFileSchema
+	if err := json.Unmarshal(data, &mcpConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse MCP JSON: %w", err)
 	}
 
-	return &mcp, nil
+	return &mcpConfig, nil
 }
 
-// GetMCPTools converts an MCP definition to a map of tools
-func GetMCPTools(mcp *MCPDefinition) map[string]Tool {
-	if mcp == nil || len(mcp.Functions) == 0 {
+// GetMCPTools converts an MCP configuration to a map of tools
+func GetMCPTools(mcpConfig *MCPFileSchema) map[string]Tool {
+	if mcpConfig == nil || len(mcpConfig.Servers) == 0 {
 		return map[string]Tool{}
 	}
 
 	tools := make(map[string]Tool)
-	for _, function := range mcp.Functions {
-		tool := &MCPTool{function: function}
+	for name, server := range mcpConfig.Servers {
+		// Create a tool for each server
+		tool := &MCPTool{
+			name:        name,
+			description: fmt.Sprintf("MCP server tool: %s", name),
+			server:      server,
+		}
 		tools[tool.Name()] = tool
 	}
 
@@ -136,17 +153,15 @@ func GetAllToolsWithMCP(mcpFilePath string) map[string]Tool {
 	}
 
 	// Try to load the MCP file
-	mcp, err := LoadMCPFromFile(mcpFilePath)
+	mcpConfig, err := LoadMCPFileSchema(mcpFilePath)
 	if err != nil {
 		fmt.Printf("Warning: Failed to load MCP file: %v\n", err)
 		return tools
 	}
 
 	// Add the MCP tools
-	mcpTools := GetMCPTools(mcp)
-	for name, tool := range mcpTools {
-		tools[name] = tool
-	}
+	mcpTools := GetMCPTools(mcpConfig)
+	maps.Copy(tools, mcpTools)
 
 	return tools
 }

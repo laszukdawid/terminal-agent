@@ -16,29 +16,14 @@ func NewToolCommand(config config.Config) *cobra.Command {
 		Use:          "tool",
 		SilenceUsage: true,
 		Short:        "Manage and execute tools",
-		Long: `Manage and execute tools.
-
-Available subcommands:
-  - list: Lists all available tools
-  - help: Shows help information for specific tools
-  - exec: Executes a query in the specified tool`,
+		Long:         `Manage and execute tools.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// When no arguments or subcommands are provided, print help
 			return cmd.Help()
 		},
 	}
 
-	// Add list subcommand
-	listCmd := &cobra.Command{
-		Use:   "list",
-		Short: "Lists all available tools",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			for name := range allTools {
-				fmt.Println(name)
-			}
-			return nil
-		},
-	}
+	listCmd := NewToolListCommand(config)
 
 	// Add help subcommand
 	helpCmd := &cobra.Command{
@@ -176,9 +161,4 @@ func NewToolListCommand(config config.Config) *cobra.Command {
 	}
 
 	return cmd
-}
-
-// Adapt the original tool command to maintain backward compatibility
-func init() {
-	// This will be automatically added to the main command based on path structure
 }

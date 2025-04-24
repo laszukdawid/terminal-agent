@@ -103,9 +103,9 @@ func ConfigGetAll(config config.Config) *cobra.Command {
 		Short: "Get all configuration values",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Print each key and value on a new line
-			fmt.Println("Default provider:", config.GetDefaultProvider())
-			fmt.Println("Default model ID:", config.GetDefaultModelId())
-			fmt.Println("MCP file path:", config.GetMcpFilePath())
+			fmt.Println("Default provider: ", cmdProvider, "=", config.GetDefaultProvider())
+			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
+			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 		},
 	}
 
