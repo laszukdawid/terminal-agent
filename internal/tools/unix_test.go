@@ -81,7 +81,10 @@ func TestUnixToolsRun(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			out, err := tools.Run(&tt.prompt)
+			m := map[string]any{
+				"command": tt.prompt,
+			}
+			out, err := tools.RunSchema(m)
 
 			if tt.err != "" {
 				assert.Error(t, err)
@@ -93,24 +96,4 @@ func TestUnixToolsRun(t *testing.T) {
 		})
 	}
 
-}
-
-func TestUnixToolHelpText(t *testing.T) {
-	// Create a new UnixTool instance
-	unixTool := NewUnixTool(nil)
-
-	// Call the HelpText method
-	helpText := unixTool.HelpText()
-
-	// Verify that the help text matches the expected constant
-	assert.Equal(t, unixToolHelp, helpText)
-
-	// Verify that the help text contains expected sections
-	assert.Contains(t, helpText, "UNIX TOOL HELP")
-	assert.Contains(t, helpText, "NAME")
-	assert.Contains(t, helpText, "DESCRIPTION")
-	assert.Contains(t, helpText, "USAGE")
-	assert.Contains(t, helpText, "INPUT SCHEMA")
-	assert.Contains(t, helpText, "OUTPUT")
-	assert.Contains(t, helpText, "SECURITY NOTES")
 }

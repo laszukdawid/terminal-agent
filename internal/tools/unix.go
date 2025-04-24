@@ -10,15 +10,6 @@ const (
 	The input to the tool is a summary of the Unix command. The tool then provides Unix
 	command best associated with that intent and runs the command.`
 
-	// inputSchema = `{
-	// 	"type": "object",
-	// 	"properties": {
-	// 		"command": {
-	// 			"type": "string"
-	// 		}
-	// 	}
-	// }`
-
 	systemPrompt = `You design and execute Unix commands best associated with the intent.
 	The input is provided in English and you provide the Unix command.
 	Your output is in JSON form as {"lang": <LANG>, "code": <CODE>}.

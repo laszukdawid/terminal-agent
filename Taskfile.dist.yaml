@@ -71,6 +71,28 @@ tasks:
       - go run cmd/agent/main.go task --loglevel debug --provider $PROVIDER {{.ARGS}}
     silent: false
 
+  run:tool:exec:
+    vars:
+      TOOL: "{{.TOOL}}"
+      QUERY: "{{.QUERY}}"
+    desc: Run the agent with a tool
+    cmds:
+      - go run cmd/agent/main.go
+        --loglevel debug
+        tool exec
+        {{.TOOL}}
+        {{.QUERY}}
+
+  run:tool:exec:unix:
+    desc: Run the agent with a tool
+    vars:
+      CMD: "ls -la"
+    cmds:
+      - task: run:tool:exec
+        vars:
+          TOOL: "unix"
+          QUERY: '{"command":"{{.CMD}}"}'
+
   run:set:openai:
     desc: Set the provider to openai
     cmds:

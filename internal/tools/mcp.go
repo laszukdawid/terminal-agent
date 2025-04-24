@@ -1,12 +1,16 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
-	"strings"
+	"time"
+
+	"github.com/laszukdawid/terminal-agent/internal/utils"
+	mcpClient "github.com/mark3labs/mcp-go/client"
+	mcpMain "github.com/mark3labs/mcp-go/mcp"
 )
 
 // MCPFileSchema represents a Model Context Protocol definition file structure
@@ -24,6 +28,7 @@ type MCPInput struct {
 
 // MCPServer represents a server configuration
 type MCPServer struct {
+	Name    string            `json:"name"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env,omitempty"`
@@ -33,7 +38,9 @@ type MCPServer struct {
 type MCPTool struct {
 	name        string
 	description string
-	server      MCPServer
+	// server      MCPServer
+	inputSchema mcpMain.ToolInputSchema
+	client      *mcpClient.Client
 }
 
 // Name returns the name of the MCP tool
@@ -48,57 +55,60 @@ func (t *MCPTool) Description() string {
 
 // InputSchema returns the input schema of the MCP tool
 func (t *MCPTool) InputSchema() map[string]any {
-	return map[string]any{
-		"type":        "string",
-		"description": "Input for the MCP tool",
+	inputSchema, err := utils.ConvertMCPSchemaToMap(t.inputSchema)
+	if err != nil {
+		fmt.Printf("Error converting MCP schema to map: %v\n", err)
+		return nil
 	}
+	return inputSchema
 }
 
 // HelpText returns the help text for the MCP tool
 func (t *MCPTool) HelpText() string {
-	return fmt.Sprintf("Help for %s: %s\n\nServer: %s %s",
-		t.Name(), t.Description(), t.server.Command, strings.Join(t.server.Args, " "))
+	return fmt.Sprintf("Help for %s: %s\n\n%s",
+		t.Name(), t.Description(), t.InputSchema())
 }
 
-// Run processes a string input for the MCP tool
-func (t *MCPTool) Run(input *string) (string, error) {
-	if input == nil {
-		return "", fmt.Errorf("input is nil")
+func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// // Remove the "cmd" key from the input map
+	fmt.Printf("Command: %s\n", t.Name())
+	fmt.Printf("Arguments: %v\n", input)
+
+	request := mcpMain.CallToolRequest{}
+	request.Params.Name = t.Name()
+	request.Params.Arguments = input
+	result, err := t.client.CallTool(ctx, request)
+	if err != nil {
+		return "", fmt.Errorf("error calling tool %s: %w", t.Name(), err)
 	}
 
-	// Prepare the command
-	cmd := exec.Command(t.server.Command, t.server.Args...)
-
-	// Set environment variables
-	if t.server.Env != nil {
-		cmd.Env = os.Environ()
-		for key, value := range t.server.Env {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+	// Build response from the result
+	parsedResponse := ""
+	for _, content := range result.Content {
+		if textContent, ok := content.(mcpMain.TextContent); ok {
+			parsedResponse += textContent.Text
+		} else {
+			jsonBytes, _ := json.Marshal(content)
+			parsedResponse += string(jsonBytes)
 		}
 	}
 
-	// Prepare the input
-	cmd.Stdin = strings.NewReader(*input)
-
-	// Execute the command
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("error executing MCP server: %w\nOutput: %s", err, string(output))
-	}
-
-	return string(output), nil
+	return parsedResponse, nil
 }
 
 // RunSchema processes a structured input for the MCP tool
-func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
+func (t *MCPTool) Run(input *string) (string, error) {
 	// Convert input to JSON
-	inputJSON, err := json.Marshal(input)
-	if err != nil {
-		return "", fmt.Errorf("error encoding input to JSON: %w", err)
+	inputMap := map[string]any{
+		"cmd": *input,
 	}
 
-	inputStr := string(inputJSON)
-	return t.Run(&inputStr)
+	return t.RunSchema(inputMap)
 }
 
 // LoadMCPFileSchema loads an MCP configuration from a JSON file
@@ -131,37 +141,71 @@ func GetMCPTools(mcpConfig *MCPFileSchema) map[string]Tool {
 	tools := make(map[string]Tool)
 	for name, server := range mcpConfig.Servers {
 		// Create a tool for each server
-		tool := &MCPTool{
-			name:        name,
-			description: fmt.Sprintf("MCP server tool: %s", name),
-			server:      server,
+		serverTools, err := getServerAllTools(server)
+		if err != nil {
+			fmt.Printf("couldn't list tools for server %s. Skipping.", name)
 		}
-		tools[tool.Name()] = tool
+		maps.Copy(tools, serverTools)
 	}
 
 	return tools
 }
 
-// GetAllToolsWithMCP returns all tools including those loaded from the MCP file
-func GetAllToolsWithMCP(mcpFilePath string) map[string]Tool {
-	// Start with the built-in tools
-	tools := GetAllTools()
+// getServerAllTools creates a map of tools for a given server
+func getServerAllTools(server MCPServer) (map[string]Tool, error) {
+	tools := make(map[string]Tool)
 
-	// If no MCP file path is provided, just return the built-in tools
-	if mcpFilePath == "" {
-		return tools
+	flatEnv := make([]string, 0, len(server.Env))
+	for key, value := range server.Env {
+		flatEnv = append(flatEnv, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Try to load the MCP file
-	mcpConfig, err := LoadMCPFileSchema(mcpFilePath)
+	// Pool server for all tools
+	c, err := mcpClient.NewStdioMCPClient(
+		server.Command,
+		flatEnv,
+		server.Args...,
+	)
 	if err != nil {
-		fmt.Printf("Warning: Failed to load MCP file: %v\n", err)
-		return tools
+		return nil, fmt.Errorf("error creating MCP client: %w", err)
 	}
 
-	// Add the MCP tools
-	mcpTools := GetMCPTools(mcpConfig)
-	maps.Copy(tools, mcpTools)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	return tools
+	initRequest := mcpMain.InitializeRequest{}
+	initRequest.Params.ProtocolVersion = mcpMain.LATEST_PROTOCOL_VERSION
+	initRequest.Params.ClientInfo = mcpMain.Implementation{
+		Name:    server.Command,
+		Version: "0.1",
+	}
+
+	initResult, err := c.Initialize(ctx, initRequest)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing MCP client: %w", err)
+	}
+
+	fmt.Printf(
+		"Initialized with server: %s %s\n\n",
+		initResult.ServerInfo.Name,
+		initResult.ServerInfo.Version,
+	)
+
+	// List all tools
+	toolsRequest := mcpMain.ListToolsRequest{}
+	mcpTools, err := c.ListTools(ctx, toolsRequest)
+	if err != nil {
+		return nil, fmt.Errorf("error listing tools: %w", err)
+	}
+
+	for _, tool := range mcpTools.Tools {
+		tools[tool.Name] = &MCPTool{
+			name:        tool.Name,
+			description: tool.Description,
+			inputSchema: tool.InputSchema,
+			client:      c,
+		}
+	}
+
+	return tools, nil
 }

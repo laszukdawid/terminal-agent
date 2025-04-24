@@ -34,7 +34,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			plainFlag, _ := flags.GetBool("plain")
 
 			connector := connector.NewConnector(*provider, *modelID)
-			agent := agent.NewAgent(*connector)
+			agent := agent.NewAgent(*connector, config)
 
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
@@ -16,13 +17,14 @@ var ErrEmptyQuery = fmt.Errorf("empty query")
 type Agent struct {
 	Connector connector.LLMConnector
 	// UnixTool  tools.UnixTool
-	Tools map[string]tools.Tool
+	toolProvider tools.ToolProvider
+	Tools        map[string]tools.Tool
 
 	systemPromptAsk  *string
 	systemPromptTask *string
 }
 
-func NewAgent(connector connector.LLMConnector) *Agent {
+func NewAgent(connector connector.LLMConnector, config config.Config) *Agent {
 	if connector == nil {
 		panic("connector is nil")
 	}
@@ -30,16 +32,13 @@ func NewAgent(connector connector.LLMConnector) *Agent {
 	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader, 1)
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
-	unixTool := tools.NewUnixTool(nil)
-	websearchTool := tools.NewWebsearchTool()
-	tools := map[string]tools.Tool{
-		unixTool.Name():      unixTool,
-		websearchTool.Name(): websearchTool,
-	}
+	toolProvider := tools.NewToolProvider(config)
+	allTools := toolProvider.GetAllTools()
 
 	return &Agent{
 		Connector:        connector,
-		Tools:            tools,
+		toolProvider:     toolProvider,
+		Tools:            allTools,
 		systemPromptAsk:  &spAsk,
 		systemPromptTask: &spTask,
 	}

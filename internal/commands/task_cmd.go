@@ -42,7 +42,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			ctx := cmd.Context()
 			connector := *connector.NewConnector(*provider, *modelID)
 			// connector := NewMockConnector(*provider, *modelID)
-			agent := agent.NewAgent(connector)
+			agent := agent.NewAgent(connector, config)
 			flags := cmd.Flags()
 
 			// Concatenate all remaining args to form the query
