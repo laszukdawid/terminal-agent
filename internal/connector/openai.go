@@ -186,12 +186,13 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 		Model: oc.modelID,
 	}
 
-	completion, _ := client.Chat.Completions.New(ctx, oParams)
-
-	if completion != nil {
-		price := computePriceOpenai(oc.modelID, &completion.Usage)
-		oc.logger.Sugar().Debugw("Usage", "usage", completion.Usage, "price", price)
+	completion, err := client.Chat.Completions.New(ctx, oParams)
+	if err != nil {
+		return "", err
 	}
+
+	price := computePriceOpenai(oc.modelID, &completion.Usage)
+	oc.logger.Sugar().Debugw("Usage", "usage", completion.Usage, "price", price)
 
 	// Check if any tools call
 	allToolCalls := 0

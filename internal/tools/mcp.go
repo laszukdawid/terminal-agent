@@ -193,10 +193,7 @@ func getServerAllTools(server MCPServer) (map[string]Tool, error) {
 
 	initRequest := mcpMain.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcpMain.LATEST_PROTOCOL_VERSION
-	initRequest.Params.ClientInfo = mcpMain.Implementation{
-		Name:    server.Command,
-		Version: "0.1",
-	}
+	initRequest.Params.ClientInfo = mcpMain.Implementation{Name: server.Command, Version: "0.1"}
 
 	initResult, err := c.Initialize(ctx, initRequest)
 	if err != nil {

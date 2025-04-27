@@ -1,35 +1,25 @@
 package connector
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"strings"
 
-	anthropic "github.com/laszukdawid/anthropic-go-sdk/client"
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
+
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
 )
 
 const (
 	AnthropicProvider = "anthropic"
-	apiUrl            = "https://api.anthropic.com"
 )
-
-var anthropicVersion string = "2023-06-01"
-
-// type AnthropicModelID string
 
 type AnthropicConnector struct {
 	modelID string
 	logger  zap.Logger
-	client  *anthropic.ClientWithResponses
-
-	apiKey string
+	client  anthropic.Client
 }
 
 type StreamMessage struct {
@@ -47,146 +37,175 @@ func NewAnthropicConnector(modelID *string) *AnthropicConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("Creating new Anthropic connector", zap.Any("model", modelID))
 
-	apiClient, err := anthropic.NewClientWithResponses(apiUrl)
-	if err != nil {
-		logger.Fatal("Failed to create client", zap.Error(err))
-		return nil
-	}
-
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	if apiKey == "" {
-		logger.Fatal("ANTHROPIC_API_KEY is not set")
-		return nil
-	}
+	apiClient := anthropic.NewClient()
 
 	return &AnthropicConnector{
 		modelID: *modelID,
 		logger:  logger, client: apiClient,
-		apiKey: apiKey,
 	}
 }
 
-func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, params anthropic.MessagesPostParams, body anthropic.CreateMessageParams) (string, error) {
-	response, err := ac.client.MessagesPost(ctx, &params, body)
-	if err != nil {
-		return "", err
-	}
-	ac.logger.Sugar().Debugw("Anthropic response", "status", response.StatusCode)
-
-	reader := bufio.NewReader(response.Body)
-	defer response.Body.Close()
-
-	var acc string
-
-	for {
-		// Read line by line
-		line, err := reader.ReadString('\n')
+func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParams anthropic.MessageNewParams) (string, error) {
+	// Stream the response
+	stream := ac.client.Messages.NewStreaming(ctx, msgParams)
+	message := anthropic.Message{}
+	for stream.Next() {
+		event := stream.Current()
+		err := message.Accumulate(event)
 		if err != nil {
-			if err == io.EOF {
-				return acc, nil
+			panic(err)
+		}
+
+		switch eventVariant := event.AsAny().(type) {
+		case anthropic.ContentBlockDeltaEvent:
+			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
+			case anthropic.TextDelta:
+				fmt.Print(deltaVariant.Text)
 			}
-			return acc, err
+
 		}
 
-		// Skip empty lines
-		line = strings.TrimSpace(line)
-		if line == "" || !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-
-		// Remove "data: " prefix
-		data := strings.TrimPrefix(line, "data: ")
-
-		// Check for end of stream
-		if data == "[DONE]" {
-			return acc, nil
-		}
-
-		// Parse the message
-		var streamMsg StreamMessage
-		if err := json.Unmarshal([]byte(data), &streamMsg); err != nil {
-			return acc, err
-		}
-
-		// Handle different message types
-		switch streamMsg.Type {
-		case "message_start":
-			// Handle start of message
-			ac.logger.Sugar().Debugf("Started message: %s\n", streamMsg.Message.Id)
-		case "content_block_start":
-			// Handle start of content block
-			ac.logger.Debug("Started content block\n")
-		case "content_block_delta":
-			// Handle content update
-			fmt.Print(streamMsg.Delta.Text)
-			acc += streamMsg.Delta.Text
-		case "message_delta":
-			// Handle message update
-			ac.logger.Sugar().Debugln("Message delta")
-		case "message_stop":
-			// Handle end of message
-			ac.logger.Sugar().Debugln("Message complete")
+		if stream.Err() != nil {
+			panic(stream.Err())
 		}
 	}
-
+	return message.Content[0].AsResponseTextBlock().Text, nil
 }
 
 func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	ac.logger.Sugar().Debugw("Query", "model", ac.modelID)
-	var content anthropic.InputMessage_Content
-	content.FromInputMessageContent0(*qParams.UserPrompt)
 
-	var system anthropic.CreateMessageParams_System
-	err := system.FromCreateMessageParamsSystem0(*qParams.SysPrompt)
-	if err != nil {
-		return "", err
-	}
-
-	var model anthropic.Model
-	model.FromModel0(ac.modelID)
-
-	body := anthropic.CreateMessageParams{
-		MaxTokens: 100,
-		System:    &system,
-		Messages: []anthropic.InputMessage{
-			{Role: "user", Content: content},
+	msgParams := anthropic.MessageNewParams{
+		MaxTokens: int64(qParams.MaxTokens),
+		System: []anthropic.TextBlockParam{
+			{Text: *qParams.SysPrompt},
 		},
-		Model:  model,
-		Stream: &qParams.Stream,
+		Messages: []anthropic.MessageParam{{
+			Role: anthropic.MessageParamRoleUser,
+			Content: []anthropic.ContentBlockParamUnion{{
+				OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
+			}},
+		}},
+		Model: ac.modelID,
 	}
 
-	params := anthropic.MessagesPostParams{AnthropicVersion: &anthropicVersion, XApiKey: &ac.apiKey}
-
+	// If stream, then we use the streaming API and leave this function
 	if qParams.Stream {
-		return ac.queryAnthropicStream(ctx, params, body)
+		return ac.queryAnthropicStream(ctx, msgParams)
 	}
 
-	response, err := ac.client.MessagesPost(context.Background(), &params, body)
+	message, err := ac.client.Messages.New(ctx, msgParams)
 	if err != nil {
 		return "", err
 	}
-
-	bodyBytes, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", fmt.Errorf("model %s returned response is nil", ac.modelID)
-	}
-	if response.StatusCode != 200 {
-		return "", fmt.Errorf("model %s returned status code %d: %s", ac.modelID, response.StatusCode, string(bodyBytes))
-	}
-
-	var msg anthropic.Message
-	json.Unmarshal(bodyBytes, &msg)
 
 	var outText string
-	for _, block := range msg.Content {
-		_txt, _ := block.AsResponseTextBlock()
-		outText += _txt.Text
+	for _, block := range message.Content {
+		txtBlock := block.AsResponseTextBlock()
+		outText += txtBlock.Text
 	}
 
 	return outText, nil
 }
 
-func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (string, error) {
-	ac.logger.Sugar().Fatalf("QueryWithTool is not implemented for Anthropic")
-	return "", nil
+// convertToolsToAnthropic converts internal tool representations to Anthropic's tool format
+func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam {
+	var anthropicTools []anthropic.ToolParam
+	for _, tool := range tools {
+		inputSchema := tool.InputSchema()
+		properties, ok := inputSchema["properties"].(map[string]any)
+		if !ok {
+			// Handle error
+			utils.Logger.Error("Failed to convert input schema properties", zap.Any("inputSchema", inputSchema))
+			continue
+		}
+		extraProps := make(map[string]any)
+		if required, ok := inputSchema["required"].([]string); ok {
+			extraProps["required"] = required
+		}
+		anthropicTool := anthropic.ToolParam{
+			Name:        tool.Name(),
+			Description: anthropic.String(tool.Description()),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties:  properties,
+				ExtraFields: extraProps,
+			},
+		}
+
+		// Print the anthropicTool json
+		b, err := json.Marshal(anthropicTool)
+		if err != nil {
+			utils.Logger.Error("Failed to marshal anthropicTool", zap.Error(err))
+			continue
+		}
+		utils.Logger.Debug("Anthropic Tool", zap.String("tool", string(b)))
+
+		anthropicTools = append(anthropicTools, anthropicTool)
+	}
+	return anthropicTools
+}
+
+func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
+
+	messages := []anthropic.MessageParam{{
+		Role: anthropic.MessageParamRoleUser,
+		Content: []anthropic.ContentBlockParamUnion{{
+			OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
+		}},
+	}}
+
+	toolParams := convertToolsToAnthropic(execTools)
+
+	tools := make([]anthropic.ToolUnionParam, len(toolParams))
+	for i, toolParam := range toolParams {
+		tools[i] = anthropic.ToolUnionParam{OfTool: &toolParam}
+	}
+
+	allResponses := ""
+	message, err := ac.client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     ac.modelID,
+		MaxTokens: int64(qParams.MaxTokens),
+		Messages:  messages,
+		Tools:     tools,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	toolResults := []anthropic.ContentBlockParamUnion{}
+
+	for _, block := range message.Content {
+		var blockResponse string
+		switch variant := block.AsAny().(type) {
+		case anthropic.TextBlock:
+			allResponses += block.Text + "\n"
+		case anthropic.ToolUseBlock:
+			execTool, exist := execTools[block.Name]
+			if !exist {
+				ac.logger.Sugar().Errorw("Tool not found", "tool", block.Name)
+				continue
+			}
+			var input map[string]any
+			err := json.Unmarshal([]byte(variant.JSON.Input.Raw()), &input)
+			if err != nil {
+				ac.logger.Sugar().Errorw("Failed to unmarshal input", "input", variant.JSON.Input.Raw(), "error", err)
+				continue
+			}
+			response, err := execTool.RunSchema(input)
+			if err != nil {
+				ac.logger.Sugar().Errorw("Failed to run tool", "tool", block.Name, "error", err)
+				continue
+			}
+
+			blockResponse = response
+			allResponses += response
+		}
+
+		toolResults = append(toolResults, anthropic.NewToolResultBlock(block.ID, blockResponse, false))
+	}
+
+	ac.logger.Sugar().Debugw("Tool results", "toolResults", toolResults)
+
+	return allResponses, nil
 }

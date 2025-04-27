@@ -3,13 +3,13 @@ module github.com/laszukdawid/terminal-agent
 go 1.23.0
 
 require (
+	github.com/anthropics/anthropic-sdk-go v0.2.0-beta.3
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.29.0
 	github.com/charmbracelet/glamour v0.9.1
 	github.com/diverged/tavily-go v1.0.0
 	github.com/google/generative-ai-go v0.19.0
-	github.com/laszukdawid/anthropic-go-sdk v0.0.0-20241108211623-a7463e581910
 	github.com/mark3labs/mcp-go v0.23.1
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/openai/openai-go v0.1.0-beta.10
@@ -27,7 +27,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/longrunning v0.5.7 // indirect
 	github.com/alecthomas/chroma/v2 v2.16.0 // indirect
-	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.67 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
@@ -71,7 +70,6 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect

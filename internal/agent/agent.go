@@ -14,12 +14,15 @@ import (
 // ErrEmptyQuery is returned when the query is empty.
 var ErrEmptyQuery = fmt.Errorf("empty query")
 
+const MaxTokens = 400
+
 type Agent struct {
 	Connector connector.LLMConnector
 	// UnixTool  tools.UnixTool
 	toolProvider tools.ToolProvider
 	Tools        map[string]tools.Tool
 
+	maxTokens        int
 	systemPromptAsk  *string
 	systemPromptTask *string
 }
@@ -40,6 +43,7 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 		Tools:            allTools,
 		systemPromptAsk:  &spAsk,
 		systemPromptTask: &spTask,
+		maxTokens:        MaxTokens,
 	}
 }
 
@@ -54,7 +58,7 @@ func (a *Agent) Question(ctx context.Context, s string, isStream bool) (string, 
 		UserPrompt: &s,
 		SysPrompt:  a.systemPromptAsk,
 		Stream:     isStream,
-		MaxTokens:  200,
+		MaxTokens:  a.maxTokens,
 	}
 	res, err := a.Connector.Query(ctx, &qParams)
 	return res, err
@@ -70,6 +74,7 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 	qParams := connector.QueryParams{
 		UserPrompt: &s,
 		SysPrompt:  a.systemPromptAsk,
+		MaxTokens:  a.maxTokens,
 	}
 
 	// Query the model with the task
