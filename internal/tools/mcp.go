@@ -11,6 +11,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	mcpClient "github.com/mark3labs/mcp-go/client"
 	mcpMain "github.com/mark3labs/mcp-go/mcp"
+	"go.uber.org/zap"
 )
 
 // MCPFileSchema represents a Model Context Protocol definition file structure
@@ -41,6 +42,20 @@ type MCPTool struct {
 	// server      MCPServer
 	inputSchema mcpMain.ToolInputSchema
 	client      *mcpClient.Client
+	logger      zap.Logger
+}
+
+func NewMCPTool(name string, description string, inputSchema mcpMain.ToolInputSchema, client *mcpClient.Client) *MCPTool {
+	logger := *utils.GetLogger()
+	logger.Debug("NewMCPTool", zap.String("name", name), zap.String("description", description))
+
+	return &MCPTool{
+		name:        name,
+		description: description,
+		inputSchema: inputSchema,
+		client:      client,
+		logger:      logger,
+	}
 }
 
 // Name returns the name of the MCP tool
@@ -57,7 +72,7 @@ func (t *MCPTool) Description() string {
 func (t *MCPTool) InputSchema() map[string]any {
 	inputSchema, err := utils.ConvertMCPSchemaToMap(t.inputSchema)
 	if err != nil {
-		fmt.Printf("Error converting MCP schema to map: %v\n", err)
+		t.logger.Sugar().Warnf("Error converting MCP schema to map: %v\n", err)
 		return nil
 	}
 	return inputSchema
@@ -70,14 +85,11 @@ func (t *MCPTool) HelpText() string {
 }
 
 func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
+	utils.Logger.Sugar().Debugf("RunSchema tool '%s' input: %v", t.name, input)
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	// // Remove the "cmd" key from the input map
-	fmt.Printf("Command: %s\n", t.Name())
-	fmt.Printf("Arguments: %v\n", input)
 
 	request := mcpMain.CallToolRequest{}
 	request.Params.Name = t.Name()
@@ -103,6 +115,7 @@ func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
 
 // RunSchema processes a structured input for the MCP tool
 func (t *MCPTool) Run(input *string) (string, error) {
+	t.logger.Sugar().Debugw("Run", "command", t.Name(), "arguments", input)
 	// Convert input to JSON
 	inputMap := map[string]any{
 		"cmd": *input,
@@ -153,6 +166,8 @@ func GetMCPTools(mcpConfig *MCPFileSchema) map[string]Tool {
 
 // getServerAllTools creates a map of tools for a given server
 func getServerAllTools(server MCPServer) (map[string]Tool, error) {
+	logger := utils.GetLogger()
+	logger.Debug("getServerAllTools", zap.String("server", server.Name))
 	tools := make(map[string]Tool)
 
 	flatEnv := make([]string, 0, len(server.Env))
@@ -185,10 +200,10 @@ func getServerAllTools(server MCPServer) (map[string]Tool, error) {
 		return nil, fmt.Errorf("error initializing MCP client: %w", err)
 	}
 
-	fmt.Printf(
-		"Initialized with server: %s %s\n\n",
-		initResult.ServerInfo.Name,
-		initResult.ServerInfo.Version,
+	logger.Sugar().Debugw(
+		"Initialized with server",
+		"name", initResult.ServerInfo.Name,
+		"version", initResult.ServerInfo.Version,
 	)
 
 	// List all tools

@@ -2,6 +2,8 @@ package connector
 
 import (
 	"context"
+
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
 
 type LLMPrice struct {
@@ -89,5 +91,5 @@ type QueryParams struct {
 
 type LLMConnector interface {
 	Query(ctx context.Context, params *QueryParams) (string, error)
-	QueryWithTool(ctx context.Context, params *QueryParams) (string, error)
+	QueryWithTool(ctx context.Context, params *QueryParams, tools map[string]tools.Tool) (string, error)
 }

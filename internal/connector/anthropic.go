@@ -43,7 +43,7 @@ type ContentBlockDelta struct {
 	Text string `json:"text"`
 }
 
-func NewAnthropicConnector(modelID *string, execTools map[string]tools.Tool) *AnthropicConnector {
+func NewAnthropicConnector(modelID *string) *AnthropicConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("Creating new Anthropic connector", zap.Any("model", modelID))
 
@@ -186,7 +186,7 @@ func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (
 	return outText, nil
 }
 
-func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
+func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (string, error) {
 	ac.logger.Sugar().Fatalf("QueryWithTool is not implemented for Anthropic")
 	return "", nil
 }

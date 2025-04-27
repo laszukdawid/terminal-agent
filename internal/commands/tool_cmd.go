@@ -11,8 +11,6 @@ import (
 )
 
 func NewToolCommand(config config.Config) *cobra.Command {
-	toolProvider := tools.NewToolProvider(config)
-	allTools := toolProvider.GetAllTools()
 
 	cmd := &cobra.Command{
 		Use:          "tool",
@@ -30,6 +28,8 @@ func NewToolCommand(config config.Config) *cobra.Command {
 		Short: "List all available tools",
 		Long:  `List all available tools, including built-in tools and tools from the MCP file if configured.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			toolProvider := tools.NewToolProvider(config)
+			allTools := toolProvider.GetAllTools()
 			if len(allTools) == 0 {
 				fmt.Println("No tools available")
 				return nil
@@ -56,6 +56,8 @@ func NewToolCommand(config config.Config) *cobra.Command {
 				// Show the general help for the tool command when no specific tool is mentioned
 				return cmd.Help()
 			}
+			toolProvider := tools.NewToolProvider(config)
+			allTools := toolProvider.GetAllTools()
 
 			toolName := args[0]
 			tool, ok := allTools[toolName]
@@ -100,6 +102,8 @@ Usage requires at least two positional arguments:
 			if len(args) < 2 {
 				return fmt.Errorf("not enough arguments, expected: tool [tool-name] [query]")
 			}
+			toolProvider := tools.NewToolProvider(config)
+			allTools := toolProvider.GetAllTools()
 
 			toolName := args[0]
 			query := strings.Join(args[1:], " ")

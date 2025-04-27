@@ -73,9 +73,6 @@ type BedrockConnector struct {
 	client  *bedrockruntime.Client
 	modelID BedrockModelID
 	logger  zap.Logger
-
-	execTools map[string]tools.Tool
-	toolSpecs []types.ToolSpecification
 }
 
 func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice {
@@ -92,22 +89,34 @@ func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice 
 	}
 }
 
-func convertToolsToBedrock(execTools map[string]tools.Tool) []types.ToolSpecification {
+// convertToolsToBedrock converts a map of tools.Tool to AWS Bedrock's types.Tool format.
+// It extracts the name, description, and input schema from each tool and formats them
+// according to AWS Bedrock API requirements.
+//
+// Parameters:
+//   - tools: A map of string to tools.Tool representing the available tools
+//
+// Returns:
+//   - []types.Tool: A slice of Bedrock-compatible tool specifications
+func convertToolsToBedrock(tools map[string]tools.Tool) []types.Tool {
 	// Define the input schema as a map
-	var toolSpecs []types.ToolSpecification
-	for _, tool := range execTools {
-		toolSpecs = append(toolSpecs, types.ToolSpecification{
-			Name:        aws.String(tool.Name()),
-			Description: aws.String(tool.Description()),
-			InputSchema: &types.ToolInputSchemaMemberJson{
-				Value: document.NewLazyDocument(tool.InputSchema()),
+	var bedrockTools []types.Tool
+	for _, tool := range tools {
+		bedrockTool := &types.ToolMemberToolSpec{
+			Value: types.ToolSpecification{
+				Name:        aws.String(tool.Name()),
+				Description: aws.String(tool.Description()),
+				InputSchema: &types.ToolInputSchemaMemberJson{
+					Value: document.NewLazyDocument(tool.InputSchema()),
+				},
 			},
-		})
+		}
+		bedrockTools = append(bedrockTools, bedrockTool)
 	}
-	return toolSpecs
+	return bedrockTools
 }
 
-func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Tool) *BedrockConnector {
+func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("NewBedrockConnector")
 	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
@@ -128,11 +137,9 @@ func NewBedrockConnector(modelID *BedrockModelID, execTools map[string]tools.Too
 	client := bedrockruntime.NewFromConfig(sdkConfig)
 
 	return &BedrockConnector{
-		client:    client,
-		modelID:   *modelID,
-		execTools: execTools,
-		toolSpecs: convertToolsToBedrock(execTools),
-		logger:    logger,
+		client:  client,
+		modelID: *modelID,
+		logger:  logger,
 	}
 }
 
@@ -318,19 +325,12 @@ func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (st
 	return response, nil
 }
 
-func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
+func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
 	bc.logger.Sugar().Debugw("Query with tool", "model", bc.modelID)
 
-	var tools []types.Tool
-	for _, toolSpec := range bc.toolSpecs {
-		tools = append(tools, &types.ToolMemberToolSpec{
-			Value: toolSpec,
-		})
-	}
-
 	toolConfig := types.ToolConfiguration{
-		Tools: tools,
-		// TODO: Add tool choice
+		Tools:      convertToolsToBedrock(execTools),
+		ToolChoice: &types.ToolChoiceMemberAuto{},
 	}
 
 	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, &toolConfig)
@@ -342,7 +342,7 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 		outputMsg := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value
 
 		// Check whether there's any tool used in the output. If so, execute the tool.
-		output, err := bc.findAndUseTool(outputMsg)
+		output, err := bc.findAndUseTool(outputMsg, execTools)
 
 		if err != nil {
 			return "", fmt.Errorf("failed to find and use tool: %v", err)
@@ -373,7 +373,7 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 // For supported tools, it executes `tool.RunSchema` method of the tool and returns the command to be executed.
 //
 // TODO: Only executes a single, first tool. Should be able to execute multiple tools.
-func (bc *BedrockConnector) findAndUseTool(outputMessage types.Message) (string, error) {
+func (bc *BedrockConnector) findAndUseTool(outputMessage types.Message, execTools map[string]tools.Tool) (string, error) {
 
 	// First find the content that actully has the tool use
 	for blockIdx, content := range outputMessage.Content {
@@ -387,7 +387,7 @@ func (bc *BedrockConnector) findAndUseTool(outputMessage types.Message) (string,
 		var toolUse types.ToolUseBlock = content.(*types.ContentBlockMemberToolUse).Value
 
 		// Check if the tool is supported
-		execTool := bc.execTools[*toolUse.Name]
+		execTool := execTools[*toolUse.Name]
 
 		if execTool == nil {
 			return "", fmt.Errorf("tool %s is not supported", *toolUse.Name)

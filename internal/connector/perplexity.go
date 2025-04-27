@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	u "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
@@ -115,6 +116,6 @@ func (c *PerplexityConnector) Query(ctx context.Context, qParams *QueryParams) (
 
 }
 
-func (c *PerplexityConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
+func (c *PerplexityConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTool map[string]tools.Tool) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }

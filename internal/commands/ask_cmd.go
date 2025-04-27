@@ -10,6 +10,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/history"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +35,8 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			plainFlag, _ := flags.GetBool("plain")
 
 			connector := connector.NewConnector(*provider, *modelID)
-			agent := agent.NewAgent(*connector, config)
+			toolProvider := tools.NewToolProvider(config)
+			agent := agent.NewAgent(*connector, toolProvider, config)
 
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")

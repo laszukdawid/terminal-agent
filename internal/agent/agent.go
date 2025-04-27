@@ -24,7 +24,7 @@ type Agent struct {
 	systemPromptTask *string
 }
 
-func NewAgent(connector connector.LLMConnector, config config.Config) *Agent {
+func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider, config config.Config) *Agent {
 	if connector == nil {
 		panic("connector is nil")
 	}
@@ -32,7 +32,6 @@ func NewAgent(connector connector.LLMConnector, config config.Config) *Agent {
 	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader, 1)
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
-	toolProvider := tools.NewToolProvider(config)
 	allTools := toolProvider.GetAllTools()
 
 	return &Agent{
@@ -75,7 +74,8 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 
 	// Query the model with the task
 	// TODO: There's only a single iterations with tools; either get it or not.
-	res, err := a.Connector.QueryWithTool(ctx, &qParams)
+	mapTools := a.toolProvider.GetAllTools()
+	res, err := a.Connector.QueryWithTool(ctx, &qParams, mapTools)
 	sugar.Debugw("Query response", "res", res, "err", err)
 	return res, err
 }

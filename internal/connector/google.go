@@ -23,12 +23,9 @@ type GoogleConnector struct {
 	model   *genai.GenerativeModel
 	logger  zap.Logger
 	modelID string
-
-	execTools map[string]tools.Tool
-	toolSpecs []*genai.Tool
 }
 
-func NewGoogleConnector(modelID *string, execTools map[string]tools.Tool) *GoogleConnector {
+func NewGoogleConnector(modelID *string) *GoogleConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("NewGoogleConnector")
 
@@ -53,19 +50,11 @@ func NewGoogleConnector(modelID *string, execTools map[string]tools.Tool) *Googl
 	model := client.GenerativeModel(*modelID)
 	// model.SetTemperature(0.9) //configurable?
 
-	toolSpecs, err := convertToolsToGoogle(execTools)
-	if err != nil {
-		logger.Fatal(fmt.Sprintf("error converting tools to Google AI: %v", err))
-		return nil
-	}
-
 	connector := &GoogleConnector{
-		client:    client,
-		model:     model,
-		logger:    logger,
-		modelID:   *modelID,
-		execTools: execTools,
-		toolSpecs: toolSpecs,
+		client:  client,
+		model:   model,
+		logger:  logger,
+		modelID: *modelID,
 	}
 
 	return connector
@@ -116,8 +105,14 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 			continue
 		}
 
+		desc, ok := propDefMap["description"].(string)
+		if !ok {
+			// desc = ""
+			utils.Logger.Sugar().Warnf("property '%s' description not found. skipping", propName)
+			continue
+		}
 		genaiSchema := &genai.Schema{
-			Description: propDefMap["description"].(string),
+			Description: desc,
 		}
 
 		if typeStr, typeOk := propDefMap["type"].(string); typeOk {
@@ -127,9 +122,15 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 		if genaiSchema.Type == genai.TypeArray {
 			if items, ok := propDefMap["items"].(map[string]any); ok {
 				if itemType, itemOk := items["type"].(string); itemOk {
+					desc, ok := items["description"].(string)
+					if !ok {
+						// desc = ""
+						utils.Logger.Sugar().Warnf("item property '%s' description not found. skipping", propName)
+						continue
+					}
 					genaiSchema.Items = &genai.Schema{
 						Type:        deduceGenaiType(itemType),
-						Description: items["description"].(string),
+						Description: desc,
 					}
 				}
 			}
@@ -191,11 +192,17 @@ func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	return "", fmt.Errorf("no response from Google AI")
 }
 
-func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
+func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
 	gc.logger.Sugar().Debugw("Query with tool", "model", gc.modelID)
-	gc.model.Tools = gc.toolSpecs
 
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
+
+	geminiTools, err := convertToolsToGoogle(execTools)
+	if err != nil {
+		gc.logger.Sugar().Errorw("error converting tools to Google AI", "error", err)
+		return "", err
+	}
+	gc.model.Tools = geminiTools
 	session := gc.model.StartChat()
 
 	resp, err := session.SendMessage(ctx, genai.Text(*qParams.UserPrompt))
@@ -207,7 +214,7 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	funcall, ok := part.(genai.FunctionCall)
 	if ok {
 		// Call the tool
-		execTool, exist := gc.execTools[funcall.Name]
+		execTool, exist := execTools[funcall.Name]
 		if !exist {
 			return "", fmt.Errorf("tool %s not found", funcall.Name)
 		}

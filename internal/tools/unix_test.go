@@ -8,13 +8,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type llmConnectorMock struct {
-}
-
-func (m *llmConnectorMock) Query(userPrompt *string, sysPrompt *string) (string, error) {
-	return "prompt: " + *userPrompt, nil
-}
-
 type mockBashExecutor struct {
 }
 

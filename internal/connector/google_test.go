@@ -187,9 +187,8 @@ func TestConvertToGenaiSchema(t *testing.T) {
 func TestNewGoogleConnector(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test")
 	modelID := "gemini-2.0-flash-lite"
-	execTools := map[string]tools.Tool{}
 
-	connector := NewGoogleConnector(&modelID, execTools)
+	connector := NewGoogleConnector(&modelID)
 
 	if connector == nil {
 		t.Fatal("Expected connector to be created, got nil")
@@ -203,9 +202,8 @@ func TestNewGoogleConnector(t *testing.T) {
 func TestNewGoogleConnectorNoKey(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
 	modelID := "gemini-2.0-flash-lite"
-	execTools := map[string]tools.Tool{}
 
-	connector := NewGoogleConnector(&modelID, execTools)
+	connector := NewGoogleConnector(&modelID)
 
 	assert.Nil(t, connector, "Expected connector to be nil when GEMINI_API_KEY is not set")
 }
@@ -213,9 +211,8 @@ func TestNewGoogleConnectorNoKey(t *testing.T) {
 func TestNewGoogleConnectorNoModelID(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test")
 	var modelID *string
-	execTools := map[string]tools.Tool{}
 
-	connector := NewGoogleConnector(modelID, execTools)
+	connector := NewGoogleConnector(modelID)
 
 	if connector == nil {
 		t.Fatal("Expected connector to be created, got nil")

@@ -56,9 +56,6 @@ type OpenAIConnector struct {
 	logger  zap.Logger
 	modelID string
 	token   string
-
-	execTools map[string]tools.Tool
-	toolSpecs []openai.ChatCompletionToolParam
 }
 
 func computePriceOpenai(modelId string, usage *openai.CompletionUsage) *LLMPrice {
@@ -77,7 +74,6 @@ func computePriceOpenai(modelId string, usage *openai.CompletionUsage) *LLMPrice
 
 func convertToolsToOpenAI(execTools map[string]tools.Tool) []openai.ChatCompletionToolParam {
 	var toolSpecs []openai.ChatCompletionToolParam
-
 	for _, tool := range execTools {
 		inputSchema := tool.InputSchema()
 
@@ -90,11 +86,10 @@ func convertToolsToOpenAI(execTools map[string]tools.Tool) []openai.ChatCompleti
 			},
 		})
 	}
-
 	return toolSpecs
 }
 
-func NewOpenAIConnector(modelID *string, execTools map[string]tools.Tool) *OpenAIConnector {
+func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 	logger := *utils.GetLogger()
 	logger.Debug("NewOpenAiConnector")
 
@@ -108,12 +103,10 @@ func NewOpenAIConnector(modelID *string, execTools map[string]tools.Tool) *OpenA
 	)
 
 	connector := &OpenAIConnector{
-		client:    &client,
-		logger:    logger,
-		modelID:   *modelID,
-		token:     token,
-		execTools: execTools,
-		toolSpecs: convertToolsToOpenAI(execTools),
+		client:  &client,
+		logger:  logger,
+		modelID: *modelID,
+		token:   token,
 	}
 
 	return connector
@@ -179,7 +172,7 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	return completion.Choices[0].Message.Content, nil
 }
 
-func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams) (string, error) {
+func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (string, error) {
 	client := openai.NewClient(
 		option.WithAPIKey(oc.token),
 	)
@@ -189,7 +182,7 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 			openai.SystemMessage(*qParams.SysPrompt),
 			openai.UserMessage(*qParams.UserPrompt),
 		},
-		Tools: oc.toolSpecs,
+		Tools: convertToolsToOpenAI(tools),
 		Model: oc.modelID,
 	}
 
@@ -212,17 +205,25 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	}
 
 	// Tool used
-	return oc.findAndUseTool(completion.Choices)
+	return oc.findAndUseTool(completion.Choices, tools)
 
 }
 
-func (oc *OpenAIConnector) findAndUseTool(choices []openai.ChatCompletionChoice) (string, error) {
+func (oc *OpenAIConnector) findAndUseTool(choices []openai.ChatCompletionChoice, execTools map[string]tools.Tool) (string, error) {
 	for _, choice := range choices {
 		message := choice.Message
 		for _, toolCall := range message.ToolCalls {
 
-			execTool, exist := oc.execTools[toolCall.Function.Name]
+			// Check if the tool call is valid
+			if toolCall.Function.Name == "" {
+				return "", fmt.Errorf("tool call name is empty")
+			}
+			if toolCall.Function.Arguments == "" {
+				return "", fmt.Errorf("tool call arguments are empty")
+			}
+			execTool, exist := execTools[toolCall.Function.Name]
 			if !exist {
+				// Check if the tool call is valid
 				return "", fmt.Errorf("tool %s not found", toolCall.Function.Name)
 			}
 

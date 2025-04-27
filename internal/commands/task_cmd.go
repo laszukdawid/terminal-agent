@@ -8,25 +8,9 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/history"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 )
-
-// Simple mock connector for the task command
-type mockConnector struct {
-	provider string
-	modelID  string
-}
-
-func NewMockConnector(provider, modelID string) *mockConnector {
-	return &mockConnector{
-		provider: provider,
-		modelID:  modelID,
-	}
-}
-
-func (m *mockConnector) Query(userPrompt *string, sysPrompt *string) (string, error) {
-	return "prompt: " + *userPrompt, nil
-}
 
 func NewTaskCommand(config config.Config) *cobra.Command {
 	var provider *string
@@ -41,8 +25,8 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			connector := *connector.NewConnector(*provider, *modelID)
-			// connector := NewMockConnector(*provider, *modelID)
-			agent := agent.NewAgent(connector, config)
+			toolProvider := tools.NewToolProvider(config)
+			agent := agent.NewAgent(connector, toolProvider, config)
 			flags := cmd.Flags()
 
 			// Concatenate all remaining args to form the query
