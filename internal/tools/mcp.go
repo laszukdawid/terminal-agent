@@ -85,7 +85,8 @@ func (t *MCPTool) HelpText() string {
 }
 
 func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
-	utils.Logger.Sugar().Debugf("RunSchema tool '%s' input: %v", t.name, input)
+	logger := *utils.GetLogger()
+	logger.Sugar().Debugf("RunSchema tool '%s' input: %v", t.name, input)
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -94,10 +95,12 @@ func (t *MCPTool) RunSchema(input map[string]any) (string, error) {
 	request := mcpMain.CallToolRequest{}
 	request.Params.Name = t.Name()
 	request.Params.Arguments = input
+	logger.Sugar().Debugw("RunSchema", "request", request)
 	result, err := t.client.CallTool(ctx, request)
 	if err != nil {
 		return "", fmt.Errorf("error calling tool %s: %w", t.Name(), err)
 	}
+	logger.Debug("RunSchema", zap.Any("result", result))
 
 	// Build response from the result
 	parsedResponse := ""

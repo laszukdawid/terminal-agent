@@ -38,7 +38,10 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			}
 
 			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
-				fmt.Println(response)
+				if plain, _ := flags.GetBool("plain"); !plain {
+					response = handleMarkdown(response)
+				}
+				cmd.Println(response)
 			}
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
@@ -57,6 +60,9 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 	// 'print' flag whether to print response to the stdout (default: true)
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")
+
+	// 'plain' flag whether to render the response as plain text (default: false)
+	cmd.Flags().BoolP("plain", "k", false, "Render the response as plain text")
 
 	// 'log' flag whether to log the input and output to a file (default: false)
 	cmd.Flags().BoolP("log", "l", false, "Log the input and output to a file")

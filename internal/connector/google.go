@@ -193,7 +193,8 @@ func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (str
 }
 
 func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
-	gc.logger.Sugar().Debugw("Query with tool", "model", gc.modelID)
+	logger := *utils.GetLogger()
+	logger.Sugar().Debugw("Query with tool", "model", gc.modelID)
 
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
 
@@ -205,28 +206,38 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	gc.model.Tools = geminiTools
 	session := gc.model.StartChat()
 
+	logger.Sugar().Debugw("Sending message to Google AI", "userPrompt", *qParams.UserPrompt)
 	resp, err := session.SendMessage(ctx, genai.Text(*qParams.UserPrompt))
 	if err != nil {
 		return "", fmt.Errorf("error sending message to Google AI: %w", err)
 	}
-
-	part := resp.Candidates[0].Content.Parts[0]
-	funcall, ok := part.(genai.FunctionCall)
-	if ok {
-		// Call the tool
-		execTool, exist := execTools[funcall.Name]
-		if !exist {
-			return "", fmt.Errorf("tool %s not found", funcall.Name)
-		}
-
-		args := funcall.Args
-		result, err := execTool.RunSchema(args)
-		if err != nil {
-			return "", fmt.Errorf("error executing tool %s: %w", funcall.Name, err)
-		}
-
-		return result, nil
+	logger.Sugar().Debugw("Received response from Google AI", "response", resp)
+	if len(resp.Candidates) == 0 {
+		return "", fmt.Errorf("no response from Google AI")
 	}
 
-	return "", fmt.Errorf("no response from Google AI")
+	// Check if the response contains a function call
+	part := resp.Candidates[0].Content.Parts[0]
+	funcall, ok := part.(genai.FunctionCall)
+	if !ok {
+		// If no function call, return the text response
+		return fmt.Sprint(part), nil
+	}
+
+	// Check if the function call is valid
+	execTool, exist := execTools[funcall.Name]
+	if !exist {
+		return "", fmt.Errorf("tool %s not found", funcall.Name)
+	}
+
+	// Execute the tool with the provided arguments
+	logger.Sugar().Debugw("Executing tool", "toolName", funcall.Name, "arguments", funcall.Args)
+	args := funcall.Args
+	result, err := execTool.RunSchema(args)
+	if err != nil {
+		return "", fmt.Errorf("error executing tool %s: %w", funcall.Name, err)
+	}
+
+	return result, nil
+
 }
