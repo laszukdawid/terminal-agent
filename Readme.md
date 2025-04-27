@@ -46,9 +46,25 @@ agent task list files 3 dirs up
 
 **Note**: Since more testing is required, there are only a few methods allowed.
 
+### MCP
+
+Terminal Agent supports tools via MCP. To enable them, provide a file path to the JSON file, [mcp.json](/docs/examples/mcp.json). In case you have the file written at `/home/user/mcp.json` you'd update the terminal agent with
+
+```shell
+agent config set mcp-path /home/user/mcp.json
+```
+
+then to verify it's fine execute
+
+```shell
+agent config get mcp-path
+```
+
 ### Config
 
 Given that a few providers and their models are supported, there's a rudamentry configuration support. Whole config 
+
+Check all settings with `agent config get all`.
 
 ## Providers supported
 
@@ -121,6 +137,7 @@ $ agent config set model gpt-4o-mini
 - [x] **task**: Ability to propose and execute a command (expect Perplexity)
 - [x] **stream**: Ask only (except Perplexity)
 - [x] **markdown**: By default, provide nicely formatted outputs in terminal
+- [x] **MCP**: Supports Model Context Protocol (MCP) defined in a file
 - [x] **websearch**: Can search the web and display links
 - [ ] **unix**: Designs and evaluates a unix command
 - [ ] **python**: Designs and evaluates a python command
