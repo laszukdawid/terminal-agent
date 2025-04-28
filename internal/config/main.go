@@ -22,6 +22,8 @@ type Config interface {
 	SetDefaultModelId(string) error
 	GetMcpFilePath() string
 	SetMcpFilePath(string) error
+	// GetMaxTokens() int
+	// SetMaxTokens(int) error
 }
 
 type config struct {
@@ -29,6 +31,7 @@ type config struct {
 	DefaultProvider string            `json:"default_provider"`
 	Providers       map[string]string `json:"providers"`
 	McpFilePath     string            `json:"mcp_file_path"`
+	MaxTokens       int               `json:"max_tokens"`
 }
 
 func ensurePathExists(path string) error {
@@ -60,6 +63,9 @@ func NewDefaultConfig() *config {
 			"perplexity": "llama-3-8b-instruct",
 			"openai":     "gpt-4o-mini",
 		},
+		LogLevel:    "info",
+		McpFilePath: "",
+		MaxTokens:   600,
 	}
 }
 

@@ -19,3 +19,11 @@ type Tool interface {
 type CodeExecutor interface {
 	Exec(code string) (string, error)
 }
+
+type LlmResponseWithTools struct {
+	ToolName     string
+	ToolInput    map[string]any
+	ToolResponse string
+
+	Response string
+}

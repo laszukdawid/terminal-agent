@@ -89,7 +89,15 @@ type QueryParams struct {
 	MaxTokens  int
 }
 
+type LlmResponseWithTools struct {
+	Response     string
+	ToolUse      bool
+	ToolName     string
+	ToolInput    map[string]any
+	ToolResponse any
+}
+
 type LLMConnector interface {
 	Query(ctx context.Context, params *QueryParams) (string, error)
-	QueryWithTool(ctx context.Context, params *QueryParams, tools map[string]tools.Tool) (string, error)
+	QueryWithTool(ctx context.Context, params *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error)
 }
