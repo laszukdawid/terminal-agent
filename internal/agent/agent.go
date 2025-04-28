@@ -39,8 +39,12 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
 	allTools := toolProvider.GetAllTools()
-	allTools["ask_user"] = NewAskUserTool()
-	allTools["final_answer"] = NewFinalAnswerTool()
+
+	askUserTool := NewAskUserTool()
+	allTools[askUserTool.Name()] = askUserTool
+
+	finalAnswerTool := NewFinalAnswerTool()
+	allTools[finalAnswerTool.Name()] = finalAnswerTool
 
 	return &Agent{
 		Connector: connector,
