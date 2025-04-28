@@ -80,6 +80,7 @@ func deduceGenaiType(typeStr string) genai.Type {
 }
 
 func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema, error) {
+	logger := *utils.GetLogger()
 	if inputSchema == nil {
 		return nil, fmt.Errorf("input schema is nil")
 	}
@@ -100,15 +101,34 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 	}
 
 	for propName, propDef := range properties {
-		propDefMap, ok := propDef.(map[string]any)
-		if !ok {
+		var propDefMap map[string]any
+		isMap := false
+
+		// Try asserting to map[string]any
+		if m, ok := propDef.(map[string]any); ok {
+			propDefMap = m
+			isMap = true
+		} else if mStr, okStr := propDef.(map[string]string); okStr {
+			// If it's map[string]string, convert it to map[string]any
+			tempMap := make(map[string]any, len(mStr))
+			for key, val := range mStr {
+				tempMap[key] = val
+			}
+			propDefMap = tempMap
+			isMap = true
+		}
+
+		// If it wasn't either expected map type, skip
+		if !isMap {
+			logger.Warn(fmt.Sprintf("property '%s' has unexpected type %T. skipping", propName, propDef))
 			continue
 		}
 
 		desc, ok := propDefMap["description"].(string)
 		if !ok {
 			// desc = ""
-			utils.Logger.Sugar().Warnf("property '%s' description not found. skipping", propName)
+			// logger.Sugar().Warnf("property '%s' description not found. skipping", propName)
+			logger.Warn(fmt.Sprintf("property '%s' description not found. skipping", propName))
 			continue
 		}
 		genaiSchema := &genai.Schema{
@@ -125,7 +145,7 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 					desc, ok := items["description"].(string)
 					if !ok {
 						// desc = ""
-						utils.Logger.Sugar().Warnf("item property '%s' description not found. skipping", propName)
+						logger.Warn(fmt.Sprintf("item property '%s' description not found. skipping", propName))
 						continue
 					}
 					genaiSchema.Items = &genai.Schema{
@@ -217,34 +237,46 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	}
 
 	// Check if the response contains a function call
-	part := resp.Candidates[0].Content.Parts[0]
-	funcall, ok := part.(genai.FunctionCall)
-	if !ok {
-		// If no function call, return the text response
-		return LlmResponseWithTools{
-			Response: fmt.Sprint(part),
-		}, nil
+	// part := resp.Candidates[0].Content.Parts[0]
+	// funcall, ok := part.(genai.FunctionCall)
+
+	// var response string
+	response := LlmResponseWithTools{}
+	for _, candidate := range resp.Candidates {
+		for _, part := range candidate.Content.Parts {
+			funcall, ok := part.(genai.FunctionCall)
+
+			if ok {
+				response.ToolUse = true
+				response.ToolName = funcall.Name
+				response.ToolInput = funcall.Args
+			} else {
+				response.Response += fmt.Sprint(part) + "\n"
+			}
+		}
 	}
+
+	return response, nil
 
 	// Check if the function call is valid
-	execTool, exist := execTools[funcall.Name]
-	if !exist {
-		return LlmResponseWithTools{}, fmt.Errorf("tool %s not found", funcall.Name)
-	}
+	// execTool, exist := execTools[funcall.Name]
+	// if !exist {
+	// 	return LlmResponseWithTools{}, fmt.Errorf("tool %s not found", funcall.Name)
+	// }
 
-	// Execute the tool with the provided arguments
-	logger.Sugar().Debugw("Executing tool", "toolName", funcall.Name, "arguments", funcall.Args)
-	args := funcall.Args
-	result, err := execTool.RunSchema(args)
-	if err != nil {
-		return LlmResponseWithTools{}, fmt.Errorf("error executing tool %s: %w", funcall.Name, err)
-	}
+	// // Execute the tool with the provided arguments
+	// logger.Sugar().Debugw("Executing tool", "toolName", funcall.Name, "arguments", funcall.Args)
+	// args := funcall.Args
+	// // result, err := execTool.RunSchema(args)
+	// if err != nil {
+	// 	return LlmResponseWithTools{}, fmt.Errorf("error executing tool %s: %w", funcall.Name, err)
+	// }
 
-	return LlmResponseWithTools{
-		Response:     fmt.Sprint(result),
-		ToolResponse: result,
-		ToolName:     funcall.Name,
-		ToolInput:    args,
-	}, nil
+	// return LlmResponseWithTools{
+	// 	Response:     fmt.Sprint(result),
+	// 	ToolResponse: result,
+	// 	ToolName:     funcall.Name,
+	// 	ToolInput:    args,
+	// }, nil
 
 }

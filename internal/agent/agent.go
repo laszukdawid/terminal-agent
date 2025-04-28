@@ -40,8 +40,8 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
 	allTools := toolProvider.GetAllTools()
-	allTools["ask_user"] = NewAskUserTool()
-	allTools["final_answer"] = NewFinalAnswerTool()
+	// allTools["ask_user"] = NewAskUserTool()
+	// allTools["final_answer"] = NewFinalAnswerTool()
 
 	return &Agent{
 		Connector: connector,
@@ -108,10 +108,10 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 		// Parse response to extract agent's decisions
 		// decision, err := parseAgentResponse(response)
 
-		if err != nil {
-			logger.Errorw("Failed to parse agent response", "response", response, "error", err)
-			continue
-		}
+		// if err != nil {
+		// 	logger.Errorw("Failed to parse agent response", "response", response, "error", err)
+		// 	continue
+		// }
 
 		// Process the decision
 		// switch decision.ActionType {
@@ -126,6 +126,7 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 			if err != nil {
 				logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)
 				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
+				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
 			} else {
 				taskState.Results[response.ToolName] = toolResult
 				taskState.CompletionStatus = min(taskState.CompletionStatus+10, 90) // Progress but not complete
@@ -356,9 +357,12 @@ func NewAskUserTool() *askUserTool {
 		name:        "user_clarification",
 		description: "Ask the user for clarification or additional information.",
 		inputSchema: map[string]any{
-			"question": map[string]string{
-				"type":        "string",
-				"description": "The question to ask the user.",
+			"type": "object",
+			"properties": map[string]any{
+				"question": map[string]string{
+					"type":        "string",
+					"description": "Ask a question to the user to get more info required to solve or clarify their problem",
+				},
 			},
 		},
 	}
@@ -408,9 +412,12 @@ func NewFinalAnswerTool() *finalAnswerTool {
 		name:        "final_answer",
 		description: "Provide the final answer to the task.",
 		inputSchema: map[string]any{
-			"answer": map[string]string{
-				"type":        "string",
-				"description": "The final answer to the task.",
+			"type": "object",
+			"properties": map[string]any{
+				"answer": map[string]string{
+					"type":        "string",
+					"description": "Call this tool when the task is complete and you want to provide the final answer.",
+				},
 			},
 		},
 	}
