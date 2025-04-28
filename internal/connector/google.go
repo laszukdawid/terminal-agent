@@ -197,10 +197,8 @@ func convertToolsToGoogle(execTools map[string]tools.Tool) ([]*genai.Tool, error
 }
 
 func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
-	// cs := gc.model.StartChat()
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
 	resp, err := gc.model.GenerateContent(ctx, genai.Text(*qParams.UserPrompt))
-	// resp, err := cs.SendMessage(ctx, genai.Text())
 	if err != nil {
 		return "", fmt.Errorf("error sending message to Google AI: %w", err)
 	}
@@ -236,11 +234,6 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 		return LlmResponseWithTools{}, fmt.Errorf("no response from Google AI")
 	}
 
-	// Check if the response contains a function call
-	// part := resp.Candidates[0].Content.Parts[0]
-	// funcall, ok := part.(genai.FunctionCall)
-
-	// var response string
 	response := LlmResponseWithTools{}
 	for _, candidate := range resp.Candidates {
 		for _, part := range candidate.Content.Parts {
@@ -257,26 +250,4 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	}
 
 	return response, nil
-
-	// Check if the function call is valid
-	// execTool, exist := execTools[funcall.Name]
-	// if !exist {
-	// 	return LlmResponseWithTools{}, fmt.Errorf("tool %s not found", funcall.Name)
-	// }
-
-	// // Execute the tool with the provided arguments
-	// logger.Sugar().Debugw("Executing tool", "toolName", funcall.Name, "arguments", funcall.Args)
-	// args := funcall.Args
-	// // result, err := execTool.RunSchema(args)
-	// if err != nil {
-	// 	return LlmResponseWithTools{}, fmt.Errorf("error executing tool %s: %w", funcall.Name, err)
-	// }
-
-	// return LlmResponseWithTools{
-	// 	Response:     fmt.Sprint(result),
-	// 	ToolResponse: result,
-	// 	ToolName:     funcall.Name,
-	// 	ToolInput:    args,
-	// }, nil
-
 }

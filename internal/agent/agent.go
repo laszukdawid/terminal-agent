@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
@@ -22,9 +23,7 @@ const MaxTokens = 400
 
 type Agent struct {
 	Connector connector.LLMConnector
-	// UnixTool  tools.UnixTool
-	// toolProvider tools.ToolProvider
-	Tools map[string]tools.Tool
+	Tools     map[string]tools.Tool
 
 	maxTokens        int
 	systemPromptAsk  *string
@@ -40,8 +39,8 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
 
 	allTools := toolProvider.GetAllTools()
-	// allTools["ask_user"] = NewAskUserTool()
-	// allTools["final_answer"] = NewFinalAnswerTool()
+	allTools["ask_user"] = NewAskUserTool()
+	allTools["final_answer"] = NewFinalAnswerTool()
 
 	return &Agent{
 		Connector: connector,
@@ -72,8 +71,8 @@ func (a *Agent) Question(ctx context.Context, s string, isStream bool) (string, 
 
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 	logger := utils.Logger.Sugar()
-	// ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
-	// defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, 900*time.Second) // 15 minutes timeout
+	defer cancel()
 
 	// Create initial task state
 	taskState := &TaskState{
@@ -104,20 +103,7 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 			logger.Errorw("Error querying model", "iteration", taskState.Iterations, "error", err)
 			return "", fmt.Errorf("error during task processing: %w", err)
 		}
-
-		// Parse response to extract agent's decisions
-		// decision, err := parseAgentResponse(response)
-
-		// if err != nil {
-		// 	logger.Errorw("Failed to parse agent response", "response", response, "error", err)
-		// 	continue
-		// }
-
-		// Process the decision
-		// switch decision.ActionType {
-		// case "complete":
-		// 	// Task is complete, return the final answer
-		// 	return decision.FinalAnswer, nil
+		taskState.CompletionStatus = min(taskState.CompletionStatus+5, 85)
 
 		if response.ToolUse {
 			// Execute the selected tool
@@ -128,38 +114,24 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
 			} else {
+				// TODO: Handle multiple executions of the same tool
+				taskState.Results[fmt.Sprintf("%s justification", response.ToolName)] = response.Response
 				taskState.Results[response.ToolName] = toolResult
-				taskState.CompletionStatus = min(taskState.CompletionStatus+10, 90) // Progress but not complete
+				taskState.CompletionStatus = min(taskState.CompletionStatus+5, 90) // Progress but not complete
+				taskState.CurrentThought = ""
 			}
 
+			// If the final answer tool is used, set the completion status to 100%
 			if response.ToolName == "final_answer" {
-				// If the final answer tool is used, set the completion status to 100%
 				taskState.CompletionStatus = 100
-				taskState.Results["final_answer"] = toolResult
 				return toolResult, nil
 			}
 
-			// case "ask_user":
-			// 	// Ask user for clarification
-			// 	fmt.Println("\nNeed clarification:", decision.UserQuery)
-			// 	userInput, err := getUserInput()
-			// 	if err != nil {
-			// 		logger.Errorw("Failed to get user input", "error", err)
-			// 		return "", fmt.Errorf("user input error: %w", err)
-			// 	}
-			// 	taskState.Results["user_clarification"] = userInput
-
-		} else {
-			// Continue thinking
-			// taskState.CurrentThought = decision.NextThought
-			taskState.CurrentThought = response.Response
-			taskState.CompletionStatus = min(taskState.CompletionStatus+5, 85)
 		}
 
 		logger.Debugw("Task iteration complete",
 			"iteration", taskState.Iterations,
 			"status", taskState.CompletionStatus)
-		// "action", decision.ActionType)
 	}
 
 	// If we reached max iterations without completion
@@ -199,12 +171,16 @@ Current progress: {{.CompletionStatus}}%
 Iteration: {{.Iterations}} of {{.MaxIterations}}
 
 {{if .HasResults}}Information gathered so far:
-{{range $source, $result := .Results}}- {{$source}}: {{$result}}
+{{range $source, $result := .Results}}Results source: {{$source}}
+<RESULTS>
+{{$result}}
+</RESULTS>
 {{end}}
 {{end}}
+
 Current thought: {{.CurrentThought}}
 
-What should I do next to complete this task? 
+What should I do next to complete this task? Is the task finished? If so, provide the final answer.
 `
 
 	// Prepare template data
@@ -219,8 +195,8 @@ What should I do next to complete this task?
 	// Process each result to truncate if needed
 	processedResults := make(map[string]string, len(state.Results))
 	for source, result := range state.Results {
-		// processedResults[source] = TruncateString(result, 200)
-		processedResults[source] = result
+		processedResults[source] = TruncateString(result, 2000)
+		// processedResults[source] = result
 	}
 	data.Results = processedResults
 
@@ -238,44 +214,6 @@ What should I do next to complete this task?
 	}
 
 	return strings.TrimSpace(buf.String())
-}
-
-// parseAgentResponse analyzes the model's response to determine the agent's decision
-func parseAgentResponse(response connector.LlmResponseWithTools) (*AgentDecision, error) {
-	// Implement logic to parse structured or semi-structured responses
-	// This would depend on your model's output format
-
-	decision := &AgentDecision{
-		ActionType:  "think", // Default action
-		NextThought: "Processing the information...",
-	}
-
-	// Parse based on keywords or structured format
-	if response.ToolUse {
-		decision.ActionType = "use_tool"
-		// Extract tool name and input from response
-		// This is simplified - you'll need proper parsing based on your format
-		decision.ToolName = response.ToolName
-		decision.ToolInput = response.ToolInput
-	} else if strings.Contains(response.Response, "ASK USER:") {
-		decision.ActionType = "ask_user"
-		parts := strings.Split(response.Response, "ASK USER:")
-		if len(parts) > 1 {
-			decision.UserQuery = strings.TrimSpace(parts[1])
-		}
-	} else if strings.Contains(response.Response, "FINAL ANSWER:") {
-		decision.ActionType = "complete"
-		parts := strings.Split(response.Response, "FINAL ANSWER:")
-		if len(parts) > 1 {
-			decision.FinalAnswer = strings.TrimSpace(parts[1])
-		}
-	} else {
-		// Extract thinking - this would be model specific
-		// decision.NextThought = TruncateString(response.Response, 300)
-		decision.NextThought = response.Response
-	}
-
-	return decision, nil
 }
 
 // getUserInput reads input from the user
@@ -341,7 +279,7 @@ func min(a, b int) int {
 
 func TruncateString(s string, maxLen int) string {
 	if len(s) > maxLen {
-		return s[:maxLen] + "..."
+		return s[:maxLen] + "... [Truncated]"
 	}
 	return s
 }
