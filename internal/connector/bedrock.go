@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -23,6 +23,8 @@ type BedrockModelID string
 const (
 	BedrockProvider = "bedrock"
 	ToolUse         = "tool_use"
+
+	DefaultAwsRegion = "us-east-1"
 
 	// Supported models https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html
 	ClaudeHaiku      BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
@@ -121,7 +123,14 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 	logger.Debug("NewBedrockConnector")
 	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
 	// sdkConfig, err := cloud.NewDefaultAwsConfig(context.Background())
-	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion("us-east-1"))
+
+	// Load the AWS region from environment variable or use default
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = DefaultAwsRegion
+	}
+
+	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion(awsRegion))
 
 	if err != nil {
 		fmt.Println("Couldn't load default configuration. Have you set up your AWS account?")
@@ -146,19 +155,16 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 func (bc *BedrockConnector) queryBedrock(
 	ctx context.Context, userPrompt *string, systemPrompt *string, toolConfig *types.ToolConfiguration,
 ) (*bedrockruntime.ConverseOutput, error) {
-	systemPromptContent := []types.SystemContentBlock{
-		&types.SystemContentBlockMemberText{Value: *systemPrompt},
-	}
-	userPromptContent := []types.ContentBlock{
-		&types.ContentBlockMemberText{Value: *userPrompt},
-	}
 
 	converseInput := &bedrockruntime.ConverseInput{
 		ModelId: (*string)(&bc.modelID),
-		System:  systemPromptContent,
-		Messages: []types.Message{
-			{Role: "user", Content: userPromptContent},
+		System: []types.SystemContentBlock{
+			&types.SystemContentBlockMemberText{Value: *systemPrompt},
 		},
+		Messages: []types.Message{{
+			Role:    "user",
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *userPrompt}},
+		}},
 	}
 
 	if toolConfig != nil {
@@ -169,7 +175,7 @@ func (bc *BedrockConnector) queryBedrock(
 	if err != nil {
 		var re *awshttp.ResponseError
 		if errors.As(err, &re) {
-			log.Printf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
+			bc.logger.Sugar().Errorf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
 		}
 
 		if re.ResponseError.HTTPStatusCode() == 403 {
@@ -204,19 +210,16 @@ func (bc *BedrockConnector) queryBedrock(
 func (bc *BedrockConnector) queryBedrockStream(
 	ctx context.Context, qParams *QueryParams, toolConfig *types.ToolConfiguration,
 ) (string, error) {
-	systemPromptContent := []types.SystemContentBlock{
-		&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
-	}
-	userPromptContent := []types.ContentBlock{
-		&types.ContentBlockMemberText{Value: *qParams.UserPrompt},
-	}
 
 	converseInput := &bedrockruntime.ConverseStreamInput{
 		ModelId: (*string)(&bc.modelID),
-		System:  systemPromptContent,
-		Messages: []types.Message{
-			{Role: "user", Content: userPromptContent},
+		System: []types.SystemContentBlock{
+			&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
 		},
+		Messages: []types.Message{{
+			Role:    "user",
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *qParams.UserPrompt}},
+		}},
 	}
 
 	if toolConfig != nil {
@@ -227,7 +230,7 @@ func (bc *BedrockConnector) queryBedrockStream(
 	if err != nil {
 		var re *awshttp.ResponseError
 		if errors.As(err, &re) {
-			log.Printf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
+			bc.logger.Sugar().Errorf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
 		}
 
 		if re.ResponseError.HTTPStatusCode() == 403 {
@@ -240,7 +243,6 @@ func (bc *BedrockConnector) queryBedrockStream(
 	var acc string
 
 	stream := converseOutput.GetStream()
-	// var stream <-chan types.ConverseStreamOutput = converseOutput.GetStream()
 	var events <-chan types.ConverseStreamOutput = stream.Events()
 
 	for _event := range events {
@@ -334,55 +336,36 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 		ToolChoice: &types.ToolChoiceMemberAuto{},
 	}
 
+	//
 	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, &toolConfig)
 	if err != nil {
 		return response, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	// TODO: Unify with other blocks iterations
-	// Special block just to handle Tools
 	if converseOutput.StopReason == ToolUse {
-		outputMsg := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value
+		bc.logger.Sugar().Debugw("Tool use", "stopReason", converseOutput.StopReason)
+	}
 
-		// First find the content that actully has the tool use
-		for blockIdx, content := range outputMsg.Content {
-			bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
+	contents := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value.Content
+	for blockIdx, content := range contents {
+		bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
+		if contentBlockMemberText, ok := content.(*types.ContentBlockMemberText); ok {
+			response.Response += contentBlockMemberText.Value + "\n"
+		}
 
-			// response.Response += content.(*types.ContentBlockMemberText).Value
-			// Only interested in ToolUse content
-			if _, ok := content.(*types.ContentBlockMemberToolUse); !ok {
-				continue
-			}
+		if contentBlockMemberText, ok := content.(*types.ContentBlockMemberToolUse); ok {
+			bc.logger.Sugar().Debugw("Tool use", "blockIdx", blockIdx, "content", content)
+			contentToolUse := contentBlockMemberText.Value
+			response.ToolUse = true
+			response.ToolName = *contentToolUse.Name
 
-			var toolUse types.ToolUseBlock = content.(*types.ContentBlockMemberToolUse).Value
-
-			var inputMap map[string]interface{}
-			err := toolUse.Input.UnmarshalSmithyDocument(&inputMap)
+			// Parse tool's input
+			var inputMap map[string]any
+			err := contentToolUse.Input.UnmarshalSmithyDocument(&inputMap)
 			if err != nil {
 				return response, fmt.Errorf("failed to unmarshal tool input: %v", err)
 			}
-			bc.logger.Sugar().Infow("Tool use", "tool", *toolUse.Name, "input", inputMap)
-			response.ToolUse = true
-			response.ToolName = *toolUse.Name
 			response.ToolInput = inputMap
-		}
-	}
-
-	union := converseOutput.Output
-	if union == nil {
-		return response, fmt.Errorf("model %s returned response is nil", bc.modelID)
-	}
-
-	// Collect all content blocks
-	if unionMsg, ok := union.(*types.ConverseOutputMemberMessage); ok {
-		for blockIdx, content := range unionMsg.Value.Content {
-			bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
-			if _, ok := content.(*types.ContentBlockMemberText); !ok {
-				continue
-			}
-
-			// Only interested in Text content
-			response.Response += content.(*types.ContentBlockMemberText).Value + "\n"
 		}
 	}
 
