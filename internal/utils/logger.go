@@ -13,10 +13,15 @@ func InitLogger(loglevel *string) (*zap.Logger, error) {
 
 	switch *loglevel {
 	case zap.DebugLevel.String():
-		Logger, err = zap.NewDevelopment()
+		cfg := zap.NewDevelopmentConfig()
+		cfg.Level.SetLevel(zap.DebugLevel)
+		cfg.DisableStacktrace = true
+		Logger, err = cfg.Build()
+
 	case zap.WarnLevel.String():
 		cfg := zap.NewProductionConfig()
 		cfg.Level.SetLevel(zap.WarnLevel)
+		cfg.DisableStacktrace = true
 		Logger, err = cfg.Build()
 	case zap.InfoLevel.String():
 		Logger, err = zap.NewProduction()

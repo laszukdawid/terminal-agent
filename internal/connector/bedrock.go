@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -23,6 +23,8 @@ type BedrockModelID string
 const (
 	BedrockProvider = "bedrock"
 	ToolUse         = "tool_use"
+
+	DefaultAwsRegion = "us-east-1"
 
 	// Supported models https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html
 	ClaudeHaiku      BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
@@ -121,7 +123,14 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 	logger.Debug("NewBedrockConnector")
 	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
 	// sdkConfig, err := cloud.NewDefaultAwsConfig(context.Background())
-	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion("us-east-1"))
+
+	// Load the AWS region from environment variable or use default
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = DefaultAwsRegion
+	}
+
+	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion(awsRegion))
 
 	if err != nil {
 		fmt.Println("Couldn't load default configuration. Have you set up your AWS account?")
@@ -146,19 +155,16 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 func (bc *BedrockConnector) queryBedrock(
 	ctx context.Context, userPrompt *string, systemPrompt *string, toolConfig *types.ToolConfiguration,
 ) (*bedrockruntime.ConverseOutput, error) {
-	systemPromptContent := []types.SystemContentBlock{
-		&types.SystemContentBlockMemberText{Value: *systemPrompt},
-	}
-	userPromptContent := []types.ContentBlock{
-		&types.ContentBlockMemberText{Value: *userPrompt},
-	}
 
 	converseInput := &bedrockruntime.ConverseInput{
 		ModelId: (*string)(&bc.modelID),
-		System:  systemPromptContent,
-		Messages: []types.Message{
-			{Role: "user", Content: userPromptContent},
+		System: []types.SystemContentBlock{
+			&types.SystemContentBlockMemberText{Value: *systemPrompt},
 		},
+		Messages: []types.Message{{
+			Role:    "user",
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *userPrompt}},
+		}},
 	}
 
 	if toolConfig != nil {
@@ -169,7 +175,7 @@ func (bc *BedrockConnector) queryBedrock(
 	if err != nil {
 		var re *awshttp.ResponseError
 		if errors.As(err, &re) {
-			log.Printf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
+			bc.logger.Sugar().Errorf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
 		}
 
 		if re.ResponseError.HTTPStatusCode() == 403 {
@@ -204,19 +210,16 @@ func (bc *BedrockConnector) queryBedrock(
 func (bc *BedrockConnector) queryBedrockStream(
 	ctx context.Context, qParams *QueryParams, toolConfig *types.ToolConfiguration,
 ) (string, error) {
-	systemPromptContent := []types.SystemContentBlock{
-		&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
-	}
-	userPromptContent := []types.ContentBlock{
-		&types.ContentBlockMemberText{Value: *qParams.UserPrompt},
-	}
 
 	converseInput := &bedrockruntime.ConverseStreamInput{
 		ModelId: (*string)(&bc.modelID),
-		System:  systemPromptContent,
-		Messages: []types.Message{
-			{Role: "user", Content: userPromptContent},
+		System: []types.SystemContentBlock{
+			&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
 		},
+		Messages: []types.Message{{
+			Role:    "user",
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *qParams.UserPrompt}},
+		}},
 	}
 
 	if toolConfig != nil {
@@ -227,7 +230,7 @@ func (bc *BedrockConnector) queryBedrockStream(
 	if err != nil {
 		var re *awshttp.ResponseError
 		if errors.As(err, &re) {
-			log.Printf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
+			bc.logger.Sugar().Errorf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
 		}
 
 		if re.ResponseError.HTTPStatusCode() == 403 {
@@ -240,7 +243,6 @@ func (bc *BedrockConnector) queryBedrockStream(
 	var acc string
 
 	stream := converseOutput.GetStream()
-	// var stream <-chan types.ConverseStreamOutput = converseOutput.GetStream()
 	var events <-chan types.ConverseStreamOutput = stream.Events()
 
 	for _event := range events {
@@ -325,84 +327,47 @@ func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (st
 	return response, nil
 }
 
-func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
+func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	bc.logger.Sugar().Debugw("Query with tool", "model", bc.modelID)
+	response := LlmResponseWithTools{}
 
 	toolConfig := types.ToolConfiguration{
 		Tools:      convertToolsToBedrock(execTools),
 		ToolChoice: &types.ToolChoiceMemberAuto{},
 	}
 
+	//
 	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, &toolConfig)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %v", err)
+		return response, fmt.Errorf("failed to send request: %v", err)
 	}
 
 	if converseOutput.StopReason == ToolUse {
-		outputMsg := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value
+		bc.logger.Sugar().Debugw("Tool use", "stopReason", converseOutput.StopReason)
+	}
 
-		// Check whether there's any tool used in the output. If so, execute the tool.
-		output, err := bc.findAndUseTool(outputMsg, execTools)
-
-		if err != nil {
-			return "", fmt.Errorf("failed to find and use tool: %v", err)
+	contents := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value.Content
+	for blockIdx, content := range contents {
+		bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
+		if contentBlockMemberText, ok := content.(*types.ContentBlockMemberText); ok {
+			response.Response += contentBlockMemberText.Value + "\n"
 		}
 
-		return output, nil
-	}
+		if contentBlockMemberText, ok := content.(*types.ContentBlockMemberToolUse); ok {
+			bc.logger.Sugar().Debugw("Tool use", "blockIdx", blockIdx, "content", content)
+			contentToolUse := contentBlockMemberText.Value
+			response.ToolUse = true
+			response.ToolName = *contentToolUse.Name
 
-	var response string
-	var msgResponse types.Message
-
-	union := converseOutput.Output
-	if union == nil {
-		return "", fmt.Errorf("model %s returned response is nil", bc.modelID)
+			// Parse tool's input
+			var inputMap map[string]any
+			err := contentToolUse.Input.UnmarshalSmithyDocument(&inputMap)
+			if err != nil {
+				return response, fmt.Errorf("failed to unmarshal tool input: %v", err)
+			}
+			response.ToolInput = inputMap
+		}
 	}
-
-	if _, ok := union.(*types.ConverseOutputMemberMessage); !ok {
-		return "", fmt.Errorf("model %s returned unknown response type", bc.modelID)
-	}
-	msgResponse = union.(*types.ConverseOutputMemberMessage).Value // Value is types.Message
-	response = msgResponse.Content[0].(*types.ContentBlockMemberText).Value
 
 	return response, nil
-}
-
-// findAndUseTool finds the tool use in the output message and executes the tool.
-// If the tool is not supported then it returns an error.
-// For supported tools, it executes `tool.RunSchema` method of the tool and returns the command to be executed.
-//
-// TODO: Only executes a single, first tool. Should be able to execute multiple tools.
-func (bc *BedrockConnector) findAndUseTool(outputMessage types.Message, execTools map[string]tools.Tool) (string, error) {
-
-	// First find the content that actully has the tool use
-	for blockIdx, content := range outputMessage.Content {
-		bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
-
-		// Only interested in ToolUse content
-		if _, ok := content.(*types.ContentBlockMemberToolUse); !ok {
-			continue
-		}
-
-		var toolUse types.ToolUseBlock = content.(*types.ContentBlockMemberToolUse).Value
-
-		// Check if the tool is supported
-		execTool := execTools[*toolUse.Name]
-
-		if execTool == nil {
-			return "", fmt.Errorf("tool %s is not supported", *toolUse.Name)
-		}
-
-		var inputMap map[string]interface{}
-		err := toolUse.Input.UnmarshalSmithyDocument(&inputMap)
-		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal tool input: %v", err)
-		}
-		bc.logger.Sugar().Infow("Tool use", "tool", *toolUse.Name, "input", inputMap)
-
-		// Execute the tool and return the output
-		return execTool.RunSchema(inputMap)
-	}
-
-	return "", fmt.Errorf("no tool use found in the output")
 }

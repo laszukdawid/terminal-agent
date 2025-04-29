@@ -72,42 +72,6 @@ func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParam
 	return message.Content[0].AsResponseTextBlock().Text, nil
 }
 
-func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
-	ac.logger.Sugar().Debugw("Query", "model", ac.modelID)
-
-	msgParams := anthropic.MessageNewParams{
-		MaxTokens: int64(qParams.MaxTokens),
-		System: []anthropic.TextBlockParam{
-			{Text: *qParams.SysPrompt},
-		},
-		Messages: []anthropic.MessageParam{{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{{
-				OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
-			}},
-		}},
-		Model: ac.modelID,
-	}
-
-	// If stream, then we use the streaming API and leave this function
-	if qParams.Stream {
-		return ac.queryAnthropicStream(ctx, msgParams)
-	}
-
-	message, err := ac.client.Messages.New(ctx, msgParams)
-	if err != nil {
-		return "", err
-	}
-
-	var outText string
-	for _, block := range message.Content {
-		txtBlock := block.AsResponseTextBlock()
-		outText += txtBlock.Text
-	}
-
-	return outText, nil
-}
-
 // convertToolsToAnthropic converts internal tool representations to Anthropic's tool format
 func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam {
 	var anthropicTools []anthropic.ToolParam
@@ -145,14 +109,47 @@ func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam 
 	return anthropicTools
 }
 
-func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
+func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+	ac.logger.Sugar().Debugw("Query", "model", ac.modelID)
 
-	messages := []anthropic.MessageParam{{
-		Role: anthropic.MessageParamRoleUser,
-		Content: []anthropic.ContentBlockParamUnion{{
-			OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
+	msgParams := anthropic.MessageNewParams{
+		MaxTokens: int64(qParams.MaxTokens),
+		System: []anthropic.TextBlockParam{
+			{Text: *qParams.SysPrompt},
+		},
+		Messages: []anthropic.MessageParam{{
+			Role: anthropic.MessageParamRoleUser,
+			Content: []anthropic.ContentBlockParamUnion{{
+				OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
+			}},
 		}},
-	}}
+		Model: ac.modelID,
+	}
+
+	// If stream, then we use the streaming API and leave this function
+	if qParams.Stream {
+		return ac.queryAnthropicStream(ctx, msgParams)
+	}
+
+	message, err := ac.client.Messages.New(ctx, msgParams)
+	if err != nil {
+		return "", err
+	}
+
+	var outText string
+	for _, block := range message.Content {
+		txtBlock := block.AsResponseTextBlock()
+		outText += txtBlock.Text
+	}
+
+	return outText, nil
+}
+
+func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
+	logger := *utils.GetLogger()
+	logger.Sugar().Debugw("Query with tool", "model", ac.modelID)
+
+	response := LlmResponseWithTools{}
 
 	toolParams := convertToolsToAnthropic(execTools)
 
@@ -161,51 +158,42 @@ func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryP
 		tools[i] = anthropic.ToolUnionParam{OfTool: &toolParam}
 	}
 
-	allResponses := ""
 	message, err := ac.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     ac.modelID,
+		System:    []anthropic.TextBlockParam{{Text: *qParams.SysPrompt}},
 		MaxTokens: int64(qParams.MaxTokens),
-		Messages:  messages,
-		Tools:     tools,
+		Messages: []anthropic.MessageParam{{
+			Role: anthropic.MessageParamRoleUser,
+			Content: []anthropic.ContentBlockParamUnion{{
+				OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
+			}},
+		}},
+		Tools: tools,
 	})
 
 	if err != nil {
-		return "", err
+		return response, fmt.Errorf("failed to request Anthropic client: %v", err)
 	}
 
-	toolResults := []anthropic.ContentBlockParamUnion{}
-
+	// Iterate over all blocks in the message
 	for _, block := range message.Content {
-		var blockResponse string
 		switch variant := block.AsAny().(type) {
 		case anthropic.TextBlock:
-			allResponses += block.Text + "\n"
+			response.Response += block.Text + "\n"
+
 		case anthropic.ToolUseBlock:
-			execTool, exist := execTools[block.Name]
-			if !exist {
-				ac.logger.Sugar().Errorw("Tool not found", "tool", block.Name)
-				continue
-			}
 			var input map[string]any
 			err := json.Unmarshal([]byte(variant.JSON.Input.Raw()), &input)
 			if err != nil {
 				ac.logger.Sugar().Errorw("Failed to unmarshal input", "input", variant.JSON.Input.Raw(), "error", err)
 				continue
 			}
-			response, err := execTool.RunSchema(input)
-			if err != nil {
-				ac.logger.Sugar().Errorw("Failed to run tool", "tool", block.Name, "error", err)
-				continue
-			}
-
-			blockResponse = response
-			allResponses += response
+			response.ToolUse = true
+			response.ToolName = variant.Name
+			response.ToolInput = input
 		}
 
-		toolResults = append(toolResults, anthropic.NewToolResultBlock(block.ID, blockResponse, false))
 	}
-
-	ac.logger.Sugar().Debugw("Tool results", "toolResults", toolResults)
-
-	return allResponses, nil
+	ac.logger.Sugar().Debugw("Response", "toolResponse", response)
+	return response, nil
 }

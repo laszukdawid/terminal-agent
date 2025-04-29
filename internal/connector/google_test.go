@@ -9,11 +9,9 @@ import (
 )
 
 func TestConvertToolsToGoogle(t *testing.T) {
-	// Mock UnixTool
-	unixTool := tools.NewUnixTool(nil)
 
 	execTools := map[string]tools.Tool{
-		"unix": unixTool,
+		"unix": tools.NewUnixTool(nil),
 	}
 
 	// Call convertToolsToGoogle
@@ -25,15 +23,15 @@ func TestConvertToolsToGoogle(t *testing.T) {
 		t.Fatalf("Expected 1 tool spec, got %d", len(toolSpecs))
 	}
 
-	toolSpec := toolSpecs[0]
+	for _, googleTool := range toolSpecs {
+		funcDec := googleTool.FunctionDeclarations[0]
+		expectedTool := execTools[funcDec.Name]
 
-	if toolSpec.FunctionDeclarations[0].Name != "unix" {
-		t.Errorf("Expected tool name to be 'unix', got '%s'", toolSpec.FunctionDeclarations[0].Name)
+		assert.Equal(t, funcDec.Name, expectedTool.Name(), "Expected tool name to be %s, got %s", expectedTool.Name(), funcDec.Name)
+		assert.Equal(t, funcDec.Description, expectedTool.Description(), "Expected tool description to be %s, got %s", expectedTool.Description(), funcDec.Description)
+		// assert.Equal(t, funcDec.Parameters, expectedTool.InputSchema(), "Expected tool input schema to be %v, got %v", expectedTool.InputSchema(), funcDec.Parameters)
 	}
 
-	if toolSpec.FunctionDeclarations[0].Description != unixTool.Description() {
-		t.Errorf("Expected tool description to be '%s', got '%s'", unixTool.Description(), toolSpec.FunctionDeclarations[0].Description)
-	}
 }
 
 func TestConvertToGenaiSchema(t *testing.T) {
@@ -44,8 +42,23 @@ func TestConvertToGenaiSchema(t *testing.T) {
 		input    map[string]any
 		expected genai.Schema
 	}{
-		{name: "Empty schema",
-
+		{
+			name:  "Unix command schema",
+			input: tools.NewUnixTool(nil).InputSchema(),
+			expected: genai.Schema{
+				Type:        genai.TypeObject,
+				Description: "",
+				Properties: map[string]*genai.Schema{
+					"command": {
+						Type: genai.TypeString,
+						Description: "The Unix command to execute. " +
+							"Please provide the command in a single line without any new lines.",
+					},
+				},
+			},
+		},
+		{
+			name: "Empty schema",
 			input: map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -58,7 +71,8 @@ func TestConvertToGenaiSchema(t *testing.T) {
 				Required:    []string{},
 			},
 		},
-		{name: "Missing required",
+		{
+			name: "Missing required",
 			input: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -81,7 +95,8 @@ func TestConvertToGenaiSchema(t *testing.T) {
 				Required: []string{},
 			},
 		},
-		{name: "Single command property",
+		{
+			name: "Single command property",
 			input: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -104,7 +119,8 @@ func TestConvertToGenaiSchema(t *testing.T) {
 				Required: []string{"command"},
 			},
 		},
-		{name: "Multiple properties",
+		{
+			name: "Multiple properties",
 			input: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -161,7 +177,7 @@ func TestConvertToGenaiSchema(t *testing.T) {
 			// Check if the result matches the expected output
 			assert.Equal(t, test.expected.Type, result.Type, "Expected type to be %v, got %v", test.expected.Type, result.Type)
 			assert.Equal(t, test.expected.Description, result.Description, "Expected description to be %v, got %v", test.expected.Description, result.Description)
-			assert.Equal(t, test.expected.Required, result.Required, "Expected required to be %v, got %v", test.expected.Required, result.Required)
+			assert.ElementsMatch(t, test.expected.Required, result.Required, "Expected required to be %v, got %v", test.expected.Required, result.Required)
 			assert.Equal(t, len(test.expected.Properties), len(result.Properties), "Expected %d properties, got %d", len(test.expected.Properties), len(result.Properties))
 			for key, expectedProp := range test.expected.Properties {
 				actualProp, ok := result.Properties[key]

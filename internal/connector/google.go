@@ -80,6 +80,7 @@ func deduceGenaiType(typeStr string) genai.Type {
 }
 
 func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema, error) {
+	logger := *utils.GetLogger()
 	if inputSchema == nil {
 		return nil, fmt.Errorf("input schema is nil")
 	}
@@ -100,15 +101,34 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 	}
 
 	for propName, propDef := range properties {
-		propDefMap, ok := propDef.(map[string]any)
-		if !ok {
+		var propDefMap map[string]any
+		isMap := false
+
+		// Try asserting to map[string]any
+		if m, ok := propDef.(map[string]any); ok {
+			propDefMap = m
+			isMap = true
+		} else if mStr, okStr := propDef.(map[string]string); okStr {
+			// If it's map[string]string, convert it to map[string]any
+			tempMap := make(map[string]any, len(mStr))
+			for key, val := range mStr {
+				tempMap[key] = val
+			}
+			propDefMap = tempMap
+			isMap = true
+		}
+
+		// If it wasn't either expected map type, skip
+		if !isMap {
+			logger.Warn(fmt.Sprintf("property '%s' has unexpected type %T. skipping", propName, propDef))
 			continue
 		}
 
 		desc, ok := propDefMap["description"].(string)
 		if !ok {
 			// desc = ""
-			utils.Logger.Sugar().Warnf("property '%s' description not found. skipping", propName)
+			// logger.Sugar().Warnf("property '%s' description not found. skipping", propName)
+			logger.Warn(fmt.Sprintf("property '%s' description not found. skipping", propName))
 			continue
 		}
 		genaiSchema := &genai.Schema{
@@ -125,7 +145,7 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 					desc, ok := items["description"].(string)
 					if !ok {
 						// desc = ""
-						utils.Logger.Sugar().Warnf("item property '%s' description not found. skipping", propName)
+						logger.Warn(fmt.Sprintf("item property '%s' description not found. skipping", propName))
 						continue
 					}
 					genaiSchema.Items = &genai.Schema{
@@ -177,10 +197,8 @@ func convertToolsToGoogle(execTools map[string]tools.Tool) ([]*genai.Tool, error
 }
 
 func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
-	// cs := gc.model.StartChat()
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
 	resp, err := gc.model.GenerateContent(ctx, genai.Text(*qParams.UserPrompt))
-	// resp, err := cs.SendMessage(ctx, genai.Text())
 	if err != nil {
 		return "", fmt.Errorf("error sending message to Google AI: %w", err)
 	}
@@ -192,16 +210,17 @@ func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	return "", fmt.Errorf("no response from Google AI")
 }
 
-func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
+func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	logger := *utils.GetLogger()
 	logger.Sugar().Debugw("Query with tool", "model", gc.modelID)
+	response := LlmResponseWithTools{}
 
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
 
 	geminiTools, err := convertToolsToGoogle(execTools)
 	if err != nil {
 		gc.logger.Sugar().Errorw("error converting tools to Google AI", "error", err)
-		return "", err
+		return response, err
 	}
 	gc.model.Tools = geminiTools
 	session := gc.model.StartChat()
@@ -209,35 +228,26 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	logger.Sugar().Debugw("Sending message to Google AI", "userPrompt", *qParams.UserPrompt)
 	resp, err := session.SendMessage(ctx, genai.Text(*qParams.UserPrompt))
 	if err != nil {
-		return "", fmt.Errorf("error sending message to Google AI: %w", err)
+		return response, fmt.Errorf("error sending message to Google AI: %w", err)
 	}
 	logger.Sugar().Debugw("Received response from Google AI", "response", resp)
 	if len(resp.Candidates) == 0 {
-		return "", fmt.Errorf("no response from Google AI")
+		return response, fmt.Errorf("no response from Google AI")
 	}
 
-	// Check if the response contains a function call
-	part := resp.Candidates[0].Content.Parts[0]
-	funcall, ok := part.(genai.FunctionCall)
-	if !ok {
-		// If no function call, return the text response
-		return fmt.Sprint(part), nil
+	for _, candidate := range resp.Candidates {
+		for _, part := range candidate.Content.Parts {
+			funcall, ok := part.(genai.FunctionCall)
+
+			if ok {
+				response.ToolUse = true
+				response.ToolName = funcall.Name
+				response.ToolInput = funcall.Args
+			} else {
+				response.Response += fmt.Sprint(part) + "\n"
+			}
+		}
 	}
 
-	// Check if the function call is valid
-	execTool, exist := execTools[funcall.Name]
-	if !exist {
-		return "", fmt.Errorf("tool %s not found", funcall.Name)
-	}
-
-	// Execute the tool with the provided arguments
-	logger.Sugar().Debugw("Executing tool", "toolName", funcall.Name, "arguments", funcall.Args)
-	args := funcall.Args
-	result, err := execTool.RunSchema(args)
-	if err != nil {
-		return "", fmt.Errorf("error executing tool %s: %w", funcall.Name, err)
-	}
-
-	return result, nil
-
+	return response, nil
 }

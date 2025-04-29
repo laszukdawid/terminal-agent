@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -33,12 +34,11 @@ func isSupportedUnixCommand(code string) bool {
 		"uname", "hostname", "uptime", "init", "systemd", "systemctl", "service",
 	}
 
-	for _, cmd := range validUnixCmds {
-		if strings.Split(code, " ")[0] == cmd {
-			return true
-		}
+	codeSplit := strings.Split(code, " ")
+	if len(codeSplit) == 0 {
+		return false
 	}
-	return false
+	return slices.Contains(validUnixCmds, codeSplit[0])
 }
 
 func validateResCode(res string) error {
@@ -69,7 +69,7 @@ func (b *BashExecutor) Exec(code string) (string, error) {
 
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
-			return "", nil
+			return "user declined exection", nil
 		}
 	}
 
@@ -86,9 +86,8 @@ func (b *BashExecutor) Exec(code string) (string, error) {
 	// Gather cmd results
 	output, err := cmd.CombinedOutput()
 	strOutput := string(output)
-	// fmt.Printf("Output: %s\n", strOutput)
 	if err != nil {
-		return "", err
+		return strOutput, fmt.Errorf("bash command returned non-zero status: %w\nOutput: %s", err, strOutput)
 	}
 
 	return strings.TrimSpace(strOutput), nil

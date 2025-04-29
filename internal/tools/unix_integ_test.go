@@ -19,7 +19,7 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 		confirmPrompt: false,
 		workDir:       workDir,
 	}
-	tools := NewUnixTool(bashExecutor)
+	tool := NewUnixTool(bashExecutor)
 
 	tests := []struct {
 		name     string
@@ -50,7 +50,7 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 		}, {
 			name:     "List files in a non existing directory",
 			prompt:   `ls not-existing-dir`,
-			err:      "failed to execute Unix command: exit status",
+			err:      "ls: cannot access 'not-existing-dir': No such file or directory",
 			expected: "",
 		}, {
 			name:     "sudo something not allowed",
@@ -73,7 +73,7 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			out, err := tools.Run(&tt.prompt)
+			out, err := tool.Run(&tt.prompt)
 
 			if tt.err != "" {
 				assert.Error(t, err)

@@ -1,5 +1,7 @@
 package connector
 
+import "fmt"
+
 func NewConnector(provider string, modelID string) *LLMConnector {
 	if modelID == "" {
 		panic("modelID is empty")
@@ -18,6 +20,8 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 		connector = NewAnthropicConnector(&modelID)
 	case GoogleProvider:
 		connector = NewGoogleConnector(&modelID)
+	default:
+		panic(fmt.Sprintf("unsupported provider: %s", provider))
 	}
 
 	return &connector
