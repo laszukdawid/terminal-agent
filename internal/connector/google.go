@@ -213,13 +213,14 @@ func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (str
 func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	logger := *utils.GetLogger()
 	logger.Sugar().Debugw("Query with tool", "model", gc.modelID)
+	response := LlmResponseWithTools{}
 
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
 
 	geminiTools, err := convertToolsToGoogle(execTools)
 	if err != nil {
 		gc.logger.Sugar().Errorw("error converting tools to Google AI", "error", err)
-		return LlmResponseWithTools{}, err
+		return response, err
 	}
 	gc.model.Tools = geminiTools
 	session := gc.model.StartChat()
@@ -227,14 +228,13 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	logger.Sugar().Debugw("Sending message to Google AI", "userPrompt", *qParams.UserPrompt)
 	resp, err := session.SendMessage(ctx, genai.Text(*qParams.UserPrompt))
 	if err != nil {
-		return LlmResponseWithTools{}, fmt.Errorf("error sending message to Google AI: %w", err)
+		return response, fmt.Errorf("error sending message to Google AI: %w", err)
 	}
 	logger.Sugar().Debugw("Received response from Google AI", "response", resp)
 	if len(resp.Candidates) == 0 {
-		return LlmResponseWithTools{}, fmt.Errorf("no response from Google AI")
+		return response, fmt.Errorf("no response from Google AI")
 	}
 
-	response := LlmResponseWithTools{}
 	for _, candidate := range resp.Candidates {
 		for _, part := range candidate.Content.Parts {
 			funcall, ok := part.(genai.FunctionCall)

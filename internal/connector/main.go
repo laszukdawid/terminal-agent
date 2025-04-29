@@ -14,8 +14,8 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 	// 	connector = LLMConnector(ac)
 	// case OpenaiProvider:
 	// 	connector = NewOpenAIConnector(&modelID)
-	// case AnthropicProvider:
-	// 	connector = NewAnthropicConnector(&modelID)
+	case AnthropicProvider:
+		connector = NewAnthropicConnector(&modelID)
 	case GoogleProvider:
 		connector = NewGoogleConnector(&modelID)
 	}
