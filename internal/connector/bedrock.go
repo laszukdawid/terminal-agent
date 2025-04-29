@@ -325,8 +325,9 @@ func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (st
 	return response, nil
 }
 
-func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (string, error) {
+func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	bc.logger.Sugar().Debugw("Query with tool", "model", bc.modelID)
+	response := LlmResponseWithTools{}
 
 	toolConfig := types.ToolConfiguration{
 		Tools:      convertToolsToBedrock(execTools),
@@ -335,74 +336,55 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 
 	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, &toolConfig)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %v", err)
+		return response, fmt.Errorf("failed to send request: %v", err)
 	}
 
+	// TODO: Unify with other blocks iterations
+	// Special block just to handle Tools
 	if converseOutput.StopReason == ToolUse {
 		outputMsg := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value
 
-		// Check whether there's any tool used in the output. If so, execute the tool.
-		output, err := bc.findAndUseTool(outputMsg, execTools)
+		// First find the content that actully has the tool use
+		for blockIdx, content := range outputMsg.Content {
+			bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
 
-		if err != nil {
-			return "", fmt.Errorf("failed to find and use tool: %v", err)
+			// response.Response += content.(*types.ContentBlockMemberText).Value
+			// Only interested in ToolUse content
+			if _, ok := content.(*types.ContentBlockMemberToolUse); !ok {
+				continue
+			}
+
+			var toolUse types.ToolUseBlock = content.(*types.ContentBlockMemberToolUse).Value
+
+			var inputMap map[string]interface{}
+			err := toolUse.Input.UnmarshalSmithyDocument(&inputMap)
+			if err != nil {
+				return response, fmt.Errorf("failed to unmarshal tool input: %v", err)
+			}
+			bc.logger.Sugar().Infow("Tool use", "tool", *toolUse.Name, "input", inputMap)
+			response.ToolUse = true
+			response.ToolName = *toolUse.Name
+			response.ToolInput = inputMap
 		}
-
-		return output, nil
 	}
-
-	var response string
-	var msgResponse types.Message
 
 	union := converseOutput.Output
 	if union == nil {
-		return "", fmt.Errorf("model %s returned response is nil", bc.modelID)
+		return response, fmt.Errorf("model %s returned response is nil", bc.modelID)
 	}
 
-	if _, ok := union.(*types.ConverseOutputMemberMessage); !ok {
-		return "", fmt.Errorf("model %s returned unknown response type", bc.modelID)
+	// Collect all content blocks
+	if unionMsg, ok := union.(*types.ConverseOutputMemberMessage); ok {
+		for blockIdx, content := range unionMsg.Value.Content {
+			bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
+			if _, ok := content.(*types.ContentBlockMemberText); !ok {
+				continue
+			}
+
+			// Only interested in Text content
+			response.Response += content.(*types.ContentBlockMemberText).Value + "\n"
+		}
 	}
-	msgResponse = union.(*types.ConverseOutputMemberMessage).Value // Value is types.Message
-	response = msgResponse.Content[0].(*types.ContentBlockMemberText).Value
 
 	return response, nil
-}
-
-// findAndUseTool finds the tool use in the output message and executes the tool.
-// If the tool is not supported then it returns an error.
-// For supported tools, it executes `tool.RunSchema` method of the tool and returns the command to be executed.
-//
-// TODO: Only executes a single, first tool. Should be able to execute multiple tools.
-func (bc *BedrockConnector) findAndUseTool(outputMessage types.Message, execTools map[string]tools.Tool) (string, error) {
-
-	// First find the content that actully has the tool use
-	for blockIdx, content := range outputMessage.Content {
-		bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
-
-		// Only interested in ToolUse content
-		if _, ok := content.(*types.ContentBlockMemberToolUse); !ok {
-			continue
-		}
-
-		var toolUse types.ToolUseBlock = content.(*types.ContentBlockMemberToolUse).Value
-
-		// Check if the tool is supported
-		execTool := execTools[*toolUse.Name]
-
-		if execTool == nil {
-			return "", fmt.Errorf("tool %s is not supported", *toolUse.Name)
-		}
-
-		var inputMap map[string]interface{}
-		err := toolUse.Input.UnmarshalSmithyDocument(&inputMap)
-		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal tool input: %v", err)
-		}
-		bc.logger.Sugar().Infow("Tool use", "tool", *toolUse.Name, "input", inputMap)
-
-		// Execute the tool and return the output
-		return execTool.RunSchema(inputMap)
-	}
-
-	return "", fmt.Errorf("no tool use found in the output")
 }

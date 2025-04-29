@@ -172,7 +172,10 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	return completion.Choices[0].Message.Content, nil
 }
 
-func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (string, error) {
+func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error) {
+	oc.logger.Sugar().Debugw("Query with tool", "model", oc.modelID)
+	response := LlmResponseWithTools{}
+
 	client := openai.NewClient(
 		option.WithAPIKey(oc.token),
 	)
@@ -188,7 +191,7 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 
 	completion, err := client.Chat.Completions.New(ctx, oParams)
 	if err != nil {
-		return "", err
+		return response, err
 	}
 
 	price := computePriceOpenai(oc.modelID, &completion.Usage)
@@ -202,45 +205,32 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 
 	// No tools used
 	if allToolCalls == 0 {
-		return completion.Choices[0].Message.Content, nil
+		response.Response = completion.Choices[0].Message.Content
+		return response, nil
 	}
 
-	// Tool used
-	return oc.findAndUseTool(completion.Choices, tools)
-
-}
-
-func (oc *OpenAIConnector) findAndUseTool(choices []openai.ChatCompletionChoice, execTools map[string]tools.Tool) (string, error) {
-	for _, choice := range choices {
+	for _, choice := range completion.Choices {
 		message := choice.Message
+		response.Response += message.Content + "\n"
 		for _, toolCall := range message.ToolCalls {
 
 			// Check if the tool call is valid
 			if toolCall.Function.Name == "" {
-				return "", fmt.Errorf("tool call name is empty")
+				return response, fmt.Errorf("tool call name is empty")
 			}
 			if toolCall.Function.Arguments == "" {
-				return "", fmt.Errorf("tool call arguments are empty")
-			}
-			execTool, exist := execTools[toolCall.Function.Name]
-			if !exist {
-				// Check if the tool call is valid
-				return "", fmt.Errorf("tool %s not found", toolCall.Function.Name)
+				return response, fmt.Errorf("tool call arguments are empty")
 			}
 
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 				panic(err)
 			}
-
-			output, err := execTool.RunSchema(args)
-			if err != nil {
-				return "", err
-			}
-
-			return output, nil
+			response.ToolUse = true
+			response.ToolName = toolCall.Function.Name
+			response.ToolInput = args
 		}
 	}
 
-	return "", nil
+	return response, nil
 }
