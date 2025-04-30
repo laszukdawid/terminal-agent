@@ -1,0 +1,536 @@
+openapi: 3.0.0
+info:
+  title: Anthropic API
+  version: 1.0.0
+  description: Combined API for interacting with Anthropic's language models, counting tokens, and managing message batches.
+
+servers:
+  - url: https://api.anthropic.com/v1
+
+paths:
+  /messages:
+    post:
+      summary: Create a new message
+      operationId: createMessage
+      tags:
+        - Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /messages/count_tokens:
+    post:
+      summary: Count tokens in messages
+      operationId: countTokens
+      tags:
+        - Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CountTokensRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountTokensResponse"
+
+  /message/batches:
+    post:
+      summary: Create a new message batch
+      operationId: createMessageBatch
+      tags:
+        - MessageBatches
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageBatchRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageBatchResponse"
+
+  /message/batches/{message_batch_id}:
+    get:
+      summary: Retrieve a message batch
+      operationId: getMessageBatch
+      tags:
+        - MessageBatches
+      parameters:
+        - in: path
+          name: message_batch_id
+          required: true
+          schema:
+            type: string
+          description: ID of the Message Batch
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageBatchResponse"
+
+  /messages/batches/{message_batch_id}/results:
+    get:
+      summary: Retrieve Message Batch Results
+      operationId: getMessageBatchResults
+      tags:
+        - MessageBatches
+      parameters:
+        - in: path
+          name: message_batch_id
+          required: true
+          schema:
+            type: string
+          description: ID of the Message Batch
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/x-jsonl:
+              schema:
+                type: string
+                format: binary
+                description: A file containing the results of the Message Batch requests
+
+  /message/batches/{message_batch_id}/cancel:
+    post:
+      summary: Cancel a Message Batch
+      operationId: cancelMessageBatch
+      tags:
+        - MessageBatches
+      parameters:
+        - in: path
+          name: message_batch_id
+          required: true
+          schema:
+            type: string
+          description: ID of the Message Batch to cancel
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageBatchResponse"
+
+  /complete:
+    post:
+      summary: Create a text completion
+      operationId: createCompletion
+      tags:
+        - TextCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResponse"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Your unique API key for authentication
+    AnthropicVersionHeader:
+      type: apiKey
+      in: header
+      name: anthropic-version
+      description: The version of the Anthropic API you want to use
+    AnthropicBetaHeader:
+      type: apiKey
+      in: header
+      name: anthropic-beta
+      description: Optional header to specify the beta version(s) you want to use
+
+  schemas:
+    MessageRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: The model that will complete your prompt
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        max_tokens:
+          type: integer
+          description: The maximum number of tokens to generate before stopping
+        metadata:
+          type: object
+          description: An object describing metadata about the request
+        stop_sequences:
+          type: array
+          items:
+            type: string
+          description: Custom text sequences that will cause the model to stop generating
+        stream:
+          type: boolean
+          description: Whether to incrementally stream the response using server-sent events
+        system:
+          type: string
+          description: System prompt
+        temperature:
+          type: number
+          description: Amount of randomness injected into the response
+          default: 1.0
+          minimum: 0.0
+          maximum: 1.0
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tool"
+        tool_choice:
+          type: string
+          enum: [none, auto, any]
+          description: How the model should use the provided tools
+        top_p:
+          type: number
+          description: Use nucleus sampling
+        top_k:
+          type: integer
+          description: Only sample from the top K options for each subsequent token
+
+    CountTokensRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: The model that will be used to count tokens
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        system:
+          type: string
+          description: System prompt
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tool"
+
+    Message:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                $ref: "#/components/schemas/ContentBlock"
+
+    ContentBlock:
+      oneOf:
+        - $ref: "#/components/schemas/TextBlock"
+        - $ref: "#/components/schemas/ImageBlock"
+
+    Usage:
+      properties:
+        input_tokens:
+          description: The number of input tokens which were used.
+          examples:
+            - 2095
+          title: Input Tokens
+          type: integer
+        output_tokens:
+          description: The number of output tokens which were used.
+          examples:
+            - 503
+          title: Output Tokens
+          type: integer
+      required:
+        - input_tokens
+        - output_tokens
+      title: Usage
+      type: object
+
+    TextBlock:
+      type: object
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          enum: [text]
+        text:
+          type: string
+
+    ImageBlock:
+      type: object
+      required:
+        - type
+        - source
+      properties:
+        type:
+          type: string
+          enum: [image]
+        source:
+          $ref: "#/components/schemas/ImageSource"
+
+    ImageSource:
+      type: object
+      required:
+        - type
+        - media_type
+        - data
+      properties:
+        type:
+          type: string
+          enum: [base64]
+        media_type:
+          type: string
+          enum: [image/jpeg, image/png, image/gif, image/webp]
+        data:
+          type: string
+
+    Tool:
+      type: object
+      required:
+        - name
+        - input_schema
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        input_schema:
+          type: object
+
+    MessageResponse:
+      type: object
+      required:
+        - id
+        - type
+        - role
+        - content
+        - model
+        - stop_reason
+        - usage
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [message]
+        role:
+          type: string
+          enum: [assistant]
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentBlock"
+        model:
+          type: string
+        stop_reason:
+          type: string
+          enum: [end_turn, max_tokens, stop_sequence, tool_use]
+        stop_sequence:
+          type: string
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    CountTokensResponse:
+      type: object
+      required:
+        - token_count
+      properties:
+        token_count:
+          type: integer
+          description: The total number of tokens across the provided list of messages
+
+    MessageBatchRequest:
+      type: object
+      required:
+        - requests
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchRequest"
+          description: List of requests for prompt completion
+
+    BatchRequest:
+      type: object
+      required:
+        - custom_id
+        - message
+      properties:
+        custom_id:
+          type: string
+          description: Developer-provided ID for each request in a Message Batch
+        message:
+          $ref: "#/components/schemas/MessageRequest"
+
+    MessageBatchResponse:
+      type: object
+      required:
+        - id
+        - type
+        - status
+        - request_counts
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: string
+          description: Unique object identifier
+        type:
+          type: string
+          enum: [message_batch]
+          description: Object type, always "message_batch" for Message Batches
+        status:
+          type: string
+          enum: [in_progress, canceling, ended]
+          description: Processing status of the Message Batch
+        request_counts:
+          $ref: "#/components/schemas/RequestCounts"
+        created_at:
+          type: string
+          format: date-time
+          description: RFC 3339 datetime string representing the time at which the Message Batch was created
+        expires_at:
+          type: string
+          format: date-time
+          description: RFC 3339 datetime string representing the time at which the Message Batch will expire and end processing, which is 24 hours after creation
+        ended_at:
+          type: string
+          format: date-time
+          description: RFC 3339 datetime string representing the time at which processing for the Message Batch ended
+        archived_at:
+          type: string
+          format: date-time
+          description: RFC 3339 datetime string representing the time at which the Message Batch was archived and its results became unavailable
+        cancellation_initiated_at:
+          type: string
+          format: date-time
+          description: RFC 3339 datetime string representing the time at which cancellation was initiated for the Message Batch
+        results_url:
+          type: string
+          format: uri
+          description: URL to a .jsonl file containing the results of the Message Batch requests
+
+    RequestCounts:
+      type: object
+      properties:
+        processing:
+          type: integer
+        succeeded:
+          type: integer
+        errored:
+          type: integer
+        canceled:
+          type: integer
+        expired:
+          type: integer
+      description: Tallies requests within the Message Batch, categorized by their status
+
+    CompletionRequest:
+      type: object
+      required:
+        - model
+        - prompt
+      properties:
+        model:
+          type: string
+          description: The model that will complete your prompt. See models for additional details and options.
+        prompt:
+          type: string
+          description: The prompt that you want Claude to complete. For proper response generation, format your prompt using alternating "\n\nHuman:" and "\n\nAssistant:" conversational turns.
+        max_tokens_to_sample:
+          type: integer
+          description: The maximum number of tokens to generate before stopping. Note that our models may stop before reaching this maximum.
+        stop_sequences:
+          type: array
+          items:
+            type: string
+          description: Sequences that will cause the model to stop generating. Our models stop on "\n\nHuman:", and may include additional built-in stop sequences in the future.
+        temperature:
+          type: number
+          default: 1.0
+          minimum: 0.0
+          maximum: 1.0
+          description: Amount of randomness injected into the response. Defaults to 1.0. Ranges from 0.0 to 1.0.
+        top_p:
+          type: number
+          description: Use nucleus sampling. You should either alter temperature or top_p, but not both.
+        top_k:
+          type: integer
+          description: Only sample from the top K options for each subsequent token. Used to remove "long tail" low probability responses.
+        metadata:
+          type: object
+          description: An object describing metadata about the request.
+        stream:
+          type: boolean
+          description: Whether to incrementally stream the response using server-sent events.
+
+    CompletionResponse:
+      type: object
+      required:
+        - completion
+        - stop_reason
+        - model
+      properties:
+        completion:
+          type: string
+          description: The resulting completion up to and excluding the stop sequences.
+        stop_reason:
+          type: string
+          enum: [stop_sequence, max_tokens]
+          description: The reason that we stopped generating tokens.
+        model:
+          type: string
+          description: The model that handled the request.
+        type:
+          type: string
+          enum: [completion]
+          description: Object type. For Text Completions, this is always "completion".
+        id:
+          type: string
+          description: Unique object identifier. The format and length of IDs may change over time.
+
+security:
+  - ApiKeyAuth: []
+    AnthropicVersionHeader: []
+    AnthropicBetaHeader: []
