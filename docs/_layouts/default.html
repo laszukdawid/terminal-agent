@@ -1,0 +1,55 @@
+---
+layout: default
+---
+
+<div id="header_wrap" class="outer">
+    <header class="inner">
+        {% if site.github.is_project_page %}
+        <a id="forkme_banner" href="{{ site.github.repository_url }}">View on GitHub</a>
+        {% endif %}
+        <h1 id="project_title">{{ site.title | default: site.github.repository_name }}</h1>
+        <h2 id="project_tagline">{{ site.description | default: site.github.project_tagline }}</h2>
+
+        <!-- Navigation Menu -->
+        <div id="navigation">
+            <nav>
+                <ul>
+                    <li><a href="{{ site.baseurl }}/">Home</a></li>
+                    <li><a href="{{ site.baseurl }}/getting-started.html">Getting Started</a></li>
+                    <li class="dropdown">
+                        <a href="{{ site.baseurl }}/commands.html">Commands ▾</a>
+                        <ul class="dropdown-content">
+                            <li><a href="{{ site.baseurl }}/commands/ask.html">Ask</a></li>
+                            <li><a href="{{ site.baseurl }}/commands/task.html">Task</a></li>
+                            <li><a href="{{ site.baseurl }}/commands/tool.html">Tool</a></li>
+                            <li><a href="{{ site.baseurl }}/commands/config.html">Config</a></li>
+                            <li><a href="{{ site.baseurl }}/commands/history.html">History</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="{{ site.baseurl }}/providers.html">Providers</a></li>
+                    <li><a href="{{ site.baseurl }}/tools.html">Tools</a></li>
+                    <li><a href="{{ site.baseurl }}/configuration.html">Configuration</a></li>
+                    <li><a href="{{ site.baseurl }}/examples.html">Examples</a></li>
+                    <li><a href="{{ site.baseurl }}/developers.html">Developers</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+</div>
+
+<!-- MAIN CONTENT -->
+<div id="main_content_wrap" class="outer">
+    <section id="main_content" class="inner">
+        {{ content }}
+    </section>
+</div>
+
+<!-- FOOTER -->
+<div id="footer_wrap" class="outer">
+    <footer class="inner">
+        {% if site.github.is_project_page %}
+        <p class="copyright">{{ site.title | default: site.github.repository_name }} maintained by <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a></p>
+        {% endif %}
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+    </footer>
+</div>

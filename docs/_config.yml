@@ -1,1 +1,8 @@
 theme: jekyll-theme-slate
+title: Terminal Agent
+description: An LLM Agent to help you from and within the terminal
+baseurl: "/terminal-agent"
+url: "https://laszukdawid.github.io"
+show_downloads: true
+github:
+  repository_url: https://github.com/laszukdawid/terminal-agent
