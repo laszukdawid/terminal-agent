@@ -28,6 +28,9 @@ markdown_extensions:
   - md_in_html
   - tables
 
+# Set docs_dir to current directory since mkdocs.yml is already in docs/
+docs_dir: .
+
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
