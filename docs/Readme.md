@@ -1,3 +1,8 @@
+---
+layout: default
+title: Terminal Agent Documentation
+---
+
 # Terminal Agent Documentation
 
 Welcome to Terminal Agent - an LLM-powered assistant for your terminal needs.
