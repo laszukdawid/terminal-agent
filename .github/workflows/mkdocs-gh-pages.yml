@@ -38,16 +38,18 @@ jobs:
           pip install mkdocs-material
     
       - name: Check where we are
+        working-directory: docs
         run: |
           echo "Current directory:"
           pwd
           echo "Directory structure:"
           ls -la
           echo "Assets directory:"
-          mkdir -p docs/assets
+          mkdir -p assets
           
       - name: Build MkDocs site
-        run: mkdocs build --config-file docs/mkdocs.yml
+        working-directory: docs
+        run: mkdocs build
           
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -55,7 +57,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './site'
+          path: './docs/site'
 
   # Deployment job
   deploy:
