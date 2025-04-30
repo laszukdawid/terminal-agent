@@ -15,3 +15,10 @@ Welcome to Terminal Agent - an LLM-powered assistant for your terminal needs.
 - [Configuration](./configuration.md) - Advanced configuration options
 - [Tools](./tools.md) - Available tools and extending functionality
 - [Examples](./examples.md) - Usage examples and patterns
+
+
+### Quick examples
+
+![answer to how to attach an image to Readme](/docs/assets/aa-how-to-attach-image.png)
+
+![example of streaming in terminal](/docs/assets/stream-example.gif)
