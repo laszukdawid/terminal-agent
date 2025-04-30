@@ -1,3 +1,8 @@
+---
+layout: default
+title: Getting Started with Terminal Agent
+---
+
 # Getting Started with Terminal Agent
 
 Terminal Agent is an LLM-powered CLI tool designed to help you interact with your terminal more efficiently.

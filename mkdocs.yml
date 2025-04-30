@@ -1,0 +1,45 @@
+site_name: Terminal Agent
+site_description: An LLM Agent to help you from and within the terminal
+repo_url: https://github.com/laszukdawid/terminal-agent
+repo_name: laszukdawid/terminal-agent
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.expand
+    - navigation.indexes
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Commands:
+      - Overview: commands.md
+      - Ask Command: commands/ask.md
+      - Task Command: commands/task.md
+      - Tool Command: commands/tool.md
+      - Config Command: commands/config.md
+      - History Command: commands/history.md
+  - Tools: tools.md
+  - Providers: providers.md
+  - Configuration: configuration.md
+  - Examples: examples.md
+  - Developers: developers.md
