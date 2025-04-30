@@ -1,4 +1,5 @@
-theme: jekyll-theme-slate
+# theme: jekyll-theme-slate
+remote_theme: pages-themes/slate@v0.2.0
 title: Terminal Agent
 description: An LLM Agent to help you from and within the terminal
 baseurl: "/terminal-agent" # Make sure this matches your repository name exactly
@@ -6,3 +7,30 @@ url: "https://laszukdawid.github.io"
 show_downloads: true
 github:
   repository_url: https://github.com/laszukdawid/terminal-agent
+
+# Jekyll settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Auto-discover Markdown files
+include: ["_data", "_includes"]
+exclude: ["Gemfile", "Gemfile.lock", "node_modules", "vendor", "README.md"]
+
+# Enable GitHub Pages compatible settings
+safe: true
+
+# Use GitHub Pages supported plugins only
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-remote-theme # add this line to the plugins list if you already have one
+
+# Default layout for markdown files
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"

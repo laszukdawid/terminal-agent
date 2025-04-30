@@ -1,14 +1,21 @@
-name: Deploy Jekyll with GitHub Pages dependencies preinstalled
+name: "[DEPRECATED] Deploy Jekyll with GitHub Pages dependencies preinstalled"
 
+# Disable this workflow as we're now using MkDocs
+# on:
+#   push:
+#     branches: ["docs"]
+#     paths:
+#       - 'docs/**'
+#   workflow_dispatch:
+
+# This workflow is now disabled in favor of mkdocs-gh-pages.yml
 on:
-  # Runs on pushes to main
-  push:
-    branches: ["docs"]
-    paths:
-      - 'docs/**'
-
-  # Allows running workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      run_disabled_workflow:
+        description: 'Confirm running this deprecated workflow (type "yes" to confirm)'
+        required: true
+        default: 'no'
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -17,20 +24,38 @@ permissions:
   id-token: write
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Build job
+  # Check if should run
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if workflow should run
+        if: github.event.inputs.run_disabled_workflow != 'yes'
+        run: |
+          echo "This workflow is deprecated in favor of MkDocs."
+          echo "Use the mkdocs-gh-pages workflow instead."
+          exit 1
+
+  # Build job (will only run if explicitly confirmed)
   build:
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Verify directory structure
+        run: |
+          echo "Directory structure:"
+          ls -la docs/
+          echo "Assets directory:"
+          mkdir -p docs/assets
+          ls -la docs/assets/ || echo "Assets directory empty or does not exist"
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:

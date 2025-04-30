@@ -1,0 +1,26 @@
+# MkDocs site output
+/site/
+
+# Python virtual environment
+venv/
+env/
+.env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Editor-specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jekyll leftovers from previous setup
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+.bundle/
+vendor/
