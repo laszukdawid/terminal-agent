@@ -2,10 +2,13 @@
 
 An LLM Agent to help you from and within the terminal.
 
+Read more https://laszukdawid.github.io/terminal-agent/.
+
 ## Example
 
-![answer to how to attach an image to Readme](/docs/assets/aa-how-to-attach-image.png)
-![example of streaming in terminal](/docs/assets/stream-example.gif)
+<img src="./docs/assets/aa-how-to-attach-image.png" width="500" alt="answer to how to attach an image to Readme" />
+
+<img src="./docs/assets/stream-example.gif" width="500" alt="example of streaming in terminal" />
 
 ## Usage
 
@@ -35,6 +38,8 @@ agent ask what is a file descriptor?
 If you like to see characters appearing in terminal, add `--stream` flag. By default, all results are formatted as a markdown using [glamour](https://github.com/charmbracelet/glamour).
 
 **Life hack**: If you set alias `alias aa="agent ask"` you'll have a quick shortcut to ask questions from terminal. It's quicker than opening browser to search! Execute `task install:alias` for auto-setup.
+
+Read more at [Ask Command documentation](https://laszukdawid.github.io/terminal-agent/commands/ask.html).
 
 ### Task
 
@@ -75,6 +80,8 @@ $ agent config set provider $PROVIDER
 $ agent config set model $MODEL
 ```
 
+More details at [Providers documentation](https://laszukdawid.github.io/terminal-agent/providers.html).
+
 ### Anthropic
 
 Anthropic is best known for their Sonnet and Haiku models. From subjective experience, they're one of the best commercially available models. One can use them either directly, or via [Amazon Bedrock](#amazon-bedrock).
@@ -109,7 +116,7 @@ $ agent config set anthropic.claude-3-haiku-20240307-v1:0
 
 ### Perplexity AI
 
-Perplexity AI has an "in development" functionality to provide access to models via their API. To read more on this visit their (documentation)[https://docs.perplexity.ai/guides/getting-started].
+Perplexity AI has an "in development" functionality to provide access to models via their API. To read more on this visit their [documentation](https://docs.perplexity.ai/guides/getting-started).
 
 To use `agent` with Perplexity AI, you need to set `PERPLEXITY_KEY` env variable with your individual key, and then set the provider to `perplexity`.
 
@@ -117,7 +124,7 @@ Setting `perplexity` provider with `llama-3.1-8b-instruct` model can be done wit
 
 ```sh
 $ agent config set provider perplexity
-$ agent config set llama-3.1-8b-instruct
+$ agent config set model llama-3.1-8b-instruct
 ```
 
 ### OpenAI
@@ -139,9 +146,9 @@ $ agent config set model gpt-4o-mini
 - [x] **markdown**: By default, provide nicely formatted outputs in terminal
 - [x] **MCP**: Supports Model Context Protocol (MCP) defined in a file
 - [x] **websearch**: Can search the web and display links
-- [ ] **unix**: Designs and evaluates a unix command
-- [ ] **python**: Designs and evaluates a python command
-- [ ] **git**: Designs and evaluates a git command
+- [x] **unix**: Designs and evaluates a unix command
+
+In case some capabilities are missing please create a Feature Request github issue. Looking forward to extending this agent with useful features.
 
 ## Philosphy
 
@@ -166,9 +173,12 @@ $ agent config set model ai21.jamba-1-5-mini-v1:0
 
 The config is stored in json file at `$HOME/.config/terminal-agent/config.json`.
 
+More details at [Configuration documentation](https://laszukdawid.github.io/terminal-agent/configuration.html).
+
 ## Development
 
 ### Setup
 
 * Taskfile, instead of Makefile. See [Taskfile installation](https://taskfile.dev/installation/)
 * Docker, needed for running integ tests
+* See [Developer documentation](https://laszukdawid.github.io/terminal-agent/developers.html) for complete setup instructions

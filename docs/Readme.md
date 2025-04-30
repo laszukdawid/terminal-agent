@@ -15,6 +15,7 @@ Welcome to Terminal Agent - an LLM-powered assistant for your terminal needs.
 - [Configuration](./configuration.md) - Advanced configuration options
 - [Tools](./tools.md) - Available tools and extending functionality
 - [Examples](./examples.md) - Usage examples and patterns
+- [Developers](./developers.md) - Guide for contributors and developers
 
 
 ### Quick examples
