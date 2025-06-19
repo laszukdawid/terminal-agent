@@ -64,6 +64,50 @@ agent config set model claude-3-5-sonnet-latest
 - Tool usage capability for the `task` command
 - Supports streaming output with the `--stream` flag
 
+### Google (Gemini)
+
+**Setup:**
+1. Get access to [Google AI Studio](https://ai.google.dev/)
+2. Generate an API key
+3. Set the key as an environment variable:
+   ```sh
+   export GOOGLE_API_KEY=your_api_key_here
+   ```
+
+**Configuration:**
+```sh
+agent config set provider google
+agent config set model gemini-2.0-flash-lite
+```
+
+**Recommended Models:**
+- `gemini-2.0-flash-lite` - Fast response times
+- `gemini-2.0-pro` - More capable model
+
+**Special Features:**
+- Tool usage capability for the `task` command
+- Good integration with web search capabilities
+
+### Ollama
+
+**Setup**:
+1. Make sure you have [Ollama](https://ollama.com/) installed
+2. Make sure you downloaded the model you'd like to use, e.g. `ollama pull llama3.2`
+
+**Configuration:**
+```sh
+agent config set provider ollama
+agent config set model llama3.2
+```
+
+In case your Ollama serve is running on a non-default server you can set the URL via env variable, i.e.
+```sh
+export OLLAMA_HOST=http://localhost:11345  # modify
+```
+
+**Limitations:**
+- Currently only `ask` is supported
+
 ### Amazon Bedrock
 
 **Setup:**
@@ -119,30 +163,6 @@ agent config set model llama-3-8b-instruct
 **Limitations:**
 - Does not support streaming output
 - Does not support the `task` command's tool usage capability
-
-### Google (Gemini)
-
-**Setup:**
-1. Get access to [Google AI Studio](https://ai.google.dev/)
-2. Generate an API key
-3. Set the key as an environment variable:
-   ```sh
-   export GOOGLE_API_KEY=your_api_key_here
-   ```
-
-**Configuration:**
-```sh
-agent config set provider google
-agent config set model gemini-2.0-flash-lite
-```
-
-**Recommended Models:**
-- `gemini-2.0-flash-lite` - Fast response times
-- `gemini-2.0-pro` - More capable model
-
-**Special Features:**
-- Tool usage capability for the `task` command
-- Good integration with web search capabilities
 
 ## Performance Considerations
 

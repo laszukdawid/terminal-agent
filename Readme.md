@@ -12,6 +12,8 @@ Read more https://laszukdawid.github.io/terminal-agent/.
 
 ## Usage
 
+**Note**: Default model is OpenAI `gpt-4o-mini`. See [Config](#config) below on how to change it.
+
 ### Recommended (download)
 
 Recommended way of using the `terminal-agent` is to download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
@@ -137,6 +139,32 @@ Setting `openai` provider with `gpt-4o-mini` model can be done with `task run:se
 $ agent config set provider openai
 $ agent config set model gpt-4o-mini
 ```
+
+### Ollama
+
+Ollama allows you to run large language models locally on your machine. This provides privacy, offline capability, and no API costs. To use Ollama with the terminal agent, you first need to install and run Ollama on your system.
+
+To get started with Ollama:
+1. Install Ollama from [ollama.ai](https://ollama.ai)
+2. Pull a model, e.g., `ollama pull llama3.2`
+3. Make sure Ollama is running (usually on `http://localhost:11434`)
+
+By default, the terminal agent will connect to Ollama at `http://localhost:11434`. If you're running Ollama on a different host or port, you can set the `OLLAMA_HOST` environment variable:
+
+```sh
+export OLLAMA_HOST=http://your-ollama-host:11434
+```
+
+Setting `ollama` provider with `llama3.2` model can be done directly:
+
+```sh
+$ agent config set provider ollama
+$ agent config set model llama3.2
+```
+
+**Note**: Make sure the model you specify is already pulled and available in your local Ollama installation. You can list available models with `ollama list`.
+
+
 
 ## Features
 
