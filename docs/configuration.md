@@ -45,6 +45,7 @@ Terminal Agent uses environment variables for API keys:
 | Perplexity | `PERPLEXITY_KEY` | API key for Perplexity AI |
 | Google | `GOOGLE_API_KEY` | API key for Google AI (Gemini) |
 | AWS Bedrock | AWS credentials | Standard AWS credential configuration |
+| Ollama | `OLLAMA_HOST` | Host URL for Ollama server |
 
 Example of setting an environment variable:
 
@@ -144,6 +145,9 @@ task run:set:google
 
 # Set provider to Perplexity
 task run:set:perplexity
+
+# Set provider to Ollama
+task run:set:ollama
 ```
 
 To see all available tasks:

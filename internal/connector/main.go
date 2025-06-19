@@ -20,6 +20,8 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 		connector = NewAnthropicConnector(&modelID)
 	case GoogleProvider:
 		connector = NewGoogleConnector(&modelID)
+	case OllamaProvider:
+		connector = NewOllamaConnector(&modelID)
 	default:
 		panic(fmt.Sprintf("unsupported provider: %s", provider))
 	}

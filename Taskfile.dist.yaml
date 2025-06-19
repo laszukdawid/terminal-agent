@@ -18,10 +18,15 @@ tasks:
     silent: false
 
   install:
+    silent: true
     cmds:
       - task: build
       - mkdir -p ~/.local/bin
       - cp bin/agent ~/.local/bin/agent
+      - echo "Terminal Agent installed to ~/.local/bin/agent"
+      - echo "To run the agent, add ~/.local/bin to your PATH."
+      - echo "You can do this by running:"
+      - echo "  echo 'export PATH=\$PATH:~/.local/bin' >> ~/.bashrc"
 
   install:alias:
     desc: Install the alias for the agent
@@ -103,7 +108,7 @@ tasks:
     desc: Set the provider to anthropic
     cmds:
       - go run cmd/agent/main.go config set provider anthropic
-      - go run cmd/agent/main.go config set model claude-3-haiku-20240307
+      - go run cmd/agent/main.go config set model claude-3-haiku-latest
 
   run:set:bedrock:
     desc: Set the provider to bedrock
@@ -116,6 +121,12 @@ tasks:
     cmds:
       - go run cmd/agent/main.go config set provider google
       - go run cmd/agent/main.go config set model gemini-2.0-flash-lite
+  
+  run:set:ollama:
+    desc: Set the provider to ollama
+    cmds:
+      - go run cmd/agent/main.go config set provider ollama
+      - go run cmd/agent/main.go config set model llama3.2
 
   run:generate:
     desc: Execute generation

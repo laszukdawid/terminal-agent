@@ -56,12 +56,14 @@ func ensurePathExists(path string) error {
 
 func NewDefaultConfig() *config {
 	return &config{
-		DefaultProvider: "bedrock",
+		DefaultProvider: "openai",
 		Providers: map[string]string{
-			"anthropic":  "anthropic.claude-3-haiku-20240307-v1:0",
+			"anthropic":  "claude-3-5-haiku-latest",
 			"bedrock":    "anthropic.claude-3-haiku-20240307-v1:0",
 			"perplexity": "llama-3-8b-instruct",
 			"openai":     "gpt-4o-mini",
+			"google":     "gemini-2.0-flash-lite",
+			"ollama":     "llama3.2",
 		},
 		LogLevel:    "info",
 		McpFilePath: "",

@@ -178,6 +178,10 @@ func (bc *BedrockConnector) queryBedrock(
 			bc.logger.Sugar().Errorf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
 		}
 
+		if re == nil || re.ResponseError == nil {
+			return nil, fmt.Errorf("failed to send request: %v", err)
+		}
+
 		if re.ResponseError.HTTPStatusCode() == 403 {
 			return nil, ErrBedrockForbidden
 		}
