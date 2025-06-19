@@ -37,7 +37,7 @@ tasks:
       - grep -q 'terminal-agent alias' {{.SHELL_CFG}}
     cmds:
       - printf '\n# BEGIN terminal-agent alias\n' >> {{.SHELL_CFG}}
-      - printf 'alias aa="agent ask --markdown "\n' >> {{.SHELL_CFG}}
+      - printf 'alias aa="agent ask "\n' >> {{.SHELL_CFG}}
       - printf '\n# END terminal-agent alias\n' >> {{.SHELL_CFG}}
 
   uninstall:alias:
