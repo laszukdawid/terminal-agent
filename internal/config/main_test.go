@@ -45,14 +45,16 @@ func TestLoadConfig(t *testing.T) {
 		}
 
 		// Verify the default config values
-		assert.Equal(t, "bedrock", config.GetDefaultProvider())
-		assert.Equal(t, "anthropic.claude-3-haiku-20240307-v1:0", config.GetDefaultModelId())
+		assert.Equal(t, "openai", config.GetDefaultProvider())
+		assert.Equal(t, "gpt-4o-mini", config.GetDefaultModelId())
 
 		// Verify that default providers included
-		assert.Equal(t, "anthropic.claude-3-haiku-20240307-v1:0", config.Providers["anthropic"])
+		assert.Equal(t, "claude-3-5-haiku-latest", config.Providers["anthropic"])
 		assert.Equal(t, "anthropic.claude-3-haiku-20240307-v1:0", config.Providers["bedrock"])
 		assert.Equal(t, "llama-3-8b-instruct", config.Providers["perplexity"])
 		assert.Equal(t, "gpt-4o-mini", config.Providers["openai"])
+		assert.Equal(t, "gemini-2.0-flash-lite", config.Providers["google"])
+		assert.Equal(t, "llama3.2", config.Providers["ollama"])
 
 	})
 
@@ -79,5 +81,34 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, expectedConfig.DefaultProvider, loadedConfig.DefaultProvider)
 		assert.Equal(t, expectedConfig.Providers, loadedConfig.Providers)
 		assert.Equal(t, expectedConfig.GetDefaultModelId(), loadedConfig.GetDefaultModelId())
+	})
+
+	// Test Ollama provider configuration
+	t.Run("OllamaProviderConfig", func(t *testing.T) {
+		// Load default config
+		config, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("Expected no error, but got %v", err)
+		}
+
+		// Test setting Ollama as default provider
+		err = config.SetDefaultProvider("ollama")
+		if err != nil {
+			t.Fatalf("Failed to set ollama provider: %v", err)
+		}
+
+		// Verify Ollama is now the default provider
+		assert.Equal(t, "ollama", config.GetDefaultProvider())
+		assert.Equal(t, "llama3.2", config.GetDefaultModelId())
+
+		// Test setting a different Ollama model
+		err = config.SetDefaultModelId("llama3.1")
+		if err != nil {
+			t.Fatalf("Failed to set ollama model: %v", err)
+		}
+
+		// Verify the model was updated
+		assert.Equal(t, "llama3.1", config.GetDefaultModelId())
+		assert.Equal(t, "llama3.1", config.Providers["ollama"])
 	})
 }

@@ -44,6 +44,11 @@ tasks:
     desc: Remove aliases for the agent
     cmds:
       - sed -i -n -e '/^# BEGIN/,/^# END/!p' {{.SHELL_CFG}}
+  
+  test:
+    desc: Run all tests
+    cmds:
+      - go test -v ./...
 
   # Application related
   run:
