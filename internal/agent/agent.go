@@ -19,7 +19,10 @@ import (
 // ErrEmptyQuery is returned when the query is empty.
 var ErrEmptyQuery = fmt.Errorf("empty query")
 
-const MaxTokens = 400
+const (
+	MaxTokens     = 400
+	MaxIterations = 10
+)
 
 type Agent struct {
 	Connector connector.LLMConnector
@@ -84,7 +87,7 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 		CurrentThought:   "I'll solve this task step by step.",
 		CompletionStatus: 0, // 0% complete
 		Iterations:       0,
-		MaxIterations:    10, // Configurable maximum iterations
+		MaxIterations:    MaxIterations, // Configurable maximum iterations
 		Results:          make(map[string]string),
 	}
 
@@ -108,6 +111,9 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 			return "", fmt.Errorf("error during task processing: %w", err)
 		}
 		taskState.CompletionStatus = min(taskState.CompletionStatus+5, 85)
+		if response.Response != "" {
+			taskState.CurrentThought = response.Response // Store the model's response
+		}
 
 		if response.ToolUse {
 			// Execute the selected tool
@@ -184,7 +190,7 @@ Iteration: {{.Iterations}} of {{.MaxIterations}}
 
 Current thought: {{.CurrentThought}}
 
-What should I do next to complete this task? Is the task finished? If so, provide the final answer.
+What should I do next to complete this task? Should I use one of provided tools? Is the task finished?  If so, provide the final answer.
 `
 
 	// Prepare template data
@@ -297,7 +303,7 @@ type askUserTool struct {
 func NewAskUserTool() *askUserTool {
 	return &askUserTool{
 		name:        "user_clarification",
-		description: "Ask the user for clarification or additional information.",
+		description: "Ask the user for clarification or additional information. This tool is used when the model needs more context to proceed with the task.",
 		inputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

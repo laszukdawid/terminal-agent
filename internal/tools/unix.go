@@ -6,9 +6,13 @@ import (
 
 const (
 	unixToolName        = "unix"
-	unixToolDescription = `Unix tool provide the ability to design and run Unix commands.
-	The input to the tool is a summary of the Unix command. The tool then provides Unix
-	command best associated with that intent and runs the command.`
+	unixToolDescription = `Unix tool is for coming up with and executing Unix commands.
+	One would use this tool to either execute a specific command, e.g. "ls -la",
+	or to generate a command based on a description, e.g. "list all files in the
+	current directory".
+	It is designed to help with tasks that require Unix command line operations,
+	such as file manipulation, system monitoring, and other command line tasks.
+	`
 
 	systemPrompt = `You design and execute Unix commands best associated with the intent.
 	The input is provided in English and you provide the Unix command.
