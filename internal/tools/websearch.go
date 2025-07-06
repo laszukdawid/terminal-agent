@@ -90,7 +90,7 @@ func NewWebsearchTool() *WebsearchTool {
 
 	tavilyKey := os.Getenv("TAVILY_KEY")
 	if tavilyKey == "" {
-		logger.Warn("Websearch tool requires TAVILY_KEY environment variable to be set")
+		logger.Debug("Websearch tool requires TAVILY_KEY environment variable to be set")
 		return nil
 	}
 	tavily := tavilygo.NewClient(tavilyKey)

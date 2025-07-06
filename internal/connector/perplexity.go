@@ -111,6 +111,9 @@ func (c *PerplexityConnector) Query(ctx context.Context, qParams *QueryParams) (
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %v", err)
 	}
+	if len(response.Choices) == 0 {
+		return "", fmt.Errorf("no choices in response: %v", response)
+	}
 
 	return response.Choices[0].Message.Content, nil
 
