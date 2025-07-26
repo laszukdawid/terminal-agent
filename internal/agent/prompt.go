@@ -1,10 +1,73 @@
 package agent
 
-const SystemPromptHeader = `
-You are a Unix terminal helper.
+import (
+	"fmt"
+	"os"
+	"os/user"
+	"runtime"
+	"time"
+)
+
+// SystemInfo contains information about the current system environment
+type SystemInfo struct {
+	Hostname     string
+	Username     string
+	CurrentTime  string
+	WorkingDir   string
+	OS           string
+	Architecture string
+	GoVersion    string
+}
+
+// GetSystemInfo collects information about the current system
+func GetSystemInfo() SystemInfo {
+	info := SystemInfo{
+		CurrentTime:  time.Now().Format("2006-01-02 15:04:05 MST"),
+		OS:           runtime.GOOS,
+		Architecture: runtime.GOARCH,
+		GoVersion:    runtime.Version(),
+	}
+
+	// Get hostname
+	if hostname, err := os.Hostname(); err == nil {
+		info.Hostname = hostname
+	} else {
+		info.Hostname = "unknown"
+	}
+
+	// Get username
+	if currentUser, err := user.Current(); err == nil {
+		info.Username = currentUser.Username
+	} else {
+		info.Username = "unknown"
+	}
+
+	// Get working directory
+	if wd, err := os.Getwd(); err == nil {
+		info.WorkingDir = wd
+	} else {
+		info.WorkingDir = "unknown"
+	}
+
+	return info
+}
+
+// SystemPromptHeader returns the system prompt header with current system information
+func SystemPromptHeader() string {
+	info := GetSystemInfo()
+
+	return fmt.Sprintf(`You are a Unix terminal helper.
 You are mainly called from Unix terminal, and asked about Unix terminal questions.
 You specialize in software development with access to a variety of tools and the ability to instruct and direct a coding agent and a code execution one.
-`
+
+Current system context:
+- Hostname: %s
+- User: %s
+- Time: %s
+- Working Directory: %s
+- Operating System: %s/%s
+`, info.Hostname, info.Username, info.CurrentTime, info.WorkingDir, info.OS, info.Architecture)
+}
 
 const SystemPromptAsk = `
 {{header}}

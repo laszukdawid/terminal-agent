@@ -38,8 +38,8 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 		panic("connector is nil")
 	}
 
-	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader, 1)
-	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader, 1)
+	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader(), 1)
+	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader(), 1)
 
 	allTools := toolProvider.GetAllTools()
 

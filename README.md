@@ -10,24 +10,36 @@ Read more https://laszukdawid.github.io/terminal-agent/.
 
 <img src="./docs/assets/stream-example.gif" width="500" alt="example of streaming in terminal" />
 
-## Usage
+## Installation
 
-**Note**: Default model is OpenAI `gpt-4o-mini`. See [Config](#config) below on how to change it.
+### Option 1: go install (Recommended for Go users)
 
-### Recommended (download)
+If you have Go installed, you can install directly from the repository:
 
-Recommended way of using the `terminal-agent` is to download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
+```sh
+go install github.com/laszukdawid/terminal-agent/cmd/agent@latest
+```
+
+This will install the `agent` binary in your `$GOPATH/bin` directory (typically `~/go/bin`). Make sure this directory is in your PATH.
+
+### Option 2: Download pre-built binary
+
+Download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
 (Remember to set execution permissions with `chmod u+x agent`.)
 To test the executability type `agent --help`.
 
-### Compile source
+### Option 3: Compile from source
 
-Alternatively, you can compile the code yourself.
+You can compile the code yourself.
 To do so, make sure you have golang installed for compilation and we recommend using [Taskfile](https://taskfile.dev/installation/) for task execution.
 If you only want to compile the repo then execute `task build`.
 In case you want to both build and set it in your path then execute `task install` which will put binary into `~/.local/bin/agent`.
 
 For majority of cases, do check out the `Taskfile.dist.yaml` as it has most relevant tasks / receipies.
+
+## Usage
+
+**Note**: Default model is OpenAI `gpt-4o-mini`. See [Config](#config) below on how to change it.
 
 ### Ask
 
