@@ -214,6 +214,13 @@ func (bc *BedrockConnector) queryBedrock(
 func (bc *BedrockConnector) queryBedrockStream(
 	ctx context.Context, qParams *QueryParams, toolConfig *types.ToolConfiguration,
 ) (string, error) {
+	// Create markdown renderer for streaming
+	mdRenderer, err := NewMarkdownStreamRenderer()
+	if err != nil {
+		// Fallback to simple streaming if renderer fails
+		bc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		mdRenderer = nil
+	}
 
 	converseInput := &bedrockruntime.ConverseStreamInput{
 		ModelId: (*string)(&bc.modelID),
@@ -280,7 +287,11 @@ func (bc *BedrockConnector) queryBedrockStream(
 			if !isText {
 				continue
 			}
-			fmt.Print(chunk.Value)
+			if mdRenderer != nil {
+				mdRenderer.ProcessChunk(chunk.Value)
+			} else {
+				fmt.Print(chunk.Value)
+			}
 			acc += chunk.Value
 
 		case *types.ConverseStreamOutputMemberMetadata:
@@ -296,6 +307,11 @@ func (bc *BedrockConnector) queryBedrockStream(
 		default:
 			bc.logger.Warn("union is nil or unknown type", zap.Any("event", event))
 		}
+	}
+
+	// Flush any remaining content
+	if mdRenderer != nil {
+		mdRenderer.Flush()
 	}
 
 	return acc, nil

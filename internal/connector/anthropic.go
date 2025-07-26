@@ -46,6 +46,14 @@ func NewAnthropicConnector(modelID *string) *AnthropicConnector {
 }
 
 func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParams anthropic.MessageNewParams) (string, error) {
+	// Create markdown renderer for streaming
+	mdRenderer, err := NewMarkdownStreamRenderer()
+	if err != nil {
+		// Fallback to simple streaming if renderer fails
+		ac.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		mdRenderer = nil
+	}
+
 	// Stream the response
 	stream := ac.client.Messages.NewStreaming(ctx, msgParams)
 	message := anthropic.Message{}
@@ -60,7 +68,11 @@ func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParam
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
 			case anthropic.TextDelta:
-				fmt.Print(deltaVariant.Text)
+				if mdRenderer != nil {
+					mdRenderer.ProcessChunk(deltaVariant.Text)
+				} else {
+					fmt.Print(deltaVariant.Text)
+				}
 			}
 
 		}
@@ -69,6 +81,17 @@ func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParam
 			panic(stream.Err())
 		}
 	}
+
+	// Flush any remaining content
+	if mdRenderer != nil {
+		mdRenderer.Flush()
+	}
+
+	// Check if we have content
+	if len(message.Content) == 0 {
+		return "", nil
+	}
+
 	return message.Content[0].AsResponseTextBlock().Text, nil
 }
 

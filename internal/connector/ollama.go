@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -189,7 +190,12 @@ func (oc *OllamaConnector) Query(ctx context.Context, params *QueryParams) (stri
 		return "", fmt.Errorf("ollama API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Read and parse the response
+	// Handle streaming response
+	if params.Stream {
+		return oc.handleStreamingResponse(resp)
+	}
+
+	// Read and parse the non-streaming response
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
@@ -310,4 +316,56 @@ func (oc *OllamaConnector) QueryWithTool(ctx context.Context, params *QueryParam
 	}
 
 	return response, nil
+}
+
+// handleStreamingResponse handles the streaming response from Ollama
+func (oc *OllamaConnector) handleStreamingResponse(resp *http.Response) (string, error) {
+	// Create markdown renderer for streaming
+	mdRenderer, err := NewMarkdownStreamRenderer()
+	if err != nil {
+		// Fallback to simple streaming if renderer fails
+		oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		mdRenderer = nil
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	var fullResponse string
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		var streamResp OllamaResponse
+		if err := json.Unmarshal(line, &streamResp); err != nil {
+			// Skip lines that can't be parsed
+			continue
+		}
+
+		// Accumulate the response
+		fullResponse += streamResp.Response
+
+		// Stream the chunk
+		if streamResp.Response != "" {
+			if mdRenderer != nil {
+				mdRenderer.ProcessChunk(streamResp.Response)
+			} else {
+				fmt.Print(streamResp.Response)
+			}
+		}
+
+		// Check if streaming is done
+		if streamResp.Done {
+			break
+		}
+	}
+
+	// Flush any remaining content
+	if mdRenderer != nil {
+		mdRenderer.Flush()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading stream: %w", err)
+	}
+
+	return fullResponse, nil
 }

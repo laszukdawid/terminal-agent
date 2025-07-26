@@ -113,6 +113,13 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 }
 
 func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCompletionNewParams) (*string, error) {
+	// Create markdown renderer for streaming
+	mdRenderer, err := NewMarkdownStreamRenderer()
+	if err != nil {
+		// Fallback to simple streaming if renderer fails
+		oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		mdRenderer = nil
+	}
 
 	stream := oc.client.Chat.Completions.NewStreaming(ctx, params)
 
@@ -132,13 +139,27 @@ func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCo
 		}
 
 		// it's best to use chunks after handling JustFinished events
-		if len(chunk.Choices) > 0 {
-			print(chunk.Choices[0].Delta.Content)
+		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+			if mdRenderer != nil {
+				mdRenderer.ProcessChunk(chunk.Choices[0].Delta.Content)
+			} else {
+				print(chunk.Choices[0].Delta.Content)
+			}
 		}
 	}
 
 	if err := stream.Err(); err != nil {
 		return nil, err
+	}
+
+	// Flush any remaining content
+	if mdRenderer != nil {
+		mdRenderer.Flush()
+	}
+
+	// Check if we have any choices
+	if len(acc.Choices) == 0 {
+		return nil, fmt.Errorf("no response choices received")
 	}
 
 	return &acc.Choices[0].Message.Content, nil
@@ -156,7 +177,13 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 
 	if qParams.Stream {
 		s, err := oc.streamQuery(ctx, oParams)
-		return *s, err
+		if err != nil {
+			return "", err
+		}
+		if s == nil {
+			return "", nil
+		}
+		return *s, nil
 	}
 
 	completion, err := oc.client.Chat.Completions.New(ctx, oParams)
