@@ -12,7 +12,14 @@ Read more https://laszukdawid.github.io/terminal-agent/.
 
 ## Installation
 
-### Option 1: go install (Recommended for Go users)
+### Option 1: Download pre-built binary (Recommended for all)
+
+Download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
+(Remember to set execution permissions with `chmod u+x agent`.)
+To test the executability type `agent --help`.
+
+
+### Option 2: go install (Recommended for Go users)
 
 If you have Go installed, you can install directly from the repository:
 
@@ -21,12 +28,6 @@ go install github.com/laszukdawid/terminal-agent/cmd/agent@latest
 ```
 
 This will install the `agent` binary in your `$GOPATH/bin` directory (typically `~/go/bin`). Make sure this directory is in your PATH.
-
-### Option 2: Download pre-built binary
-
-Download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
-(Remember to set execution permissions with `chmod u+x agent`.)
-To test the executability type `agent --help`.
 
 ### Option 3: Compile from source
 
@@ -221,4 +222,80 @@ More details at [Configuration documentation](https://laszukdawid.github.io/term
 
 * Taskfile, instead of Makefile. See [Taskfile installation](https://taskfile.dev/installation/)
 * Docker, needed for running integ tests
+* Go 1.23.x or higher
 * See [Developer documentation](https://laszukdawid.github.io/terminal-agent/developers.html) for complete setup instructions
+
+### Running Tests
+
+The project uses `task` for test execution:
+
+```sh
+# Run all tests
+task test
+
+# Run unit tests only
+task test:unit
+
+# Run integration tests only
+task test:integration
+```
+
+### Versioning Strategy
+
+This project follows [Semantic Versioning](https://semver.org/) (SemVer) and uses automated version tagging on the main branch.
+
+#### Automatic Version Bumping
+
+When changes are merged to the `main` branch, the CI/CD pipeline automatically:
+1. Runs all tests (`task test`)
+2. Determines the version bump type based on commit messages
+3. Creates a new version tag
+4. Publishes a GitHub release
+
+#### Version Bump Rules
+
+The version bump is determined using [Conventional Commits](https://www.conventionalcommits.org/):
+
+- **PATCH** version (x.x.X) - Default for all changes:
+  - `fix:` Bug fixes
+  - `chore:` Maintenance tasks
+  - `docs:` Documentation changes
+  - Any commit without a conventional prefix
+
+- **MINOR** version (x.X.0) - New features:
+  - `feat:` New feature additions
+  - Example: `feat: add support for new LLM provider`
+
+- **MAJOR** version (X.0.0) - Breaking changes:
+  - Any commit with `!` suffix: `feat!:`, `fix!:`, `refactor!:`
+  - Commits containing `BREAKING CHANGE:` in the body
+  - Example: `feat!: redesign configuration API`
+
+#### Manual Version Override
+
+For cases where automatic detection isn't suitable, maintainers can manually trigger a release with a specific version bump type through the GitHub Actions UI:
+
+1. Go to Actions → "Test and Tag Release"
+2. Click "Run workflow"
+3. Select the version bump type (patch/minor/major)
+4. Run the workflow
+
+#### Commit Message Examples
+
+```sh
+# Results in PATCH bump (0.3.0 → 0.3.1)
+git commit -m "fix: correct parsing error in ask command"
+git commit -m "chore: update dependencies"
+
+# Results in MINOR bump (0.3.1 → 0.4.0)
+git commit -m "feat: add Ollama provider support"
+git commit -m "feat(mcp): implement new MCP protocol tools"
+
+# Results in MAJOR bump (0.4.0 → 1.0.0)
+git commit -m "feat!: change configuration file format"
+git commit -m "refactor!: remove deprecated API endpoints"
+```
+
+### Contributing
+
+Please ensure your commits follow the conventional commit format to help maintain proper versioning. See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
