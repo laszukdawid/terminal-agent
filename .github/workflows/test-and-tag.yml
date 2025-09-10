@@ -125,22 +125,3 @@ jobs:
         
         # Push the tag
         git push origin "$NEW_VERSION"
-
-    - name: Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.calculate_version.outputs.new_version }}
-        release_name: Release ${{ steps.calculate_version.outputs.new_version }}
-        body: |
-          Automated release ${{ steps.calculate_version.outputs.new_version }}
-          
-          **Version bump type:** ${{ steps.determine_bump.outputs.bump_type }}
-          
-          This release was automatically created after successful tests on the main branch.
-          
-          **Changes since ${{ steps.get_latest_tag.outputs.latest_tag }}:**
-          - See commit history for details
-        draft: false
-        prerelease: false
