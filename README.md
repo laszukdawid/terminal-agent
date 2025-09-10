@@ -14,7 +14,7 @@ Read more https://laszukdawid.github.io/terminal-agent/.
 
 ### Option 1: Download pre-built binary (Recommended for all)
 
-Download the `agent` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). 
+Download the `agent-*-*` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). If you're on Linux you likely want `agent-linux-amd64` and if you're on MacOS it's likely `agent-macos-arm64`. After downloading, rename it to `agent` and add it to your path with binaries.
 (Remember to set execution permissions with `chmod u+x agent`.)
 To test the executability type `agent --help`.
 
