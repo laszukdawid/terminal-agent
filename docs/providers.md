@@ -29,6 +29,12 @@ agent config set provider openai
 agent config set model gpt-4o-mini
 ```
 
+**Custom API Endpoints:**
+If you're using an OpenAI-compatible API endpoint (e.g., Azure OpenAI, local LLM servers), you can set a custom base URL:
+```sh
+export OPENAI_BASE_URL=https://your-custom-endpoint.com/v1
+```
+
 **Recommended Models:**
 - `gpt-4o-mini` - Good balance of capability and cost
 - `gpt-4o` - Higher capability, higher cost
@@ -37,6 +43,7 @@ agent config set model gpt-4o-mini
 **Special Features:**
 - Supports streaming output with the `--stream` flag
 - Tool usage capability for the `task` command
+- Compatible with OpenAI-compatible endpoints via `OPENAI_BASE_URL`
 
 ### Anthropic
 
