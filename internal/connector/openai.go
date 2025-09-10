@@ -98,9 +98,19 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		modelID = &model
 	}
 	token := os.Getenv("OPENAI_API_KEY")
-	client := openai.NewClient(
+
+	// Build client options
+	clientOptions := []option.RequestOption{
 		option.WithAPIKey(token),
-	)
+	}
+
+	// Check for custom base URL
+	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+		logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
+	}
+
+	client := openai.NewClient(clientOptions...)
 
 	connector := &OpenAIConnector{
 		client:  &client,
@@ -203,9 +213,17 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	oc.logger.Sugar().Debugw("Query with tool", "model", oc.modelID)
 	response := LlmResponseWithTools{}
 
-	client := openai.NewClient(
+	// Build client options with same configuration as NewOpenAIConnector
+	clientOptions := []option.RequestOption{
 		option.WithAPIKey(oc.token),
-	)
+	}
+
+	// Check for custom base URL
+	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+	}
+
+	client := openai.NewClient(clientOptions...)
 
 	oParams := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
