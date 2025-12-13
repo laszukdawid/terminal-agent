@@ -20,9 +20,10 @@ var supportedProviders = []string{
 }
 
 const (
-	cmdProvider = "provider"
-	cmdModel    = "model"
-	cmdMcpPath  = "mcp-path"
+	cmdProvider   = "provider"
+	cmdModel      = "model"
+	cmdMcpPath    = "mcp-path"
+	cmdWorkingDir = "working-dir"
 )
 
 func NewConfigCommand(config config.Config) *cobra.Command {
@@ -61,6 +62,8 @@ func ConfigGetCommand(config config.Config) *cobra.Command {
 				fmt.Println(config.GetDefaultModelId())
 			case cmdMcpPath:
 				fmt.Println(config.GetMcpFilePath())
+			case cmdWorkingDir:
+				fmt.Println(config.GetWorkingDir())
 			default:
 				fmt.Println("Unknown key:", key)
 				cmd.Help()
@@ -77,11 +80,12 @@ func ConfigSetCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set the configuration",
-		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path.
+		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir.
 
-For example: 
+For example:
   terminal-agent config set provider bedrock
-  terminal-agent config set mcp-path /path/to/mcp.json`,
+  terminal-agent config set mcp-path /path/to/mcp.json
+  terminal-agent config set working-dir /path/to/workdir`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 2 {
 				cmd.Help()
@@ -106,6 +110,9 @@ For example:
 			case cmdMcpPath:
 				config.SetMcpFilePath(value)
 				fmt.Println("MCP file path set to:", value)
+			case cmdWorkingDir:
+				config.SetWorkingDir(value)
+				fmt.Println("Working directory set to:", value)
 			default:
 				fmt.Println("Unknown key:", key)
 			}
@@ -123,6 +130,7 @@ func ConfigShowAllCommand(config config.Config) *cobra.Command {
 			fmt.Println("Default provider:", cmdProvider, "=", config.GetDefaultProvider())
 			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
+			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
 		},
 	}
 
@@ -138,6 +146,7 @@ func ConfigGetAll(config config.Config) *cobra.Command {
 			fmt.Println("Default provider: ", cmdProvider, "=", config.GetDefaultProvider())
 			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
+			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
 		},
 	}
 

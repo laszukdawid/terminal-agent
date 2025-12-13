@@ -33,13 +33,10 @@ type Agent struct {
 	systemPromptTask *string
 }
 
-func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider, config config.Config) *Agent {
+func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider, config config.Config, systemPromptAsk, systemPromptTask string) *Agent {
 	if connector == nil {
 		panic("connector is nil")
 	}
-
-	spAsk := strings.Replace(SystemPromptAsk, "{{header}}", SystemPromptHeader(), 1)
-	spTask := strings.Replace(SystemPromptTask, "{{header}}", SystemPromptHeader(), 1)
 
 	allTools := toolProvider.GetAllTools()
 
@@ -50,11 +47,10 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 	allTools[finalAnswerTool.Name()] = finalAnswerTool
 
 	return &Agent{
-		Connector: connector,
-		// toolProvider:     toolProvider,
+		Connector:        connector,
 		Tools:            allTools,
-		systemPromptAsk:  &spAsk,
-		systemPromptTask: &spTask,
+		systemPromptAsk:  &systemPromptAsk,
+		systemPromptTask: &systemPromptTask,
 		maxTokens:        MaxTokens,
 	}
 }

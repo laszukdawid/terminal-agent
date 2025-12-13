@@ -15,6 +15,7 @@ import (
 func NewTaskCommand(config config.Config) *cobra.Command {
 	var provider *string
 	var modelID *string
+	var promptFlag *string
 
 	cmd := &cobra.Command{
 		Use:   "task",
@@ -24,10 +25,22 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 		Any remaining argument that isn't captured by the flags will be concatenated to form the query.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			flags := cmd.Flags()
+
+			// Resolve system prompts
+			workingDir := config.GetWorkingDir()
+			askPrompt, err := agent.ResolvePrompt("", "ask", workingDir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve ask prompt: %w", err)
+			}
+			taskPrompt, err := agent.ResolvePrompt(*promptFlag, "task", workingDir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve task prompt: %w", err)
+			}
+
 			connector := *connector.NewConnector(*provider, *modelID)
 			toolProvider := tools.NewToolProvider(config)
-			agent := agent.NewAgent(connector, toolProvider, config)
-			flags := cmd.Flags()
+			agent := agent.NewAgent(connector, toolProvider, config, askPrompt, taskPrompt)
 
 			// Concatenate all remaining args to form the query
 			userRequest := strings.Join(args, " ")
@@ -57,6 +70,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	cmd.MarkFlagRequired("task")
 	provider = cmd.Flags().StringP("provider", "p", config.GetDefaultProvider(), "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
+	promptFlag = cmd.Flags().String("prompt", "", "Custom system prompt (overrides file-based and default prompts)")
 
 	// 'print' flag whether to print response to the stdout (default: true)
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")

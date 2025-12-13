@@ -22,6 +22,8 @@ type Config interface {
 	SetDefaultModelId(string) error
 	GetMcpFilePath() string
 	SetMcpFilePath(string) error
+	GetWorkingDir() string
+	SetWorkingDir(string) error
 	// GetMaxTokens() int
 	// SetMaxTokens(int) error
 }
@@ -31,6 +33,7 @@ type config struct {
 	DefaultProvider string            `json:"default_provider"`
 	Providers       map[string]string `json:"providers"`
 	McpFilePath     string            `json:"mcp_file_path"`
+	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
 }
 
@@ -54,6 +57,10 @@ func ensurePathExists(path string) error {
 	return nil
 }
 
+func getDefaultWorkingDir() string {
+	return filepath.Dir(getConfigPath())
+}
+
 func NewDefaultConfig() *config {
 	return &config{
 		DefaultProvider: "openai",
@@ -67,6 +74,7 @@ func NewDefaultConfig() *config {
 		},
 		LogLevel:    "info",
 		McpFilePath: "",
+		WorkingDir:  getDefaultWorkingDir(),
 		MaxTokens:   600,
 	}
 }
@@ -144,6 +152,19 @@ func (config *config) GetMcpFilePath() string {
 func (config *config) SetMcpFilePath(path string) error {
 	log.Println("Setting MCP file path to:", path)
 	config.McpFilePath = path
+	return SaveConfig(config)
+}
+
+func (config *config) GetWorkingDir() string {
+	if config.WorkingDir == "" {
+		return getDefaultWorkingDir()
+	}
+	return config.WorkingDir
+}
+
+func (config *config) SetWorkingDir(path string) error {
+	log.Println("Setting working directory to:", path)
+	config.WorkingDir = path
 	return SaveConfig(config)
 }
 

@@ -17,6 +17,7 @@ import (
 func NewQuestionCommand(config config.Config) *cobra.Command {
 	var provider *string
 	var modelID *string
+	var promptFlag *string
 
 	cmd := &cobra.Command{
 		Use:          "ask",
@@ -34,9 +35,20 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
 
+			// Resolve system prompts
+			workingDir := config.GetWorkingDir()
+			askPrompt, err := agent.ResolvePrompt(*promptFlag, "ask", workingDir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve ask prompt: %w", err)
+			}
+			taskPrompt, err := agent.ResolvePrompt("", "task", workingDir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve task prompt: %w", err)
+			}
+
 			connector := connector.NewConnector(*provider, *modelID)
 			toolProvider := tools.NewToolProvider(config)
-			agent := agent.NewAgent(*connector, toolProvider, config)
+			agent := agent.NewAgent(*connector, toolProvider, config, askPrompt, taskPrompt)
 
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")
@@ -69,6 +81,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	cmd.MarkFlagRequired("question")
 	provider = cmd.Flags().StringP("provider", "p", config.GetDefaultProvider(), "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
+	promptFlag = cmd.Flags().String("prompt", "", "Custom system prompt (overrides file-based and default prompts)")
 
 	if *provider == "" {
 		*provider = os.Getenv("PROVIDER")

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -92,3 +94,91 @@ If you are not sure about anything pertaining to the user's request, use your to
 
 You MUST plan extensively before each function call, and reflect extensively on the outcomes of the previous function calls. DO NOT do this entire process by making function calls only, as this can impair your ability to solve the problem and think insightfully.
 `
+
+// ResolvePrompt resolves the system prompt based on the priority hierarchy:
+// 1. flagPrompt (CLI --prompt flag) - highest priority
+// 2. File-based prompt (system.prompt for ask, task/system.prompt or task_system.prompt for task)
+// 3. Default prompt - lowest priority
+//
+// All prompts support {{header}} template substitution.
+// workingDir is the directory to look for prompt files in (from config).
+func ResolvePrompt(flagPrompt string, promptType string, workingDir string) (string, error) {
+	var rawPrompt string
+
+	if flagPrompt != "" {
+		// Highest priority: CLI flag
+		rawPrompt = flagPrompt
+	} else {
+		// Try file-based prompt
+		filePrompt, err := readPromptFile(promptType, workingDir)
+		if err != nil {
+			return "", err
+		}
+		if filePrompt != "" {
+			rawPrompt = filePrompt
+		} else {
+			// Fall back to default
+			if promptType == "task" {
+				rawPrompt = SystemPromptTask
+			} else {
+				rawPrompt = SystemPromptAsk
+			}
+		}
+	}
+
+	// Apply {{header}} substitution
+	resolved := strings.Replace(rawPrompt, "{{header}}", SystemPromptHeader(), 1)
+	return resolved, nil
+}
+
+// readPromptFile attempts to read a prompt file from the working directory.
+// For "ask": checks ./ask/system.prompt, then ./ask_system.prompt
+// For "task": checks ./task/system.prompt, then ./task_system.prompt
+// Returns empty string if no file exists, error if file exists but can't be read.
+func readPromptFile(promptType string, workingDir string) (string, error) {
+	var paths []string
+
+	if promptType == "task" {
+		paths = []string{
+			filepath.Join(workingDir, "task", "system.prompt"),
+			filepath.Join(workingDir, "task_system.prompt"),
+		}
+	} else {
+		paths = []string{
+			filepath.Join(workingDir, "ask", "system.prompt"),
+			filepath.Join(workingDir, "ask_system.prompt"),
+		}
+	}
+
+	for _, path := range paths {
+		content, err := tryReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt file %s: %w", path, err)
+		}
+		if content != "" {
+			return content, nil
+		}
+	}
+
+	return "", nil
+}
+
+// tryReadFile attempts to read a file. Returns empty string if file doesn't exist.
+// Returns error if file exists but can't be read or is empty.
+func tryReadFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		// Treat empty file as "not present"
+		return "", nil
+	}
+
+	return content, nil
+}

@@ -188,8 +188,35 @@ $ agent config set model llama3.2
 - [x] **MCP**: Supports Model Context Protocol (MCP) defined in a file
 - [x] **websearch**: Can search the web and display links
 - [x] **unix**: Designs and evaluates a unix command
+- [x] **custom prompts**: Override system prompts via CLI flag or project files
 
 In case some capabilities are missing please create a Feature Request github issue. Looking forward to extending this agent with useful features.
+
+### Custom System Prompts
+
+You can customize the system prompt used by the agent. The prompt is resolved in the following priority order:
+
+1. **CLI flag** (`--prompt "your prompt"`) - highest priority
+2. **Project file** - looked up in the configured working directory
+3. **Default prompt** - built-in default
+
+**File locations:**
+- For `ask` command: `ask/system.prompt` (preferred) or `ask_system.prompt`
+- For `task` command: `task/system.prompt` (preferred) or `task_system.prompt`
+
+**Example usage:**
+
+```sh
+# Override via CLI flag
+agent ask --prompt "You are a helpful coding assistant" "How do I reverse a string?"
+
+# Or create a file in your working directory
+mkdir -p ask
+echo "You are a Unix expert. Be concise." > ask/system.prompt
+agent ask "What is a file descriptor?"
+```
+
+All prompts support the `{{header}}` placeholder which gets replaced with dynamic system context (hostname, user, time, working directory, OS).
 
 ## Philosphy
 
