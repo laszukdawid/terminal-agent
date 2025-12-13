@@ -2,10 +2,22 @@ package commands
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/spf13/cobra"
 )
+
+var supportedProviders = []string{
+	connector.AnthropicProvider,
+	connector.BedrockProvider,
+	connector.GoogleProvider,
+	connector.OllamaProvider,
+	connector.OpenaiProvider,
+	connector.PerplexityProvider,
+}
 
 const (
 	cmdProvider = "provider"
@@ -25,6 +37,7 @@ func NewConfigCommand(config config.Config) *cobra.Command {
 
 	cmd.AddCommand(ConfigSetCommand(config))
 	cmd.AddCommand(ConfigGetCommand(config))
+	cmd.AddCommand(ConfigShowAllCommand(config))
 
 	return cmd
 }
@@ -80,6 +93,11 @@ For example:
 
 			switch key {
 			case cmdProvider:
+				if !slices.Contains(supportedProviders, value) {
+					fmt.Printf("Unsupported provider: %s\n", value)
+					fmt.Printf("Supported providers: %s\n", strings.Join(supportedProviders, ", "))
+					return
+				}
 				config.SetDefaultProvider(value)
 				fmt.Println("Default provider set to:", value)
 			case cmdModel:
@@ -91,6 +109,20 @@ For example:
 			default:
 				fmt.Println("Unknown key:", key)
 			}
+		},
+	}
+
+	return cmd
+}
+
+func ConfigShowAllCommand(config config.Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "show-all",
+		Short: "Show all configuration values",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("Default provider:", cmdProvider, "=", config.GetDefaultProvider())
+			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
+			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 		},
 	}
 
