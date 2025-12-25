@@ -24,6 +24,7 @@ const (
 	cmdModel      = "model"
 	cmdMcpPath    = "mcp-path"
 	cmdWorkingDir = "working-dir"
+	cmdMemory     = "memory"
 )
 
 func NewConfigCommand(config config.Config) *cobra.Command {
@@ -64,6 +65,8 @@ func ConfigGetCommand(config config.Config) *cobra.Command {
 				fmt.Println(config.GetMcpFilePath())
 			case cmdWorkingDir:
 				fmt.Println(config.GetWorkingDir())
+			case cmdMemory:
+				fmt.Println(config.GetMemory())
 			default:
 				fmt.Println("Unknown key:", key)
 				cmd.Help()
@@ -80,12 +83,13 @@ func ConfigSetCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set the configuration",
-		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir.
+		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir, memory.
 
 For example:
   terminal-agent config set provider bedrock
   terminal-agent config set mcp-path /path/to/mcp.json
-  terminal-agent config set working-dir /path/to/workdir`,
+  terminal-agent config set working-dir /path/to/workdir
+  terminal-agent config set memory true`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 2 {
 				cmd.Help()
@@ -113,6 +117,16 @@ For example:
 			case cmdWorkingDir:
 				config.SetWorkingDir(value)
 				fmt.Println("Working directory set to:", value)
+			case cmdMemory:
+				if value == "true" {
+					config.SetMemory(true)
+					fmt.Println("Memory set to: true")
+				} else if value == "false" {
+					config.SetMemory(false)
+					fmt.Println("Memory set to: false")
+				} else {
+					fmt.Println("Invalid value for memory. Use 'true' or 'false'.")
+				}
 			default:
 				fmt.Println("Unknown key:", key)
 			}
@@ -131,6 +145,7 @@ func ConfigShowAllCommand(config config.Config) *cobra.Command {
 			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
+			fmt.Println("Memory:", cmdMemory, "=", config.GetMemory())
 		},
 	}
 
@@ -147,6 +162,7 @@ func ConfigGetAll(config config.Config) *cobra.Command {
 			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
+			fmt.Println("Memory:", cmdMemory, "=", config.GetMemory())
 		},
 	}
 

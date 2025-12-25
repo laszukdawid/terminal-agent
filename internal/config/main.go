@@ -24,8 +24,8 @@ type Config interface {
 	SetMcpFilePath(string) error
 	GetWorkingDir() string
 	SetWorkingDir(string) error
-	// GetMaxTokens() int
-	// SetMaxTokens(int) error
+	GetMemory() bool
+	SetMemory(bool) error
 }
 
 type config struct {
@@ -35,6 +35,7 @@ type config struct {
 	McpFilePath     string            `json:"mcp_file_path"`
 	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
+	Memory          bool              `json:"memory"`
 }
 
 func ensurePathExists(path string) error {
@@ -165,6 +166,16 @@ func (config *config) GetWorkingDir() string {
 func (config *config) SetWorkingDir(path string) error {
 	log.Println("Setting working directory to:", path)
 	config.WorkingDir = path
+	return SaveConfig(config)
+}
+
+func (config *config) GetMemory() bool {
+	return config.Memory
+}
+
+func (config *config) SetMemory(enabled bool) error {
+	log.Println("Setting memory to:", enabled)
+	config.Memory = enabled
 	return SaveConfig(config)
 }
 

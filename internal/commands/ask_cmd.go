@@ -10,6 +10,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/history"
+	"github.com/laszukdawid/terminal-agent/internal/memory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +19,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	var provider *string
 	var modelID *string
 	var promptFlag *string
+	var contextFiles []string
 
 	cmd := &cobra.Command{
 		Use:          "ask",
@@ -34,6 +36,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			// Check if this is streaming response
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
+			memoryFlag, _ := flags.GetBool("memory")
 
 			// Resolve system prompts
 			workingDir := config.GetWorkingDir()
@@ -46,12 +49,28 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 				return fmt.Errorf("failed to resolve task prompt: %w", err)
 			}
 
+			// Include memory in prompt if enabled via config or flag
+			includeMemory := config.GetMemory() || memoryFlag
+			askPrompt, err = BuildAskPrompt(askPrompt, includeMemory, getMemoryPath())
+			if err != nil {
+				return err
+			}
+
 			connector := connector.NewConnector(*provider, *modelID)
 			toolProvider := tools.NewToolProvider(config)
 			agent := agent.NewAgent(*connector, toolProvider, config, askPrompt, taskPrompt)
 
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")
+
+			// Prepend context from files if provided
+			if len(contextFiles) > 0 {
+				contextContent, err := buildContextFromFiles(contextFiles)
+				if err != nil {
+					return fmt.Errorf("failed to read context files: %w", err)
+				}
+				userQuestion = contextContent + "\n\n" + userQuestion
+			}
 
 			response, err := agent.Question(ctx, userQuestion, streamFlag)
 			if err != nil {
@@ -101,6 +120,12 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 	// 'plain' flag whether to render the response as plain text (default: false)
 	cmd.Flags().BoolP("plain", "k", false, "Render the response as plain text")
+
+	// 'memory' flag whether to include memory in the system prompt (default: false)
+	cmd.Flags().BoolP("memory", "M", false, "Include memory in the system prompt")
+
+	// 'context' flag to include file contents as context (can be used multiple times)
+	cmd.Flags().StringArrayVarP(&contextFiles, "context", "c", []string{}, "Include file content as context (can be used multiple times)")
 
 	// Add help subcommand that shows the same help as the parent command
 	helpCmd := &cobra.Command{
@@ -152,4 +177,36 @@ func handleError(err error) {
 	}
 	fmt.Println(err)
 	os.Exit(1)
+}
+
+// buildContextFromFiles reads multiple files and wraps their contents in <context> tags
+func buildContextFromFiles(files []string) (string, error) {
+	var contextParts []string
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+		contextParts = append(contextParts, fmt.Sprintf("<context>\n%s\n</context>", strings.TrimSpace(string(content))))
+	}
+	return strings.Join(contextParts, "\n\n"), nil
+}
+
+// BuildAskPrompt builds the system prompt for the ask command, optionally including memory
+func BuildAskPrompt(basePrompt string, includeMemory bool, memoryPath string) (string, error) {
+	if !includeMemory {
+		return basePrompt, nil
+	}
+
+	mClient := memory.NewMemory(memoryPath)
+	memoryPrompt, err := mClient.FormatAsPrompt()
+	if err != nil {
+		return "", fmt.Errorf("failed to format memory: %w", err)
+	}
+
+	if memoryPrompt == "" {
+		return basePrompt, nil
+	}
+
+	return memoryPrompt + "\n\n" + basePrompt, nil
 }
