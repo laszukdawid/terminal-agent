@@ -72,6 +72,22 @@ func (a *Agent) Question(ctx context.Context, s string, isStream bool) (string, 
 	return res, err
 }
 
+// Chat sends a message with conversation history to the agent and returns the response.
+func (a *Agent) Chat(ctx context.Context, userMessage string, history []connector.Message, isStream bool) (string, error) {
+	if userMessage == "" {
+		return "", ErrEmptyQuery
+	}
+	qParams := connector.QueryParams{
+		UserPrompt: &userMessage,
+		SysPrompt:  a.systemPromptAsk,
+		Messages:   history,
+		Stream:     isStream,
+		MaxTokens:  a.maxTokens,
+	}
+	res, err := a.Connector.Query(ctx, &qParams)
+	return res, err
+}
+
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 	logger := utils.Logger.Sugar()
 	ctx, cancel := context.WithTimeout(ctx, 900*time.Second) // 15 minutes timeout

@@ -85,6 +85,7 @@ type ClaudeRequest struct {
 type QueryParams struct {
 	UserPrompt *string
 	SysPrompt  *string
+	Messages   []Message
 	Stream     bool
 	MaxTokens  int
 }

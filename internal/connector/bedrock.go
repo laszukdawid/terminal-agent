@@ -100,6 +100,29 @@ func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice 
 //
 // Returns:
 //   - []types.Tool: A slice of Bedrock-compatible tool specifications
+// buildMessages constructs the messages slice from history + current user prompt
+func (bc *BedrockConnector) buildMessages(qParams *QueryParams) []types.Message {
+	var messages []types.Message
+
+	// Add conversation history
+	for _, msg := range qParams.Messages {
+		messages = append(messages, types.Message{
+			Role:    types.ConversationRole(msg.Role),
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: msg.Content}},
+		})
+	}
+
+	// Add current user prompt
+	if qParams.UserPrompt != nil && *qParams.UserPrompt != "" {
+		messages = append(messages, types.Message{
+			Role:    "user",
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *qParams.UserPrompt}},
+		})
+	}
+
+	return messages
+}
+
 func convertToolsToBedrock(tools map[string]tools.Tool) []types.Tool {
 	// Define the input schema as a map
 	var bedrockTools []types.Tool
@@ -153,18 +176,18 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 }
 
 func (bc *BedrockConnector) queryBedrock(
-	ctx context.Context, userPrompt *string, systemPrompt *string, toolConfig *types.ToolConfiguration,
+	ctx context.Context, qParams *QueryParams, toolConfig *types.ToolConfiguration,
 ) (*bedrockruntime.ConverseOutput, error) {
+
+	// Build messages list from history + current user prompt
+	messages := bc.buildMessages(qParams)
 
 	converseInput := &bedrockruntime.ConverseInput{
 		ModelId: (*string)(&bc.modelID),
 		System: []types.SystemContentBlock{
-			&types.SystemContentBlockMemberText{Value: *systemPrompt},
+			&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
 		},
-		Messages: []types.Message{{
-			Role:    "user",
-			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *userPrompt}},
-		}},
+		Messages: messages,
 	}
 
 	if toolConfig != nil {
@@ -222,15 +245,15 @@ func (bc *BedrockConnector) queryBedrockStream(
 		mdRenderer = nil
 	}
 
+	// Build messages list from history + current user prompt
+	messages := bc.buildMessages(qParams)
+
 	converseInput := &bedrockruntime.ConverseStreamInput{
 		ModelId: (*string)(&bc.modelID),
 		System: []types.SystemContentBlock{
 			&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
 		},
-		Messages: []types.Message{{
-			Role:    "user",
-			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: *qParams.UserPrompt}},
-		}},
+		Messages: messages,
 	}
 
 	if toolConfig != nil {
@@ -324,7 +347,7 @@ func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (st
 		return bc.queryBedrockStream(ctx, qParams, nil)
 	}
 
-	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, nil)
+	converseOutput, err := bc.queryBedrock(context.Background(), qParams, nil)
 	if err != nil {
 		return "", err
 	}
@@ -357,7 +380,7 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 	}
 
 	//
-	converseOutput, err := bc.queryBedrock(context.Background(), qParams.UserPrompt, qParams.SysPrompt, &toolConfig)
+	converseOutput, err := bc.queryBedrock(context.Background(), qParams, &toolConfig)
 	if err != nil {
 		return response, fmt.Errorf("failed to send request: %v", err)
 	}

@@ -96,6 +96,7 @@ func mainRun() exitCode {
 	// Define flags
 	cmd := NewCommand()
 	cmd.AddCommand(commands.NewQuestionCommand(c))
+	cmd.AddCommand(commands.NewChatCommand(c))
 	cmd.AddCommand(commands.NewHistoryCommand(c))
 	cmd.AddCommand(commands.NewConfigCommand(c))
 	cmd.AddCommand(commands.NewToolCommand(c))
