@@ -12,14 +12,35 @@ Read more https://laszukdawid.github.io/terminal-agent/.
 
 ## Installation
 
-### Option 1: Download pre-built binary (Recommended for all)
+### Option 1: Homebrew (Recommended for macOS and Linux)
 
-Download the `agent-*-*` binary file from [Releases](https://github.com/laszukdawid/terminal-agent/releases). If you're on Linux you likely want `agent-linux-amd64` and if you're on MacOS it's likely `agent-macos-arm64`. After downloading, rename it to `agent` and add it to your path with binaries.
-(Remember to set execution permissions with `chmod u+x agent`.)
-To test the executability type `agent --help`.
+If you have [Homebrew](https://brew.sh/) installed, you can install Terminal Agent with:
 
+```sh
+brew install laszukdawid/tap/terminal-agent
+```
 
-### Option 2: go install (Recommended for Go users)
+This will install the `agent` binary and keep it updated with `brew upgrade`.
+
+### Option 2: Download pre-built binary
+
+Download the `terminal-agent_*_*.tar.gz` archive from [Releases](https://github.com/laszukdawid/terminal-agent/releases). Choose the appropriate version for your system:
+- **macOS (Apple Silicon)**: `terminal-agent_Darwin_arm64.tar.gz`
+- **macOS (Intel)**: `terminal-agent_Darwin_x86_64.tar.gz`
+- **Linux (x86_64)**: `terminal-agent_Linux_x86_64.tar.gz`
+- **Linux (ARM64)**: `terminal-agent_Linux_arm64.tar.gz`
+
+After downloading, extract and install:
+
+```sh
+tar -xzf terminal-agent_*.tar.gz
+chmod +x agent
+mv agent ~/.local/bin/  # or another directory in your PATH
+```
+
+To test the installation: `agent --help`
+
+### Option 3: go install (Recommended for Go users)
 
 If you have Go installed, you can install directly from the repository:
 
@@ -29,7 +50,7 @@ go install github.com/laszukdawid/terminal-agent/cmd/agent@latest
 
 This will install the `agent` binary in your `$GOPATH/bin` directory (typically `~/go/bin`). Make sure this directory is in your PATH.
 
-### Option 3: Compile from source
+### Option 4: Compile from source
 
 You can compile the code yourself.
 To do so, make sure you have golang installed for compilation and we recommend using [Taskfile](https://taskfile.dev/installation/) for task execution.

@@ -1,0 +1,125 @@
+# GoReleaser configuration for Terminal Agent
+# Documentation: https://goreleaser.com
+version: 2
+
+project_name: terminal-agent
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: agent
+    main: ./cmd/agent
+    binary: agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: "New Features"
+      regexp: "^feat"
+      order: 0
+    - title: "Bug Fixes"
+      regexp: "^fix"
+      order: 1
+    - title: "Performance Improvements"
+      regexp: "^perf"
+      order: 2
+    - title: "Refactoring"
+      regexp: "^refactor"
+      order: 3
+    - title: "Other Changes"
+      order: 999
+
+release:
+  github:
+    owner: laszukdawid
+    name: terminal-agent
+  draft: false
+  prerelease: auto
+  mode: replace
+  name_template: "{{.ProjectName}} v{{.Version}}"
+
+# Homebrew Tap configuration
+# Note: 'brews' is deprecated but still functional for CLI tools
+# homebrew_casks is for GUI apps only
+brews:
+  - name: terminal-agent
+    repository:
+      owner: laszukdawid
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+    directory: Formula
+    homepage: "https://github.com/laszukdawid/terminal-agent"
+    description: "An LLM Agent to help you from and within the terminal"
+    license: "MIT"
+
+    install: |
+      bin.install "agent"
+
+    test: |
+      system "#{bin}/agent", "--help"
+
+    caveats: |
+      To get started with Terminal Agent:
+
+      1. Set up your API key for your preferred provider:
+         export OPENAI_API_KEY=your-key-here
+         # or
+         export ANTHROPIC_API_KEY=your-key-here
+
+      2. Configure your provider:
+         agent config set provider openai
+         agent config set model gpt-4o-mini
+
+      3. Start asking questions:
+         agent ask "What is a file descriptor?"
+
+      For more information, visit:
+        https://laszukdawid.github.io/terminal-agent/
+
+      Pro tip: Set up an alias for quick access:
+        alias aa="agent ask"
+
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    skip_upload: auto
