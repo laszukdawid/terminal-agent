@@ -27,6 +27,7 @@ const (
 type Agent struct {
 	Connector connector.LLMConnector
 	Tools     map[string]tools.Tool
+	config    config.Config
 
 	maxTokens        int
 	systemPromptAsk  *string
@@ -51,6 +52,7 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 		Tools:            allTools,
 		systemPromptAsk:  &systemPromptAsk,
 		systemPromptTask: &systemPromptTask,
+		config:           config,
 		maxTokens:        MaxTokens,
 	}
 }
@@ -101,7 +103,22 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 	ctx, cancel := context.WithTimeout(ctx, 900*time.Second) // 15 minutes timeout
 	defer cancel()
 
-	confirmations := NewConfirmationManager(options.Allow)
+	workingDir := ""
+	if a.config != nil {
+		workingDir = a.config.GetWorkingDir()
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		workingDir = cwd
+	}
+
+	ruleSets, store, err := config.LoadPermissionRuleSets(workingDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to load permissions: %w", err)
+	}
+
+	confirmations := NewConfirmationManager(options.Allow, ruleSets, func(action string, allow bool) error {
+		return config.RememberPermission(store, action, allow)
+	})
 
 	// Create initial task state
 	taskState := &TaskState{
@@ -141,14 +158,16 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 			// Execute the selected tool
 			tool := a.Tools[response.ToolName]
 			action := BuildActionString(response.ToolName, response.ToolInput)
-			allowed, err := confirmations.Confirm(action)
-			if err != nil {
-				logger.Errorw("Tool confirmation failed", "tool", response.ToolName, "error", err)
-				return "", fmt.Errorf("tool confirmation failed: %w", err)
-			}
-			if !allowed {
-				taskState.Results[fmt.Sprintf("%s confirmation", response.ToolName)] = "user declined execution"
-				continue
+			if requiresConfirmation(response.ToolName) {
+				allowed, err := confirmations.Confirm(action)
+				if err != nil {
+					logger.Errorw("Tool confirmation failed", "tool", response.ToolName, "error", err)
+					return "", fmt.Errorf("tool confirmation failed: %w", err)
+				}
+				if !allowed {
+					taskState.Results[fmt.Sprintf("%s confirmation", response.ToolName)] = "user declined execution"
+					continue
+				}
 			}
 
 			toolResult, err := tool.RunSchema(response.ToolInput)
@@ -325,6 +344,15 @@ func TruncateString(s string, maxLen int) string {
 		return s[:maxLen] + "... [Truncated]"
 	}
 	return s
+}
+
+func requiresConfirmation(toolName string) bool {
+	switch toolName {
+	case "unix", "file_edit", "python":
+		return true
+	default:
+		return false
+	}
 }
 
 type askUserTool struct {

@@ -93,9 +93,7 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 
 	// Set default code executor
 	if codeExecutor == nil {
-		codeExecutor = &BashExecutor{
-			confirmPrompt: true,
-		}
+		codeExecutor = &BashExecutor{}
 	}
 
 	return &UnixTool{
@@ -130,15 +128,9 @@ func (u *UnixTool) ExecCode(code string) (string, error) {
 }
 
 func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (string, error) {
-	// Double check that <code>
-	// Validate whether the code is a valid Unix command
 	fmt.Printf("Tool: ExecCode: code: %s\n", code)
 	if code == "" {
 		return "", fmt.Errorf("no Unix command found in the response")
-	}
-
-	if err := validateResCode(code); err != nil {
-		return "", err
 	}
 
 	// Execute the Unix command

@@ -35,8 +35,8 @@ func TestUnixToolsRun(t *testing.T) {
 	}{
 		{
 			name:     "Empty code",
-			prompt:   "{ \"code\": \"\"}",
-			err:      "invalid unix command",
+			prompt:   "",
+			err:      "no Unix command found",
 			expected: "",
 		},
 		{
@@ -44,30 +44,6 @@ func TestUnixToolsRun(t *testing.T) {
 			prompt:   `ls`,
 			err:      "",
 			expected: "exec: ls",
-		},
-		{
-			name:     "No files deletion for now",
-			prompt:   `rm *`,
-			err:      "invalid unix command",
-			expected: "",
-		},
-		{
-			name:     "Supported command but contains 'sudo'",
-			prompt:   `sudo rm -rf /`,
-			err:      "command requires sudo which is not allowed",
-			expected: "",
-		},
-		{
-			name:     "Hidden sudo command",
-			prompt:   `true && sudo rm -rf /`,
-			err:      "command requires sudo which is not allowed",
-			expected: "",
-		},
-		{
-			name:     "Unsupported command in code",
-			prompt:   `unsupported some garbage`,
-			err:      "invalid unix command",
-			expected: "",
 		},
 	}
 

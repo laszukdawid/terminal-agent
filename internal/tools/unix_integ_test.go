@@ -16,8 +16,7 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 	workDir := os.Getenv("TEST_INTEG_DIR")
 
 	bashExecutor := &BashExecutor{
-		confirmPrompt: false,
-		workDir:       workDir,
+		workDir: workDir,
 	}
 	tool := NewUnixTool(bashExecutor)
 

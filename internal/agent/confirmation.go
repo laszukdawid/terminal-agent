@@ -9,11 +9,31 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/laszukdawid/terminal-agent/internal/config"
 )
 
 type ConfirmationManager struct {
-	allowPatterns []allowPattern
+	allowPatterns []rulePattern
+	denyPatterns  []rulePattern
+	askPatterns   []rulePattern
 	decisions     map[string]bool
+	rememberFunc  RememberDecisionFunc
+}
+
+type RememberDecisionFunc func(action string, allow bool) error
+
+type ruleType int
+
+const (
+	ruleAllow ruleType = iota
+	ruleDeny
+	ruleAsk
+)
+
+type rulePattern struct {
+	pattern  allowPattern
+	priority int
 }
 
 type allowPattern struct {
@@ -29,20 +49,25 @@ type actionCall struct {
 	args    map[string]string
 }
 
-func NewConfirmationManager(allow []string) *ConfirmationManager {
-	patterns := make([]allowPattern, 0, len(allow))
-	for _, entry := range normalizeList(allow) {
-		pattern, err := parseAllowPattern(entry)
-		if err != nil {
-			continue
-		}
-		patterns = append(patterns, pattern)
+func NewConfirmationManager(allow []string, ruleSets []config.PermissionRuleSet, remember RememberDecisionFunc) *ConfirmationManager {
+	manager := &ConfirmationManager{
+		decisions:    make(map[string]bool),
+		rememberFunc: remember,
 	}
 
-	return &ConfirmationManager{
-		allowPatterns: patterns,
-		decisions:     make(map[string]bool),
+	maxPriority := 0
+	for _, set := range ruleSets {
+		if set.Priority > maxPriority {
+			maxPriority = set.Priority
+		}
+		manager.appendPatterns(set.Permissions.Allow, ruleAllow, set.Priority)
+		manager.appendPatterns(set.Permissions.Deny, ruleDeny, set.Priority)
+		manager.appendPatterns(set.Permissions.Ask, ruleAsk, set.Priority)
 	}
+
+	manager.appendPatterns(allow, ruleAllow, maxPriority+1)
+
+	return manager
 }
 
 func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
@@ -54,37 +79,124 @@ func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
 		return decision, nil
 	}
 
-	if cm.isAllowed(action) {
-		cm.decisions[action] = true
-		return true, nil
+	if cm.shouldAsk(action) {
+		return cm.promptAndRemember(action)
 	}
 
-	confirmed, err := promptConfirmation(action)
+	if allowed, matched := cm.resolveAllowDeny(action); matched {
+		cm.decisions[action] = allowed
+		return allowed, nil
+	}
+
+	return cm.promptAndRemember(action)
+}
+
+func (cm *ConfirmationManager) appendPatterns(values []string, rule ruleType, priority int) {
+	for _, entry := range normalizeList(values) {
+		pattern, err := parseAllowPattern(entry)
+		if err != nil {
+			continue
+		}
+		rulePattern := rulePattern{
+			pattern:  pattern,
+			priority: priority,
+		}
+		switch rule {
+		case ruleAllow:
+			cm.allowPatterns = append(cm.allowPatterns, rulePattern)
+		case ruleDeny:
+			cm.denyPatterns = append(cm.denyPatterns, rulePattern)
+		case ruleAsk:
+			cm.askPatterns = append(cm.askPatterns, rulePattern)
+		}
+	}
+}
+
+func (cm *ConfirmationManager) shouldAsk(action string) bool {
+	return cm.matchesPatterns(action, cm.askPatterns)
+}
+
+func (cm *ConfirmationManager) resolveAllowDeny(action string) (bool, bool) {
+	allowMatch, allowPriority := cm.matchWithPriority(action, cm.allowPatterns)
+	denyMatch, denyPriority := cm.matchWithPriority(action, cm.denyPatterns)
+
+	if !allowMatch && !denyMatch {
+		return false, false
+	}
+	if allowMatch && denyMatch {
+		if denyPriority >= allowPriority {
+			return false, true
+		}
+		return true, true
+	}
+	if denyMatch {
+		return false, true
+	}
+	return true, true
+}
+
+func (cm *ConfirmationManager) promptAndRemember(action string) (bool, error) {
+	decision, err := promptConfirmation(action)
 	if err != nil {
 		return false, err
 	}
-	cm.decisions[action] = confirmed
-	return confirmed, nil
+
+	cm.decisions[action] = decision.allowed
+	if decision.remember && cm.rememberFunc != nil {
+		if err := cm.rememberFunc(action, decision.allowed); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: unable to remember permission for %s: %v\n", action, err)
+		}
+	}
+
+	return decision.allowed, nil
 }
 
-func (cm *ConfirmationManager) isAllowed(action string) bool {
+func (cm *ConfirmationManager) matchWithPriority(action string, patterns []rulePattern) (bool, int) {
+	call, err := parseActionCall(action)
+	if err != nil {
+		return false, 0
+	}
+
+	matched := false
+	priority := 0
+	for _, pattern := range patterns {
+		if pattern.pattern.tool != call.tool {
+			continue
+		}
+		if pattern.pattern.command != nil && !pattern.pattern.command.MatchString(call.command) {
+			continue
+		}
+		if !pattern.pattern.matchArgs(call.args) {
+			continue
+		}
+		if !matched || pattern.priority > priority {
+			matched = true
+			priority = pattern.priority
+		}
+	}
+
+	return matched, priority
+}
+
+func (cm *ConfirmationManager) matchesPatterns(action string, patterns []rulePattern) bool {
 	call, err := parseActionCall(action)
 	if err != nil {
 		return false
 	}
 
-	for _, pattern := range cm.allowPatterns {
-		if pattern.tool != call.tool {
+	for _, pattern := range patterns {
+		if pattern.pattern.tool != call.tool {
 			continue
 		}
-		if pattern.command != nil && !pattern.command.MatchString(call.command) {
+		if pattern.pattern.command != nil && !pattern.pattern.command.MatchString(call.command) {
 			continue
 		}
-		if !pattern.matchArgs(call.args) {
+		if !pattern.pattern.matchArgs(call.args) {
 			continue
 		}
 		return true
 	}
+
 	return false
 }
 
@@ -99,15 +211,30 @@ func normalizeList(values []string) []string {
 	return normalized
 }
 
-func promptConfirmation(action string) (bool, error) {
-	fmt.Printf("Execute the following action?\n > %s [y/N]: ", action)
+type confirmationDecision struct {
+	allowed  bool
+	remember bool
+}
+
+func promptConfirmation(action string) (confirmationDecision, error) {
+	fmt.Printf("Execute the following action?\n > %s [y/N/yes!/no!]: ", action)
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		return false, err
+		return confirmationDecision{}, err
 	}
 	response = strings.TrimSpace(strings.ToLower(response))
-	return response == "y" || response == "yes", nil
+
+	switch response {
+	case "y", "yes":
+		return confirmationDecision{allowed: true}, nil
+	case "yes!":
+		return confirmationDecision{allowed: true, remember: true}, nil
+	case "no!":
+		return confirmationDecision{allowed: false, remember: true}, nil
+	default:
+		return confirmationDecision{allowed: false}, nil
+	}
 }
 
 func BuildActionString(toolName string, input map[string]any) string {

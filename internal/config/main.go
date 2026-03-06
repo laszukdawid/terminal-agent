@@ -26,6 +26,7 @@ type Config interface {
 	SetWorkingDir(string) error
 	GetMemory() bool
 	SetMemory(bool) error
+	GetPermissions() Permissions
 }
 
 type config struct {
@@ -36,6 +37,7 @@ type config struct {
 	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
 	Memory          bool              `json:"memory"`
+	Permissions     Permissions       `json:"permissions,omitempty"`
 }
 
 func ensurePathExists(path string) error {
@@ -177,6 +179,10 @@ func (config *config) SetMemory(enabled bool) error {
 	log.Println("Setting memory to:", enabled)
 	config.Memory = enabled
 	return SaveConfig(config)
+}
+
+func (config *config) GetPermissions() Permissions {
+	return config.Permissions
 }
 
 var SetProviderCmd = &cobra.Command{

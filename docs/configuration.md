@@ -34,6 +34,47 @@ agent config get all
 agent config get provider
 ```
 
+## Permissions
+
+Terminal Agent supports tool execution permissions via the `permissions` key in configuration files. Permissions are evaluated using the same action expression format used by confirmations, for example:
+
+```
+unix("aws sso login", profile="dev")
+```
+
+### Global vs Local Configuration
+
+- Global config: `$HOME/.config/terminal-agent/config.json`
+- Local config: `.terminal-agent.json` files discovered by walking from the current working directory up to the filesystem root.
+
+Local configs take priority over global rules when both match. The closest `.terminal-agent.json` to the current directory has the highest priority.
+
+### Permissions Schema
+
+```json
+{
+  "permissions": {
+    "allow": ["unix(\"aws sso login\")"],
+    "deny": ["unix(\"rm -rf .*\")"],
+    "ask": ["unix(\"aws .*\")"]
+  }
+}
+```
+
+Rules are evaluated in this order:
+
+1. `ask` matches always prompt, even if `allow` or `deny` also match.
+2. Between `allow` and `deny`, the highest priority match wins; if both match at the same priority, `deny` wins.
+
+### Confirmation Shortcuts
+
+When prompted to execute an action, you can respond with:
+
+- `y` / `yes` to allow once
+- `n` / `no` to deny once
+- `yes!` to allow and remember (writes to the nearest `.terminal-agent.json`, or global config if none)
+- `no!` to deny and remember (writes to the nearest `.terminal-agent.json`, or global config if none)
+
 ## Environment Variables
 
 Terminal Agent uses environment variables for API keys:
