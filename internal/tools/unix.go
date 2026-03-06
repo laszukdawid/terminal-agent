@@ -126,6 +126,10 @@ func (u *UnixTool) HelpText() string {
 }
 
 func (u *UnixTool) ExecCode(code string) (string, error) {
+	return u.execCodeWithExecutor(code, u.executor)
+}
+
+func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (string, error) {
 	// Double check that <code>
 	// Validate whether the code is a valid Unix command
 	fmt.Printf("Tool: ExecCode: code: %s\n", code)
@@ -138,7 +142,7 @@ func (u *UnixTool) ExecCode(code string) (string, error) {
 	}
 
 	// Execute the Unix command
-	cmdOutput, err := u.executor.Exec(code)
+	cmdOutput, err := executor.Exec(code)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute Unix command: %v", err)
 	}
@@ -156,6 +160,5 @@ func (u *UnixTool) RunSchema(input map[string]any) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("failed to extract command from tool input")
 	}
-
 	return u.ExecCode(cmd)
 }

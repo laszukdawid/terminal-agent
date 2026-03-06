@@ -140,11 +140,20 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 		}
 
 		if genaiSchema.Type == genai.TypeArray {
-			if items, ok := propDefMap["items"].(map[string]any); ok {
-				if itemType, itemOk := items["type"].(string); itemOk {
-					desc, ok := items["description"].(string)
+			var itemsMap map[string]any
+			switch items := propDefMap["items"].(type) {
+			case map[string]any:
+				itemsMap = items
+			case map[string]string:
+				itemsMap = make(map[string]any, len(items))
+				for key, val := range items {
+					itemsMap[key] = val
+				}
+			}
+			if itemsMap != nil {
+				if itemType, itemOk := itemsMap["type"].(string); itemOk {
+					desc, ok := itemsMap["description"].(string)
 					if !ok {
-						// desc = ""
 						logger.Warn(fmt.Sprintf("item property '%s' description not found. skipping", propName))
 						continue
 					}

@@ -87,6 +87,8 @@ agent task list files 3 dirs up
 
 **Note**: Since more testing is required, there are only a few methods allowed.
 
+**Python automation**: The task agent can draft scripts using native tools and run them via `python3`, `python`, or `uv run python`. See `docs/commands/task.md` for examples.
+
 ### MCP
 
 Terminal Agent supports tools via MCP. To enable them, provide a file path to the JSON file, [mcp.json](/docs/examples/mcp.json). In case you have the file written at `/home/user/mcp.json` you'd update the terminal agent with

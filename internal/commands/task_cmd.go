@@ -16,6 +16,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	var provider *string
 	var modelID *string
 	var promptFlag *string
+	var allowList *[]string
 
 	cmd := &cobra.Command{
 		Use:   "task",
@@ -40,12 +41,17 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 			connector := *connector.NewConnector(*provider, *modelID)
 			toolProvider := tools.NewToolProvider(config)
-			agent := agent.NewAgent(connector, toolProvider, config, askPrompt, taskPrompt)
+			agentClient := agent.NewAgent(connector, toolProvider, config, askPrompt, taskPrompt)
 
 			// Concatenate all remaining args to form the query
 			userRequest := strings.Join(args, " ")
 
-			response, err := agent.Task(ctx, userRequest)
+			options := agent.TaskOptions{}
+			if allowList != nil {
+				options.Allow = *allowList
+			}
+
+			response, err := agentClient.TaskWithOptions(ctx, userRequest, options)
 			if err != nil {
 				return fmt.Errorf("failed to request a task: %w", err)
 			}
@@ -71,6 +77,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	provider = cmd.Flags().StringP("provider", "p", config.GetDefaultProvider(), "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
 	promptFlag = cmd.Flags().String("prompt", "", "Custom system prompt (overrides file-based and default prompts)")
+	allowList = cmd.Flags().StringArray("allow", []string{}, "Allow exact action without confirmation (repeatable)")
 
 	// 'print' flag whether to print response to the stdout (default: true)
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")

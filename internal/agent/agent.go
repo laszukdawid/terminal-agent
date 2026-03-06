@@ -88,10 +88,20 @@ func (a *Agent) Chat(ctx context.Context, userMessage string, history []connecto
 	return res, err
 }
 
+type TaskOptions struct {
+	Allow []string
+}
+
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
+	return a.TaskWithOptions(ctx, s, TaskOptions{})
+}
+
+func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptions) (string, error) {
 	logger := utils.Logger.Sugar()
 	ctx, cancel := context.WithTimeout(ctx, 900*time.Second) // 15 minutes timeout
 	defer cancel()
+
+	confirmations := NewConfirmationManager(options.Allow)
 
 	// Create initial task state
 	taskState := &TaskState{
@@ -130,6 +140,17 @@ func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 		if response.ToolUse {
 			// Execute the selected tool
 			tool := a.Tools[response.ToolName]
+			action := BuildActionString(response.ToolName, response.ToolInput)
+			allowed, err := confirmations.Confirm(action)
+			if err != nil {
+				logger.Errorw("Tool confirmation failed", "tool", response.ToolName, "error", err)
+				return "", fmt.Errorf("tool confirmation failed: %w", err)
+			}
+			if !allowed {
+				taskState.Results[fmt.Sprintf("%s confirmation", response.ToolName)] = "user declined execution"
+				continue
+			}
+
 			toolResult, err := tool.RunSchema(response.ToolInput)
 			if err != nil {
 				logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)

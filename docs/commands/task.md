@@ -30,6 +30,29 @@ agent task "Count the number of lines in all .md files"
 agent task "Show me information about my CPU and memory usage"
 ```
 
+## Python Automation (Native)
+
+The task agent can draft and run Python scripts using native tools (no `cat <<EOF`), then execute them with `python3`, `python`, or `uv run python`.
+
+### Prerequisites
+
+- `python3` or `python` available on your PATH
+- Optional: `uv` for fast, isolated execution
+
+### Example
+
+```sh
+# Write hello.py and run it
+agent task "Create hello.py that prints Hello, run it with python3"
+
+# Use uv when available
+agent task "Create hello.py that prints Hello, run it with uv run python"
+```
+
+If you need PEP 723 script mode, ask for `uv run --script` explicitly.
+
+You will be asked to confirm each execution step. File creation and edits are performed by the agent’s native tools.
+
 ## Flags
 
 | Flag | Short | Default | Description |
@@ -39,6 +62,9 @@ agent task "Show me information about my CPU and memory usage"
 | `--print` | `-x` | `true` | Whether to print the response to stdout |
 | `--log` | `-l` | `false` | Whether to log the input and output to a file |
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
+| `--allow` |  | `[]` | Allow actions without confirmation (repeatable, regex-based) |
+
+Action strings use a function-style format, e.g. `unix("aws login sso")` or `file_edit("README.md", operation="write")`. All strings are treated as regex and must match the full value. To constrain keys, use `allowKeys=["region", "profile"]` (regex allowed), and key values can be regex too, e.g. `region="us-.*"`.
 
 ## Safety Features
 

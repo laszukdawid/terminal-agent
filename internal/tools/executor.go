@@ -32,6 +32,7 @@ func isSupportedUnixCommand(code string) bool {
 		"netstat", "ping", "traceroute", "dig", "host", "nslookup", "ifconfig", "ip",
 		"route", "arp", "tcpdump", "wireshark", "iptables", "firewalld", "journalctl", "dmesg",
 		"uname", "hostname", "uptime", "init", "systemd", "systemctl", "service",
+		"python", "python3", "uv",
 	}
 
 	codeSplit := strings.Split(code, " ")

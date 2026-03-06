@@ -22,7 +22,7 @@ func NewToolProvider(config config.Config) ToolProvider {
 	allTools := make(map[string]Tool)
 
 	// Initialize the tool provider with all tools
-	builtinTools := GetAllBuiltinTools()
+	builtinTools := GetAllBuiltinTools(config)
 	maps.Copy(allTools, builtinTools)
 
 	// Load MCP tools if a file path is provided
@@ -50,11 +50,17 @@ func (tp *toolProvider) GetToolByName(name string) Tool {
 	return tool
 }
 
-func GetAllBuiltinTools() map[string]Tool {
+func GetAllBuiltinTools(config config.Config) map[string]Tool {
+	workDir := ""
+	if config != nil {
+		workDir = config.GetWorkingDir()
+	}
+
 	tools := map[string]Tool{
-		NewUnixTool(nil).Name(): NewUnixTool(nil),
-		// NewPythonTool().Name():       NewPythonTool(),
-		// NewPythonToolWithContext().Name(): NewPythonToolWithContext(),
+		NewUnixTool(nil).Name():           NewUnixTool(nil),
+		NewFileEditTool(workDir).Name():   NewFileEditTool(workDir),
+		NewFileSearchTool(workDir).Name(): NewFileSearchTool(workDir),
+		NewPythonTool(workDir).Name():     NewPythonTool(workDir),
 	}
 
 	// Add Websearch only if possible
@@ -64,8 +70,8 @@ func GetAllBuiltinTools() map[string]Tool {
 	return tools
 }
 
-func GetBuiltinToolByName(name string) Tool {
-	for _, tool := range GetAllBuiltinTools() {
+func GetBuiltinToolByName(name string, config config.Config) Tool {
+	for _, tool := range GetAllBuiltinTools(config) {
 		if tool.Name() == name {
 			return tool
 		}
