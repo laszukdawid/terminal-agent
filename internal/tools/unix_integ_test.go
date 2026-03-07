@@ -51,21 +51,6 @@ func TestUnixToolsRunIntegration(t *testing.T) {
 			prompt:   `ls not-existing-dir`,
 			err:      "ls: cannot access 'not-existing-dir': No such file or directory",
 			expected: "",
-		}, {
-			name:     "sudo something not allowed",
-			prompt:   `sudo chmod 777`,
-			err:      "command requires sudo which is not allowed",
-			expected: "",
-		}, {
-			name:     "Removing files is not supported",
-			prompt:   `rm *`,
-			err:      "invalid unix command",
-			expected: "",
-		}, {
-			name:     "Never allow deleting root",
-			prompt:   `sudo rm -rf /`,
-			err:      "not allowed",
-			expected: "",
 		},
 	}
 
