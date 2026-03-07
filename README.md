@@ -241,6 +241,23 @@ agent ask "What is a file descriptor?"
 
 All prompts support the `{{header}}` placeholder which gets replaced with dynamic system context (hostname, user, time, working directory, OS).
 
+### System Prompt Context
+
+Every LLM request includes a system prompt built from several layers:
+
+1. **Dynamic header (`{{header}}`)** — automatically injected into every prompt with:
+   - Hostname, username, current timestamp
+   - Working directory
+   - Operating system, architecture, and OS version (e.g. `linux/amd64 (Ubuntu 24.04.2 LTS)` or `darwin/arm64 (macOS 15.1)`)
+
+2. **Role-specific instructions** — differ by command:
+   - `ask` — instructs the model it has no tool access and should refer users to `task` for actions
+   - `task` — agentic prompt with tool-use guidance (file editing, search, Python execution)
+
+3. **Memory** (`ask` only) — when enabled via config or the `--memory`/`-M` flag, stored memory entries are formatted and prepended to the system prompt
+
+4. **Context files** (`ask` only) — the `--context`/`-c` flag reads specified files and wraps each in `<context>` tags, prepended to the user message
+
 ## Philosphy
 
 ```

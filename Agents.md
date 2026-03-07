@@ -22,4 +22,26 @@ Taskfile commands will install Go dependencies automatically, but if you need to
 - `task build` produces the `agent` binary; `task install` additionally copies it to `~/.local/bin/agent`.
 - Configuration helpers live under `task run:set:*` (e.g., `task run:set:openai`) for quickly switching providers during manual testing.
 
+## System Prompt Context
+
+Every request to an LLM includes a system prompt assembled from several layers (see `internal/agent/prompt.go`):
+
+1. **Header (`{{header}}`)** — `SystemPromptHeader()` injects dynamic system information:
+   - Hostname, username, current time
+   - Working directory
+   - Operating system, architecture, and OS version (read from `/etc/os-release` on Linux or `sw_vers` on macOS)
+
+2. **Role prompt** — command-specific instructions appended after the header:
+   - `SystemPromptAsk` (for `agent ask`) — no-tools guidance, refers users to the `task` command for actions.
+   - `SystemPromptTask` (for `agent task`) — agentic instructions with tool-use guidance.
+
+3. **Custom prompts** — can override the default role prompt via:
+   - `--prompt` CLI flag (highest priority)
+   - File-based prompt in the configured working directory (`ask/system.prompt` or `task/system.prompt`)
+   - All custom prompts still support `{{header}}` substitution.
+
+4. **Memory** (ask only) — when enabled via config (`memory: true`) or the `--memory`/`-M` flag, stored memory entries from `~/.config/terminal-agent/memory.jsonl` are formatted as `<memory>…</memory>` and prepended to the system prompt. See `internal/memory/main.go` and `internal/commands/ask_cmd.go:BuildAskPrompt`.
+
+5. **Context files** (ask only) — the `--context`/`-c` flag reads files and wraps each in `<context>…</context>` tags, prepended to the **user message** (not the system prompt).
+
 For more context (features, provider setup, MCP configuration), refer to `README.md` and the docs site referenced there.
