@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -33,6 +34,13 @@ func TestGetSystemInfo(t *testing.T) {
 	// Test specific formats
 	if !strings.Contains(info.GoVersion, "go") {
 		t.Errorf("GoVersion should contain 'go', got %s", info.GoVersion)
+	}
+
+	// OSVersion should be populated on linux/darwin
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+		if info.OSVersion == "" {
+			t.Errorf("OSVersion should not be empty on %s", runtime.GOOS)
+		}
 	}
 
 	// Test that CurrentTime follows the expected format

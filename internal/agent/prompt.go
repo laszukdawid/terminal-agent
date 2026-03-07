@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -17,6 +19,7 @@ type SystemInfo struct {
 	CurrentTime  string
 	WorkingDir   string
 	OS           string
+	OSVersion    string
 	Architecture string
 	GoVersion    string
 }
@@ -51,12 +54,20 @@ func GetSystemInfo() SystemInfo {
 		info.WorkingDir = "unknown"
 	}
 
+	// Get OS version
+	info.OSVersion = getOSVersion()
+
 	return info
 }
 
 // SystemPromptHeader returns the system prompt header with current system information
 func SystemPromptHeader() string {
 	info := GetSystemInfo()
+
+	osLine := fmt.Sprintf("%s/%s", info.OS, info.Architecture)
+	if info.OSVersion != "" {
+		osLine = fmt.Sprintf("%s/%s (%s)", info.OS, info.Architecture, info.OSVersion)
+	}
 
 	return fmt.Sprintf(`You are a Unix terminal helper.
 You are mainly called from Unix terminal, and asked about Unix terminal questions.
@@ -67,8 +78,56 @@ Current system context:
 - User: %s
 - Time: %s
 - Working Directory: %s
-- Operating System: %s/%s
-`, info.Hostname, info.Username, info.CurrentTime, info.WorkingDir, info.OS, info.Architecture)
+- Operating System: %s
+`, info.Hostname, info.Username, info.CurrentTime, info.WorkingDir, osLine)
+}
+
+// getOSVersion returns a human-readable OS name and version.
+func getOSVersion() string {
+	switch runtime.GOOS {
+	case "linux":
+		return getLinuxVersion()
+	case "darwin":
+		return getDarwinVersion()
+	default:
+		return ""
+	}
+}
+
+// getLinuxVersion reads PRETTY_NAME from /etc/os-release.
+func getLinuxVersion() string {
+	f, err := os.Open("/etc/os-release")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "PRETTY_NAME=") {
+			value := strings.TrimPrefix(line, "PRETTY_NAME=")
+			return strings.Trim(value, "\"")
+		}
+	}
+	return ""
+}
+
+// getDarwinVersion runs sw_vers to get macOS product name and version.
+func getDarwinVersion() string {
+	out, err := exec.Command("sw_vers", "-productName").Output()
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(string(out))
+
+	out, err = exec.Command("sw_vers", "-productVersion").Output()
+	if err != nil {
+		return name
+	}
+	version := strings.TrimSpace(string(out))
+
+	return name + " " + version
 }
 
 const SystemPromptAsk = `
