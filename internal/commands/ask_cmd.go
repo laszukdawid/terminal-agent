@@ -13,6 +13,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/memory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func NewQuestionCommand(config config.Config) *cobra.Command {
@@ -20,7 +21,12 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	var modelID *string
 	var promptFlag *string
 	var contextFiles []string
-	var useTerminalContext bool
+	var terminalContextCount int
+	var terminalContext1 bool
+	var terminalContext2 bool
+	var terminalContext3 bool
+	var terminalContext4 bool
+	var terminalContext5 bool
 
 	cmd := &cobra.Command{
 		Use:          "ask",
@@ -77,8 +83,13 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 				}
 			}
 
-			if useTerminalContext {
-				terminalContext, err := buildContextFromTerminal(3)
+			terminalContextCount, err := resolveTerminalContextCount(flags)
+			if err != nil {
+				return err
+			}
+
+			if terminalContextCount > 0 {
+				terminalContext, err := buildContextFromTerminal(terminalContextCount)
 				if err != nil {
 					return err
 				}
@@ -145,7 +156,13 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	cmd.Flags().StringArrayVarP(&contextFiles, "context", "c", []string{}, "Include file content as context (can be used multiple times)")
 
 	// 'use-terminal-context' flag to include the latest terminal commands and output
-	cmd.Flags().BoolVar(&useTerminalContext, "use-terminal-context", false, "Include the latest terminal commands and output as context (requires bash-reader plugin)")
+	cmd.Flags().IntVar(&terminalContextCount, "use-terminal-context", 0, "Include latest N terminal commands and output as context (1-5, requires bash-reader plugin)")
+
+	cmd.Flags().BoolVarP(&terminalContext1, "terminal-context-1", "1", false, "Shortcut for --use-terminal-context 1")
+	cmd.Flags().BoolVarP(&terminalContext2, "terminal-context-2", "2", false, "Shortcut for --use-terminal-context 2")
+	cmd.Flags().BoolVarP(&terminalContext3, "terminal-context-3", "3", false, "Shortcut for --use-terminal-context 3")
+	cmd.Flags().BoolVarP(&terminalContext4, "terminal-context-4", "4", false, "Shortcut for --use-terminal-context 4")
+	cmd.Flags().BoolVarP(&terminalContext5, "terminal-context-5", "5", false, "Shortcut for --use-terminal-context 5")
 
 	// Add help subcommand that shows the same help as the parent command
 	helpCmd := &cobra.Command{
@@ -229,4 +246,59 @@ func BuildAskPrompt(basePrompt string, includeMemory bool, memoryPath string) (s
 	}
 
 	return memoryPrompt + "\n\n" + basePrompt, nil
+}
+
+func resolveTerminalContextCount(flags *pflag.FlagSet) (int, error) {
+	if flags == nil {
+		return 0, nil
+	}
+
+	useTerminalContext, err := flags.GetInt("use-terminal-context")
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse --use-terminal-context: %w", err)
+	}
+
+	shortcutCounts := map[string]int{
+		"terminal-context-1": 1,
+		"terminal-context-2": 2,
+		"terminal-context-3": 3,
+		"terminal-context-4": 4,
+		"terminal-context-5": 5,
+	}
+
+	shortcutSelected := 0
+	for name, count := range shortcutCounts {
+		enabled, err := flags.GetBool(name)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse -%d: %w", count, err)
+		}
+
+		if !enabled {
+			continue
+		}
+
+		if shortcutSelected != 0 {
+			return 0, fmt.Errorf("use only one terminal context shortcut flag (-1 to -5)")
+		}
+
+		shortcutSelected = count
+	}
+
+	if flags.Changed("use-terminal-context") {
+		if useTerminalContext < 1 || useTerminalContext > 5 {
+			return 0, fmt.Errorf("--use-terminal-context must be between 1 and 5")
+		}
+
+		if shortcutSelected != 0 {
+			return 0, fmt.Errorf("cannot combine --use-terminal-context with terminal context shortcut flags (-1 to -5)")
+		}
+
+		return useTerminalContext, nil
+	}
+
+	if shortcutSelected != 0 {
+		return shortcutSelected, nil
+	}
+
+	return 0, nil
 }

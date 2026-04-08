@@ -29,7 +29,11 @@ agent ask --stream "What are the benefits of using Go for CLI applications?"
 agent ask --context README.md "Summarize the setup steps"
 
 # Include latest terminal context (requires bash-reader plugin)
-agent ask "why the command failed" --use-terminal-context
+agent ask "why the command failed" --use-terminal-context 3
+
+# Shortcuts for terminal context depth
+agent ask "why did this fail" -1
+agent ask "what happened here" -5
 ```
 
 ## Flags
@@ -44,13 +48,18 @@ agent ask "why the command failed" --use-terminal-context
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
 | `--memory` | `-M` | `false` | Include memory entries in the system prompt |
 | `--context` | `-c` | `[]` | Include file content as context (repeatable) |
-| `--use-terminal-context` |  | `false` | Include recent terminal commands and output as context (requires bash-reader plugin) |
+| `--use-terminal-context` |  | `0` (off) | Include latest N terminal entries as context; N must be 1-5 (requires bash-reader plugin) |
+| `--terminal-context-1` | `-1` | `false` | Shortcut for `--use-terminal-context 1` |
+| `--terminal-context-2` | `-2` | `false` | Shortcut for `--use-terminal-context 2` |
+| `--terminal-context-3` | `-3` | `false` | Shortcut for `--use-terminal-context 3` |
+| `--terminal-context-4` | `-4` | `false` | Shortcut for `--use-terminal-context 4` |
+| `--terminal-context-5` | `-5` | `false` | Shortcut for `--use-terminal-context 5` |
 
 ## Terminal Context
 
-The `--use-terminal-context` flag prepends the latest terminal entries to your question inside a `<context>` block.
+The `--use-terminal-context <N>` flag prepends terminal entries to your question inside a `<context>` block.
 
-By default, it reads the latest 3 entries captured by `bash-reader` from:
+It reads the latest `N` entries (where `N` is `1..5`) captured by `bash-reader` from:
 
 - `$HOME/.local/share/terminal-agent/terminal-context/index.log`
 
@@ -67,6 +76,12 @@ agent plugin install bash-reader
 ```
 
 If the plugin is not installed, `agent ask --use-terminal-context ...` fails with an install hint.
+
+Notes:
+
+- `--use-terminal-context` requires an explicit numeric argument (`1..5`)
+- Use only one shortcut flag at a time (`-1` to `-5`)
+- Do not combine `--use-terminal-context` with `-1..-5` in one command
 
 For storage details and uninstall options, see [Plugin Command](./plugin.md).
 

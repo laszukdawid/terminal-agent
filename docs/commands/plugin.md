@@ -42,6 +42,14 @@ Installs shell integration for terminal context capture.
 agent plugin install bash-reader
 ```
 
+Use with ask command:
+
+```sh
+agent ask "why the command failed" --use-terminal-context 3
+# or shortcuts
+agent ask "why the command failed" -3
+```
+
 What this install does:
 
 - Writes plugin script to `$HOME/.config/terminal-agent/plugins/bash-reader/init.bash`
