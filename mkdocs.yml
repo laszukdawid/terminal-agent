@@ -36,6 +36,7 @@ nav:
       - Ask Command: commands/ask.md
       - Task Command: commands/task.md
       - Tool Command: commands/tool.md
+      - Plugin Command: commands/plugin.md
       - Config Command: commands/config.md
       - History Command: commands/history.md
   - Tools: tools.md

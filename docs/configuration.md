@@ -167,6 +167,25 @@ To enable logging for a specific interaction, use the `--log` flag:
 agent ask --log "What is a file descriptor?"
 ```
 
+## Terminal Context Storage
+
+When `bash-reader` is installed (`agent plugin install bash-reader`), terminal context data is stored in:
+
+```
+$HOME/.local/share/terminal-agent/terminal-context/
+```
+
+Primary files:
+
+- `index.log` — command index used by `agent ask --use-terminal-context`
+- `sessions/` — reserved for session-related context files
+
+To remove plugin data completely:
+
+```sh
+agent plugin uninstall bash-reader --purge-data
+```
+
 ## Using Taskfile for Convenience
 
 Terminal Agent includes a comprehensive Taskfile with predefined tasks:

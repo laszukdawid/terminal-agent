@@ -24,6 +24,12 @@ agent ask --plain "Explain how pipes work in bash"
 
 # Stream the response (see output as it's generated)
 agent ask --stream "What are the benefits of using Go for CLI applications?"
+
+# Include file context
+agent ask --context README.md "Summarize the setup steps"
+
+# Include latest terminal context (requires bash-reader plugin)
+agent ask "why the command failed" --use-terminal-context
 ```
 
 ## Flags
@@ -36,6 +42,33 @@ agent ask --stream "What are the benefits of using Go for CLI applications?"
 | `--log` | `-l` | `false` | Whether to log the input and output to a file |
 | `--stream` | `-s` | `false` | Stream the response to the stdout as it's generated |
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
+| `--memory` | `-M` | `false` | Include memory entries in the system prompt |
+| `--context` | `-c` | `[]` | Include file content as context (repeatable) |
+| `--use-terminal-context` |  | `false` | Include recent terminal commands and output as context (requires bash-reader plugin) |
+
+## Terminal Context
+
+The `--use-terminal-context` flag prepends the latest terminal entries to your question inside a `<context>` block.
+
+By default, it reads the latest 3 entries captured by `bash-reader` from:
+
+- `$HOME/.local/share/terminal-agent/terminal-context/index.log`
+
+Captured fields include:
+
+- Command text
+- Exit code
+- Output when available (safe mode may provide command and exit code only)
+
+This requires the bash-reader plugin:
+
+```sh
+agent plugin install bash-reader
+```
+
+If the plugin is not installed, `agent ask --use-terminal-context ...` fails with an install hint.
+
+For storage details and uninstall options, see [Plugin Command](./plugin.md).
 
 ## Streaming Output
 

@@ -102,6 +102,7 @@ func mainRun() exitCode {
 	cmd.AddCommand(commands.NewToolCommand(c))
 	cmd.AddCommand(commands.NewTaskCommand(c))
 	cmd.AddCommand(commands.NewMemoryCommand())
+	cmd.AddCommand(commands.NewPluginCommand())
 
 	ctx := context.Background()
 

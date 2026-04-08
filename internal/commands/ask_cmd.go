@@ -20,6 +20,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 	var modelID *string
 	var promptFlag *string
 	var contextFiles []string
+	var useTerminalContext bool
 
 	cmd := &cobra.Command{
 		Use:          "ask",
@@ -63,13 +64,29 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")
 
+			var contextParts []string
+
 			// Prepend context from files if provided
 			if len(contextFiles) > 0 {
 				contextContent, err := buildContextFromFiles(contextFiles)
 				if err != nil {
 					return fmt.Errorf("failed to read context files: %w", err)
 				}
-				userQuestion = contextContent + "\n\n" + userQuestion
+				if contextContent != "" {
+					contextParts = append(contextParts, contextContent)
+				}
+			}
+
+			if useTerminalContext {
+				terminalContext, err := buildContextFromTerminal(3)
+				if err != nil {
+					return err
+				}
+				contextParts = append(contextParts, terminalContext)
+			}
+
+			if len(contextParts) > 0 {
+				userQuestion = strings.Join(contextParts, "\n\n") + "\n\n" + userQuestion
 			}
 
 			response, err := agent.Question(ctx, userQuestion, streamFlag)
@@ -126,6 +143,9 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 	// 'context' flag to include file contents as context (can be used multiple times)
 	cmd.Flags().StringArrayVarP(&contextFiles, "context", "c", []string{}, "Include file content as context (can be used multiple times)")
+
+	// 'use-terminal-context' flag to include the latest terminal commands and output
+	cmd.Flags().BoolVar(&useTerminalContext, "use-terminal-context", false, "Include the latest terminal commands and output as context (requires bash-reader plugin)")
 
 	// Add help subcommand that shows the same help as the parent command
 	helpCmd := &cobra.Command{

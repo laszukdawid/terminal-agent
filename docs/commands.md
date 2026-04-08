@@ -9,6 +9,7 @@ Terminal Agent provides several commands to help you interact with the terminal 
 | `ask` | Query the LLM with a question to get information |
 | `task` | Execute a task using LLM-generated commands |
 | `tool` | Manage and execute specific tools |
+| `plugin` | Install and manage plugins |
 | `config` | Configure Terminal Agent settings |
 | `history` | Query your interaction history |
 
@@ -32,5 +33,6 @@ For detailed information about each command, see:
 - [Ask Command](./commands/ask.md)
 - [Task Command](./commands/task.md)
 - [Tool Command](./commands/tool.md)
+- [Plugin Command](./commands/plugin.md)
 - [Config Command](./commands/config.md)
 - [History Command](./commands/history.md)
