@@ -92,7 +92,19 @@ func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParam
 		return "", nil
 	}
 
-	return message.Content[0].AsResponseTextBlock().Text, nil
+	return extractTextFromContentBlocks(message.Content), nil
+}
+
+func extractTextFromContentBlocks(blocks []anthropic.ContentBlockUnion) string {
+	outText := ""
+	for _, block := range blocks {
+		switch variant := block.AsAny().(type) {
+		case anthropic.TextBlock:
+			outText += variant.Text
+		}
+	}
+
+	return outText
 }
 
 // convertToolsToAnthropic converts internal tool representations to Anthropic's tool format
@@ -140,13 +152,8 @@ func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (
 		System: []anthropic.TextBlockParam{
 			{Text: *qParams.SysPrompt},
 		},
-		Messages: []anthropic.MessageParam{{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{{
-				OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
-			}},
-		}},
-		Model: ac.modelID,
+		Messages: []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(*qParams.UserPrompt))},
+		Model:    ac.modelID,
 	}
 
 	// If stream, then we use the streaming API and leave this function
@@ -161,8 +168,10 @@ func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (
 
 	var outText string
 	for _, block := range message.Content {
-		txtBlock := block.AsResponseTextBlock()
-		outText += txtBlock.Text
+		switch variant := block.AsAny().(type) {
+		case anthropic.TextBlock:
+			outText += variant.Text
+		}
 	}
 
 	return outText, nil
@@ -185,13 +194,8 @@ func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryP
 		Model:     ac.modelID,
 		System:    []anthropic.TextBlockParam{{Text: *qParams.SysPrompt}},
 		MaxTokens: int64(qParams.MaxTokens),
-		Messages: []anthropic.MessageParam{{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{{
-				OfRequestTextBlock: &anthropic.TextBlockParam{Text: *qParams.UserPrompt},
-			}},
-		}},
-		Tools: tools,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(*qParams.UserPrompt))},
+		Tools:     tools,
 	})
 
 	if err != nil {
@@ -202,7 +206,7 @@ func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryP
 	for _, block := range message.Content {
 		switch variant := block.AsAny().(type) {
 		case anthropic.TextBlock:
-			response.Response += block.Text + "\n"
+			response.Response += variant.Text + "\n"
 
 		case anthropic.ToolUseBlock:
 			var input map[string]any
