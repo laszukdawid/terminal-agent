@@ -15,6 +15,9 @@ import (
 
 var (
 	loglevel string
+	version  = "dev"
+	commit   = "none"
+	date     = "unknown"
 )
 
 type exitCode int
@@ -27,17 +30,28 @@ const (
 // printVersion prints the version of the CLI
 // The version is based on the golang module version which is based on git tag
 func printVersion() {
+	fmt.Printf("Version: %s\n", resolveVersion())
+}
+
+func resolveVersion() string {
 	buildInfo, ok := debug.ReadBuildInfo()
-	if !ok {
-		fmt.Println("Unable to determine version information.")
-		return
+	if ok {
+		return selectVersion(version, buildInfo.Main.Version)
 	}
 
-	if buildInfo.Main.Version != "" {
-		fmt.Printf("Version: %s\n", buildInfo.Main.Version)
-	} else {
-		fmt.Println("Version: unknown")
+	return selectVersion(version, "")
+}
+
+func selectVersion(linkerVersion, buildInfoVersion string) string {
+	if linkerVersion != "" && linkerVersion != "dev" && linkerVersion != "(devel)" {
+		return linkerVersion
 	}
+
+	if buildInfoVersion != "" && buildInfoVersion != "(devel)" {
+		return buildInfoVersion
+	}
+
+	return "unknown"
 }
 
 // NewCommand creates a new cobra command
