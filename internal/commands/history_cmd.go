@@ -1,21 +1,14 @@
 package commands
 
 import (
-	"os"
-	"path/filepath"
-
+	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/history"
 	"github.com/spf13/cobra"
 )
 
-var (
-	logDir  = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
-	logFile = "query_log.jsonl"
-)
-
 func getLogPath() string {
-	return filepath.Join(logDir, logFile)
+	return app.LogPath()
 }
 
 func NewHistoryCommand(config config.Config) *cobra.Command {

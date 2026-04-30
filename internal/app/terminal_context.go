@@ -1,4 +1,4 @@
-package commands
+package app
 
 import (
 	"bufio"
@@ -10,7 +10,10 @@ import (
 	"strings"
 )
 
-const terminalContextOutputLimit = 4000
+const (
+	terminalContextOutputLimit = 4000
+	BashReaderInstallHint      = "agent plugin install bash-reader"
+)
 
 type terminalContextEntry struct {
 	Timestamp  int64
@@ -20,21 +23,21 @@ type terminalContextEntry struct {
 	Output     string
 }
 
-func buildContextFromTerminal(maxEntries int) (string, error) {
+func BuildContextFromTerminal(maxEntries int) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to determine user home directory: %w", err)
 	}
 
-	scriptPath := getBashReaderScriptPath(homeDir)
+	scriptPath := BashReaderScriptPath(homeDir)
 	if _, err := os.Stat(scriptPath); err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("--use-terminal-context requires the bash-reader plugin. Install it with: %s", bashReaderInstallHint)
+			return "", fmt.Errorf("--use-terminal-context requires the bash-reader plugin. Install it with: %s", BashReaderInstallHint)
 		}
 		return "", fmt.Errorf("failed to check bash-reader plugin installation: %w", err)
 	}
 
-	indexPath := filepath.Join(getTerminalContextDir(homeDir), "index.log")
+	indexPath := filepath.Join(TerminalContextDir(homeDir), "index.log")
 	entries, err := readLastTerminalContextEntries(indexPath, maxEntries)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -68,6 +71,18 @@ func buildContextFromTerminal(maxEntries int) (string, error) {
 
 	builder.WriteString("</context>")
 	return builder.String(), nil
+}
+
+func BashReaderScriptPath(homeDir string) string {
+	return filepath.Join(homeDir, ".config", "terminal-agent", "plugins", "bash-reader", "init.bash")
+}
+
+func BashRCPath(homeDir string) string {
+	return filepath.Join(homeDir, ".bashrc")
+}
+
+func TerminalContextDir(homeDir string) string {
+	return filepath.Join(homeDir, ".local", "share", "terminal-agent", "terminal-context")
 }
 
 func readLastTerminalContextEntries(indexPath string, maxEntries int) ([]terminalContextEntry, error) {

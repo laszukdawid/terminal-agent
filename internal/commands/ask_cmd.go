@@ -7,11 +7,10 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"github.com/laszukdawid/terminal-agent/internal/agent"
+	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/history"
-	"github.com/laszukdawid/terminal-agent/internal/memory"
-	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -39,72 +38,40 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
+			service := app.NewService()
 
 			// Check if this is streaming response
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
 			memoryFlag, _ := flags.GetBool("memory")
 
-			// Resolve system prompts
-			workingDir := config.GetWorkingDir()
-			askPrompt, err := agent.ResolvePrompt(*promptFlag, "ask", workingDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve ask prompt: %w", err)
-			}
-			taskPrompt, err := agent.ResolvePrompt("", "task", workingDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve task prompt: %w", err)
-			}
-
-			// Include memory in prompt if enabled via config or flag
-			includeMemory := config.GetMemory() || memoryFlag
-			askPrompt, err = BuildAskPrompt(askPrompt, includeMemory, getMemoryPath())
-			if err != nil {
-				return err
-			}
-
-			connector := connector.NewConnector(*provider, *modelID)
-			toolProvider := tools.NewToolProvider(config)
-			agent := agent.NewAgent(*connector, toolProvider, config, askPrompt, taskPrompt)
-
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")
-
-			var contextParts []string
-
-			// Prepend context from files if provided
-			if len(contextFiles) > 0 {
-				contextContent, err := buildContextFromFiles(contextFiles)
-				if err != nil {
-					return fmt.Errorf("failed to read context files: %w", err)
-				}
-				if contextContent != "" {
-					contextParts = append(contextParts, contextContent)
-				}
-			}
 
 			terminalContextCount, err := resolveTerminalContextCount(flags)
 			if err != nil {
 				return err
 			}
 
-			if terminalContextCount > 0 {
-				terminalContext, err := buildContextFromTerminal(terminalContextCount)
-				if err != nil {
-					return err
-				}
-				contextParts = append(contextParts, terminalContext)
-			}
-
-			if len(contextParts) > 0 {
-				userQuestion = strings.Join(contextParts, "\n\n") + "\n\n" + userQuestion
-			}
-
-			response, err := agent.Question(ctx, userQuestion, streamFlag)
+			result, err := service.Ask(ctx, app.AskRequest{
+				Message:              userQuestion,
+				Provider:             *provider,
+				Model:                *modelID,
+				PromptOverride:       *promptFlag,
+				UseMemory:            config.GetMemory() || memoryFlag,
+				MemoryPath:           getMemoryPath(),
+				WorkingDir:           config.GetWorkingDir(),
+				ContextFiles:         contextFiles,
+				TerminalContextCount: terminalContextCount,
+				Stream:               streamFlag,
+				Config:               config,
+			})
 			if err != nil {
 				handleError(err)
 				return nil
 			}
+
+			response := result.Response
 
 			// Print only if not streaming, and explicitly asked for printing
 			if !streamFlag {
@@ -118,7 +85,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
 				hClient := history.NewHistory(getLogPath())
-				hClient.Log("ask", userQuestion, response)
+				hClient.Log("ask", result.Question, response)
 			}
 
 			return nil
@@ -218,34 +185,12 @@ func handleError(err error) {
 
 // buildContextFromFiles reads multiple files and wraps their contents in <context> tags
 func buildContextFromFiles(files []string) (string, error) {
-	var contextParts []string
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			return "", fmt.Errorf("failed to read file %s: %w", file, err)
-		}
-		contextParts = append(contextParts, fmt.Sprintf("<context>\n%s\n</context>", strings.TrimSpace(string(content))))
-	}
-	return strings.Join(contextParts, "\n\n"), nil
+	return app.BuildContextFromFiles(files)
 }
 
 // BuildAskPrompt builds the system prompt for the ask command, optionally including memory
 func BuildAskPrompt(basePrompt string, includeMemory bool, memoryPath string) (string, error) {
-	if !includeMemory {
-		return basePrompt, nil
-	}
-
-	mClient := memory.NewMemory(memoryPath)
-	memoryPrompt, err := mClient.FormatAsPrompt()
-	if err != nil {
-		return "", fmt.Errorf("failed to format memory: %w", err)
-	}
-
-	if memoryPrompt == "" {
-		return basePrompt, nil
-	}
-
-	return memoryPrompt + "\n\n" + basePrompt, nil
+	return app.BuildAskPrompt(basePrompt, includeMemory, memoryPath)
 }
 
 func resolveTerminalContextCount(flags *pflag.FlagSet) (int, error) {

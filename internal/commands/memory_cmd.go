@@ -2,21 +2,15 @@ package commands
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/memory"
 	"github.com/spf13/cobra"
 )
 
-var (
-	memoryDir  = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
-	memoryFile = "memory.jsonl"
-)
-
 func getMemoryPath() string {
-	return filepath.Join(memoryDir, memoryFile)
+	return app.MemoryPath()
 }
 
 func NewMemoryCommand() *cobra.Command {

@@ -100,6 +100,7 @@ func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice 
 //
 // Returns:
 //   - []types.Tool: A slice of Bedrock-compatible tool specifications
+//
 // buildMessages constructs the messages slice from history + current user prompt
 func (bc *BedrockConnector) buildMessages(qParams *QueryParams) []types.Message {
 	var messages []types.Message

@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/laszukdawid/terminal-agent/internal/agent"
+	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
-	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/history"
-	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -27,34 +25,30 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
-
-			// Resolve system prompts
-			workingDir := config.GetWorkingDir()
-			askPrompt, err := agent.ResolvePrompt("", "ask", workingDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve ask prompt: %w", err)
-			}
-			taskPrompt, err := agent.ResolvePrompt(*promptFlag, "task", workingDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve task prompt: %w", err)
-			}
-
-			connector := *connector.NewConnector(*provider, *modelID)
-			toolProvider := tools.NewToolProvider(config)
-			agentClient := agent.NewAgent(connector, toolProvider, config, askPrompt, taskPrompt)
+			service := app.NewService()
 
 			// Concatenate all remaining args to form the query
 			userRequest := strings.Join(args, " ")
 
-			options := agent.TaskOptions{}
+			allow := []string{}
 			if allowList != nil {
-				options.Allow = *allowList
+				allow = *allowList
 			}
 
-			response, err := agentClient.TaskWithOptions(ctx, userRequest, options)
+			result, err := service.Task(ctx, app.TaskRequest{
+				Message:        userRequest,
+				Provider:       *provider,
+				Model:          *modelID,
+				PromptOverride: *promptFlag,
+				WorkingDir:     config.GetWorkingDir(),
+				Allow:          allow,
+				Config:         config,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to request a task: %w", err)
 			}
+
+			response := result.Response
 
 			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
 				if plain, _ := flags.GetBool("plain"); !plain {
@@ -65,7 +59,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
 				hClient := history.NewHistory(getLogPath())
-				hClient.Log("task", userRequest, response)
+				hClient.Log("task", result.Request, response)
 			}
 
 			return nil

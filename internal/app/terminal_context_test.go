@@ -1,4 +1,4 @@
-package commands
+package app
 
 import (
 	"encoding/base64"
@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,9 +18,9 @@ func TestBuildContextFromTerminalRequiresPlugin(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("HOME", tempDir)
 
-	_, err := app.BuildContextFromTerminal(3)
+	_, err := BuildContextFromTerminal(3)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), app.BashReaderInstallHint)
+	assert.Contains(t, err.Error(), BashReaderInstallHint)
 }
 
 func TestBuildContextFromTerminalReturnsLatestThreeEntries(t *testing.T) {
@@ -31,10 +30,10 @@ func TestBuildContextFromTerminalReturnsLatestThreeEntries(t *testing.T) {
 	tempDir := t.TempDir()
 	os.Setenv("HOME", tempDir)
 
-	require.NoError(t, os.MkdirAll(filepath.Dir(app.BashReaderScriptPath(tempDir)), 0755))
-	require.NoError(t, os.WriteFile(app.BashReaderScriptPath(tempDir), []byte("hook"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Dir(BashReaderScriptPath(tempDir)), 0755))
+	require.NoError(t, os.WriteFile(BashReaderScriptPath(tempDir), []byte("hook"), 0644))
 
-	contextDir := app.TerminalContextDir(tempDir)
+	contextDir := TerminalContextDir(tempDir)
 	require.NoError(t, os.MkdirAll(filepath.Join(contextDir, "sessions"), 0755))
 	indexPath := filepath.Join(contextDir, "index.log")
 
@@ -56,7 +55,7 @@ func TestBuildContextFromTerminalReturnsLatestThreeEntries(t *testing.T) {
 	indexContent := fmt.Sprintf("%s\n%s\n%s\n%s\n", line1, line2, line3, line4)
 	require.NoError(t, os.WriteFile(indexPath, []byte(indexContent), 0644))
 
-	context, err := app.BuildContextFromTerminal(3)
+	context, err := BuildContextFromTerminal(3)
 	require.NoError(t, err)
 
 	assert.Contains(t, context, "<context>")

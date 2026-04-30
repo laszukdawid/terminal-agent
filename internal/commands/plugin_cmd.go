@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,7 @@ const (
 	bashReaderBlockStart  = "# BEGIN terminal-agent bash-reader"
 	bashReaderBlockEnd    = "# END terminal-agent bash-reader"
 	bashReaderSourceLine  = "source \"$HOME/.config/terminal-agent/plugins/bash-reader/init.bash\""
-	bashReaderInstallHint = "agent plugin install bash-reader"
+	bashReaderInstallHint = app.BashReaderInstallHint
 )
 
 func NewPluginCommand() *cobra.Command {
@@ -320,15 +321,15 @@ func insertAfterLastTerminalAgentBlock(content, block string) string {
 }
 
 func getBashReaderScriptPath(homeDir string) string {
-	return filepath.Join(homeDir, ".config", "terminal-agent", "plugins", bashReaderPluginName, "init.bash")
+	return app.BashReaderScriptPath(homeDir)
 }
 
 func getBashRCPath(homeDir string) string {
-	return filepath.Join(homeDir, ".bashrc")
+	return app.BashRCPath(homeDir)
 }
 
 func getTerminalContextDir(homeDir string) string {
-	return filepath.Join(homeDir, ".local", "share", "terminal-agent", "terminal-context")
+	return app.TerminalContextDir(homeDir)
 }
 
 const bashReaderInitScript = `# terminal-agent bash-reader plugin

@@ -1,16 +1,13 @@
 package commands
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/laszukdawid/terminal-agent/internal/agent"
-	"github.com/laszukdawid/terminal-agent/internal/chat"
+	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
-	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -42,98 +39,35 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
+			service := app.NewService()
 
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
 			memoryFlag, _ := flags.GetBool("memory")
 
-			// Resolve system prompts
-			workingDir := config.GetWorkingDir()
-			askPrompt, err := agent.ResolvePrompt(*promptFlag, "ask", workingDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve ask prompt: %w", err)
-			}
-			taskPrompt, err := agent.ResolvePrompt("", "task", workingDir)
-			if err != nil {
-				return fmt.Errorf("failed to resolve task prompt: %w", err)
-			}
-
-			// Include memory in prompt if enabled via config or flag
-			includeMemory := config.GetMemory() || memoryFlag
-			askPrompt, err = BuildAskPrompt(askPrompt, includeMemory, getMemoryPath())
-			if err != nil {
-				return err
-			}
-
-			// Initialize session store
-			sessionStore, err := chat.NewSessionStore(getChatDBPath())
-			if err != nil {
-				return fmt.Errorf("failed to initialize chat session: %w", err)
-			}
-			defer sessionStore.Close()
-
-			// Create new session if requested
-			if newSession {
-				_, err = sessionStore.NewSession()
-				if err != nil {
-					return fmt.Errorf("failed to create new session: %w", err)
-				}
-			}
-
-			// Get or create session
-			_, err = sessionStore.GetOrCreateSession()
-			if err != nil {
-				return fmt.Errorf("failed to get session: %w", err)
-			}
-
-			// Load conversation history
-			chatHistory, err := sessionStore.GetMessages()
-			if err != nil {
-				return fmt.Errorf("failed to load chat history: %w", err)
-			}
-
-			// Convert chat.Message to connector.Message
-			var connectorMessages []connector.Message
-			for _, msg := range chatHistory {
-				connectorMessages = append(connectorMessages, connector.Message{
-					Role:    msg.Role,
-					Content: msg.Content,
-				})
-			}
-
-			// Create connector and agent
-			conn := connector.NewConnector(*provider, *modelID)
-			toolProvider := tools.NewToolProvider(config)
-			agentInstance := agent.NewAgent(*conn, toolProvider, config, askPrompt, taskPrompt)
-
 			// Concatenate all remaining args to form the message
 			userMessage := strings.Join(args, " ")
 
-			// Prepend context from files if provided
-			if len(contextFiles) > 0 {
-				contextContent, err := buildContextFromFiles(contextFiles)
-				if err != nil {
-					return fmt.Errorf("failed to read context files: %w", err)
-				}
-				userMessage = contextContent + "\n\n" + userMessage
-			}
-
-			// Save user message to session
-			if err := sessionStore.AddMessage("user", userMessage); err != nil {
-				return fmt.Errorf("failed to save user message: %w", err)
-			}
-
-			// Send message with history
-			response, err := agentInstance.Chat(ctx, userMessage, connectorMessages, streamFlag)
+			result, err := service.Chat(ctx, app.ChatRequest{
+				Message:        userMessage,
+				Provider:       *provider,
+				Model:          *modelID,
+				PromptOverride: *promptFlag,
+				UseMemory:      config.GetMemory() || memoryFlag,
+				MemoryPath:     getMemoryPath(),
+				WorkingDir:     config.GetWorkingDir(),
+				ContextFiles:   contextFiles,
+				Stream:         streamFlag,
+				NewSession:     newSession,
+				ChatDBPath:     getChatDBPath(),
+				Config:         config,
+			})
 			if err != nil {
 				handleError(err)
 				return nil
 			}
 
-			// Save assistant response to session
-			if err := sessionStore.AddMessage("assistant", response); err != nil {
-				return fmt.Errorf("failed to save assistant response: %w", err)
-			}
+			response := result.Response
 
 			// Print only if not streaming, and explicitly asked for printing
 			if !streamFlag {
