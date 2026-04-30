@@ -88,6 +88,7 @@ type QueryParams struct {
 	Messages   []Message
 	Stream     bool
 	MaxTokens  int
+	OnStream   func(string) error
 }
 
 type LlmResponseWithTools struct {

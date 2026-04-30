@@ -46,12 +46,18 @@ func NewAnthropicConnector(modelID *string) *AnthropicConnector {
 }
 
 func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParams anthropic.MessageNewParams) (string, error) {
-	// Create markdown renderer for streaming
-	mdRenderer, err := NewMarkdownStreamRenderer()
-	if err != nil {
-		// Fallback to simple streaming if renderer fails
-		ac.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
-		mdRenderer = nil
+	return ac.queryAnthropicStreamWithCallback(ctx, msgParams, nil)
+}
+
+func (ac *AnthropicConnector) queryAnthropicStreamWithCallback(ctx context.Context, msgParams anthropic.MessageNewParams, onStream func(string) error) (string, error) {
+	var mdRenderer *MarkdownStreamRenderer
+	if onStream == nil {
+		renderer, err := NewMarkdownStreamRenderer()
+		if err != nil {
+			ac.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		} else {
+			mdRenderer = renderer
+		}
 	}
 
 	// Stream the response
@@ -68,7 +74,11 @@ func (ac *AnthropicConnector) queryAnthropicStream(ctx context.Context, msgParam
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
 			case anthropic.TextDelta:
-				if mdRenderer != nil {
+				if onStream != nil {
+					if err := onStream(deltaVariant.Text); err != nil {
+						return "", err
+					}
+				} else if mdRenderer != nil {
 					mdRenderer.ProcessChunk(deltaVariant.Text)
 				} else {
 					fmt.Print(deltaVariant.Text)
@@ -147,18 +157,31 @@ func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam 
 func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	ac.logger.Sugar().Debugw("Query", "model", ac.modelID)
 
+	messages := make([]anthropic.MessageParam, 0, len(qParams.Messages)+1)
+	for _, msg := range qParams.Messages {
+		switch msg.Role {
+		case "assistant":
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
+		default:
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
+		}
+	}
+	if qParams.UserPrompt != nil {
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(*qParams.UserPrompt)))
+	}
+
 	msgParams := anthropic.MessageNewParams{
 		MaxTokens: int64(qParams.MaxTokens),
 		System: []anthropic.TextBlockParam{
 			{Text: *qParams.SysPrompt},
 		},
-		Messages: []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(*qParams.UserPrompt))},
+		Messages: messages,
 		Model:    ac.modelID,
 	}
 
 	// If stream, then we use the streaming API and leave this function
 	if qParams.Stream {
-		return ac.queryAnthropicStream(ctx, msgParams)
+		return ac.queryAnthropicStreamWithCallback(ctx, msgParams, qParams.OnStream)
 	}
 
 	message, err := ac.client.Messages.New(ctx, msgParams)

@@ -122,13 +122,16 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 	return connector
 }
 
-func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCompletionNewParams) (*string, error) {
-	// Create markdown renderer for streaming
-	mdRenderer, err := NewMarkdownStreamRenderer()
-	if err != nil {
-		// Fallback to simple streaming if renderer fails
-		oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
-		mdRenderer = nil
+func (oc *OpenAIConnector) streamQuery(ctx context.Context, qParams *QueryParams, params openai.ChatCompletionNewParams) (*string, error) {
+	var mdRenderer *MarkdownStreamRenderer
+	if qParams.OnStream == nil {
+		// Preserve CLI streaming behavior when no caller-specific stream sink is provided.
+		renderer, err := NewMarkdownStreamRenderer()
+		if err != nil {
+			oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		} else {
+			mdRenderer = renderer
+		}
 	}
 
 	stream := oc.client.Chat.Completions.NewStreaming(ctx, params)
@@ -139,18 +142,17 @@ func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCo
 		chunk := stream.Current()
 		acc.AddChunk(chunk)
 
-		// if using tool calls
-		if tool, ok := acc.JustFinishedToolCall(); ok {
-			println("Tool call stream finished:", tool.Index, tool.Name, tool.Arguments)
-		}
-
-		if refusal, ok := acc.JustFinishedRefusal(); ok {
-			println("Refusal stream finished:", refusal)
-		}
+		// Trigger accumulator state transitions without leaking stdout in event-driven callers.
+		_, _ = acc.JustFinishedToolCall()
+		_, _ = acc.JustFinishedRefusal()
 
 		// it's best to use chunks after handling JustFinished events
 		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-			if mdRenderer != nil {
+			if qParams.OnStream != nil {
+				if err := qParams.OnStream(chunk.Choices[0].Delta.Content); err != nil {
+					return nil, err
+				}
+			} else if mdRenderer != nil {
 				mdRenderer.ProcessChunk(chunk.Choices[0].Delta.Content)
 			} else {
 				print(chunk.Choices[0].Delta.Content)
@@ -176,17 +178,26 @@ func (oc *OpenAIConnector) streamQuery(ctx context.Context, params openai.ChatCo
 }
 
 func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+	messages := []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(*qParams.SysPrompt)}
+	for _, msg := range qParams.Messages {
+		switch msg.Role {
+		case "assistant":
+			messages = append(messages, openai.AssistantMessage(msg.Content))
+		default:
+			messages = append(messages, openai.UserMessage(msg.Content))
+		}
+	}
+	if qParams.UserPrompt != nil {
+		messages = append(messages, openai.UserMessage(*qParams.UserPrompt))
+	}
 
 	oParams := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(*qParams.SysPrompt),
-			openai.UserMessage(*qParams.UserPrompt),
-		},
+		Messages: messages,
 		Model: oc.modelID,
 	}
 
 	if qParams.Stream {
-		s, err := oc.streamQuery(ctx, oParams)
+		s, err := oc.streamQuery(ctx, qParams, oParams)
 		if err != nil {
 			return "", err
 		}

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/connector"
 )
 
 type AskRequest struct {
@@ -28,6 +30,78 @@ type AskResult struct {
 }
 
 func (s *service) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
+	events, err := s.AskEvents(ctx, req)
+	if err != nil {
+		return AskResult{}, err
+	}
+
+	result := AskResult{}
+	for event := range events {
+		switch event.Type {
+		case EventOutputDelta:
+			result.Response += event.Text
+		case EventCompleted:
+			result.Question = event.Status
+			result.Response = event.FinalOutput
+		case EventFailed:
+			return AskResult{}, event.Err
+		}
+	}
+
+	return result, nil
+}
+
+func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, error) {
+	runtime, prompts, userQuestion, err := prepareAsk(req)
+	if err != nil {
+		return nil, err
+	}
+
+	agentInstance := runtime.NewAgent(prompts)
+	events := make(chan Event)
+
+	go func() {
+		defer close(events)
+
+		_ = emitEvent(events, newEvent(RunKindAsk, EventStarted))
+
+		qParams := connector.QueryParams{
+			UserPrompt: &userQuestion,
+			SysPrompt:  &prompts.Ask,
+			Stream:     req.Stream,
+			MaxTokens:  internalagent.MaxTokens,
+		}
+
+		if req.Stream {
+			qParams.OnStream = func(chunk string) error {
+				event := newEvent(RunKindAsk, EventOutputDelta)
+				event.Text = chunk
+				return emitEvent(events, event)
+			}
+		}
+
+		response, err := agentInstance.Connector.Query(ctx, &qParams)
+		if err != nil {
+			failed := newEvent(RunKindAsk, EventFailed)
+			failed.Err = err
+			_ = emitEvent(events, failed)
+			return
+		}
+
+		completed := newEvent(RunKindAsk, EventCompleted)
+		completed.Status = userQuestion
+		completed.FinalOutput = response
+		_ = emitEvent(events, completed)
+	}()
+
+	return events, nil
+}
+
+func prepareAsk(req AskRequest) (*Runtime, PromptSet, string, error) {
+	if strings.TrimSpace(req.Message) == "" {
+		return nil, PromptSet{}, "", internalagent.ErrEmptyQuery
+	}
+
 	runtime, err := NewRuntime(RuntimeRequest{
 		Provider:   req.Provider,
 		Model:      req.Model,
@@ -35,7 +109,7 @@ func (s *service) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
 		Config:     req.Config,
 	})
 	if err != nil {
-		return AskResult{}, err
+		return nil, PromptSet{}, "", err
 	}
 
 	prompts, err := runtime.ResolvePrompts(PromptOptions{
@@ -44,7 +118,7 @@ func (s *service) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
 		MemoryPath:  req.MemoryPath,
 	})
 	if err != nil {
-		return AskResult{}, err
+		return nil, PromptSet{}, "", err
 	}
 
 	userQuestion := req.Message
@@ -53,7 +127,7 @@ func (s *service) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
 	if len(req.ContextFiles) > 0 {
 		contextContent, err := BuildContextFromFiles(req.ContextFiles)
 		if err != nil {
-			return AskResult{}, fmt.Errorf("failed to read context files: %w", err)
+			return nil, PromptSet{}, "", fmt.Errorf("failed to read context files: %w", err)
 		}
 		if contextContent != "" {
 			contextParts = append(contextParts, contextContent)
@@ -63,7 +137,7 @@ func (s *service) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
 	if req.TerminalContextCount > 0 {
 		terminalContext, err := BuildContextFromTerminal(req.TerminalContextCount)
 		if err != nil {
-			return AskResult{}, err
+			return nil, PromptSet{}, "", err
 		}
 		contextParts = append(contextParts, terminalContext)
 	}
@@ -72,12 +146,5 @@ func (s *service) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
 		userQuestion = strings.Join(contextParts, "\n\n") + "\n\n" + userQuestion
 	}
 
-	agentInstance := runtime.NewAgent(prompts)
-
-	response, err := agentInstance.Question(ctx, userQuestion, req.Stream)
-	if err != nil {
-		return AskResult{}, err
-	}
-
-	return AskResult{Question: userQuestion, Response: response}, nil
+	return runtime, prompts, userQuestion, nil
 }
