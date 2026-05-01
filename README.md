@@ -57,6 +57,9 @@ To do so, make sure you have golang installed for compilation and we recommend u
 If you only want to compile the repo then execute `task build`.
 In case you want to both build and set it in your path then execute `task install` which will put binary into `~/.local/bin/agent`.
 
+If you want to test the popup GUI on Linux, install the desktop build dependencies first with `task deps:gui:ubuntu` or `task deps:gui:fedora`, then run it with `task run:gui`.
+These tasks currently use distro-specific package names for the Fyne desktop stack.
+
 For majority of cases, do check out the `Taskfile.dist.yaml` as it has most relevant tasks / receipies.
 
 ## Usage
