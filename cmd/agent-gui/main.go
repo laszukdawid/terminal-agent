@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,9 +22,11 @@ import (
 )
 
 const guiAppID = "terminal-agent-gui"
+const fyneAppID = "com.terminal-agent.popup"
 
 func main() {
 	show := flag.Bool("show", false, "show an existing popup or start a visible primary instance")
+	newInstance := flag.Bool("new", false, "start a new isolated GUI instance")
 	flag.Parse()
 
 	loglevel := zap.InfoLevel.String()
@@ -40,8 +43,21 @@ func main() {
 	}
 
 	service := app.NewService()
-	instance, err := platform.Acquire(guiAppID)
+	runtimeAppID := guiAppID
+	windowAppID := fyneAppID
+	if *newInstance {
+		suffix := strconv.Itoa(os.Getpid())
+		runtimeAppID = guiAppID + "-" + suffix
+		windowAppID = fyneAppID + "." + suffix
+	}
+
+	instance, err := platform.Acquire(runtimeAppID)
 	if err != nil {
+		if *newInstance {
+			logger.Error("failed to acquire GUI instance lock for new instance", zap.Error(err))
+			fmt.Println("Failed to start new GUI instance")
+			os.Exit(1)
+		}
 		if errors.Is(err, platform.ErrAlreadyRunning) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -65,7 +81,7 @@ func main() {
 	}
 	defer os.Remove(instance.SocketPath)
 
-	guiApp := gui.NewApp(service, cfg)
+	guiApp := gui.NewApp(service, cfg, windowAppID)
 	server, err := platform.Listen(instance.SocketPath, func(command string) error {
 		switch command {
 		case platform.CommandShow:

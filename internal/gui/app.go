@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -22,8 +23,8 @@ type App struct {
 	stopThinking chan struct{}
 }
 
-func NewApp(service appservice.Service, cfg config.Config) *App {
-	fyneApp := app.NewWithID("com.terminal-agent.popup")
+func NewApp(service appservice.Service, cfg config.Config, appID string) *App {
+	fyneApp := app.NewWithID(appID)
 	gui := &App{
 		fyneApp: fyneApp,
 		service: service,
@@ -117,8 +118,15 @@ func (g *App) FocusInput() {
 
 func (g *App) wire() {
 	g.popup.onSubmit = g.submit
-	g.popup.onCancel = g.cancel
+	g.popup.onAction = func() {
+		if g.state.isRunning {
+			g.cancel()
+			return
+		}
+		g.submit()
+	}
 	g.popup.onCopy = g.copyOutput
+	g.popup.onSettings = g.openSettings
 	g.popup.onEscape = func() {
 		g.Hide()
 	}
@@ -164,16 +172,24 @@ func (g *App) render() {
 	g.popup.outputScroll.SetMinSize(fyne.NewSize(0, g.popup.outputHeight()))
 	g.popup.modelLabel.Text = g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId()
 	g.popup.modelLabel.Refresh()
-	g.popup.answerHeading.Show()
+	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
+	showMeta := g.state.showRequest || showAnswer
+	if showMeta {
+		g.popup.answerMeta.Show()
+	} else {
+		g.popup.answerMeta.Hide()
+	}
+	if showAnswer {
+		g.popup.answerHeader.Show()
+	} else {
+		g.popup.answerHeader.Hide()
+	}
 	if g.state.showRequest {
 		g.popup.requestHeading.Show()
-		g.popup.answerPanel.Objects[1].Show()
+		g.popup.questionCard.Show()
 	} else {
 		g.popup.requestHeading.Hide()
-		g.popup.answerPanel.Objects[1].Hide()
-	}
-	if g.state.question == "" && g.state.output == "" && !g.state.isRunning && g.state.errorText == "" {
-		g.popup.answerHeading.Hide()
+		g.popup.questionCard.Hide()
 	}
 
 	status := g.state.status
@@ -183,11 +199,11 @@ func (g *App) render() {
 	g.popup.statusLabel.SetText(status)
 
 	if g.state.isRunning {
-		g.popup.submitButton.Disable()
-		g.popup.cancelButton.Enable()
+		g.popup.actionButton.SetText("Cancel")
+		g.popup.actionButton.Enable()
 	} else {
-		g.popup.submitButton.Enable()
-		g.popup.cancelButton.Disable()
+		g.popup.actionButton.SetText("Submit")
+		g.popup.actionButton.Enable()
 	}
 
 	if g.state.output != "" {
@@ -197,6 +213,23 @@ func (g *App) render() {
 	}
 
 	g.popup.outputScroll.ScrollToBottom()
+}
+
+func (g *App) openSettings() {
+	g.popup.showSettingsDialog(g.cfg.GetDefaultProvider(), g.cfg.GetDefaultModelId(), func(provider, model string) error {
+		provider = strings.TrimSpace(provider)
+		model = strings.TrimSpace(model)
+		if err := g.cfg.SetDefaultProvider(provider); err != nil {
+			return err
+		}
+		if err := g.cfg.SetDefaultModelId(model); err != nil {
+			return err
+		}
+		g.state.status = "Settings saved."
+		g.state.errorText = ""
+		g.render()
+		return nil
+	})
 }
 
 func memoryPath() string {

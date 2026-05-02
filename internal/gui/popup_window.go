@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -29,21 +30,25 @@ type popupWindow struct {
 	inputCard     fyne.CanvasObject
 	requestHeading *widget.Label
 	answerHeading *widget.Label
+	answerHeader  *fyne.Container
+	answerMeta    *fyne.Container
+	questionCard  fyne.CanvasObject
 	questionLabel *widget.Label
 	outputLabel   *widget.Label
 	statusLabel   *widget.Label
 	modelLabel    *canvas.Text
 	outputScroll  *container.Scroll
-	submitButton  *widget.Button
-	cancelButton  *widget.Button
+	actionButton  *widget.Button
 	copyButton    *widget.Button
+	settingsButton *widget.Button
 	answerPanel   *fyne.Container
 
 	onSubmit     func()
 	onShiftEnter func()
 	onEscape     func()
-	onCancel     func()
+	onAction     func()
 	onCopy       func()
+	onSettings   func()
 	onInput      func(string)
 }
 
@@ -109,14 +114,13 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	statusLabel.Wrapping = fyne.TextWrapWord
 	statusLabel.Importance = widget.LowImportance
 
-	modelLabel := canvas.NewText("", color.NRGBA{R: 232, G: 235, B: 239, A: 255})
+	modelLabel := canvas.NewText("", color.White)
 	modelLabel.Alignment = fyne.TextAlignTrailing
 	modelLabel.TextStyle = fyne.TextStyle{Bold: true}
 
-	submitButton := widget.NewButton("Submit", nil)
-	cancelButton := widget.NewButton("Cancel", nil)
-	copyButton := widget.NewButton("Copy", nil)
-	cancelButton.Disable()
+	actionButton := widget.NewButton("Submit", nil)
+	copyButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
+	settingsButton := widget.NewButton("Settings", nil)
 	copyButton.Disable()
 
 	questionCard := withBackground(questionLabel, color.NRGBA{R: 34, G: 39, B: 46, A: 255})
@@ -125,14 +129,14 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	outputScroll := container.NewVScroll(outputLabel)
 	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 
-	answerPanel := container.NewBorder(
-		container.NewVBox(requestHeading, questionCard, answerHeading),
-		nil,
-		nil,
-		nil,
-		outputScroll,
+	answerHeader := container.NewHBox(
+		answerHeading,
+		layout.NewSpacer(),
+		copyButton,
 	)
-	toolbar := container.NewHBox(submitButton, cancelButton, copyButton, layout.NewSpacer())
+	answerMeta := container.NewVBox(requestHeading, questionCard, answerHeader)
+	answerPanel := container.NewVBox(answerMeta, outputScroll)
+	toolbar := container.NewHBox(actionButton, layout.NewSpacer(), settingsButton)
 
 	content := container.NewBorder(
 		container.NewVBox(
@@ -156,16 +160,19 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		window:        window,
 		input:         input,
 		inputCard:     inputCard,
+		questionCard:  questionCard,
 		requestHeading: requestHeading,
 		answerHeading: answerHeading,
+		answerHeader:  answerHeader,
+		answerMeta:    answerMeta,
 		questionLabel: questionLabel,
 		outputLabel:   outputLabel,
 		statusLabel:   statusLabel,
 		modelLabel:    modelLabel,
 		outputScroll:  outputScroll,
-		submitButton:  submitButton,
-		cancelButton:  cancelButton,
+		actionButton:  actionButton,
 		copyButton:    copyButton,
+		settingsButton: settingsButton,
 		answerPanel:   answerPanel,
 	}
 	input.onEscape = func() {
@@ -184,19 +191,19 @@ func newPopupWindow(app fyne.App) *popupWindow {
 			p.onInput(value)
 		}
 	}
-	submitButton.OnTapped = func() {
-		if p.onSubmit != nil {
-			p.onSubmit()
-		}
-	}
-	cancelButton.OnTapped = func() {
-		if p.onCancel != nil {
-			p.onCancel()
+	actionButton.OnTapped = func() {
+		if p.onAction != nil {
+			p.onAction()
 		}
 	}
 	copyButton.OnTapped = func() {
 		if p.onCopy != nil {
 			p.onCopy()
+		}
+	}
+	settingsButton.OnTapped = func() {
+		if p.onSettings != nil {
+			p.onSettings()
 		}
 	}
 
@@ -205,6 +212,47 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	})
 
 	return p
+}
+
+func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, onSave func(provider, model string) error) {
+	providerEntry := widget.NewEntry()
+	providerEntry.SetText(initialProvider)
+	modelEntry := widget.NewEntry()
+	modelEntry.SetText(initialModel)
+	errorLabel := widget.NewLabel("")
+	errorLabel.Wrapping = fyne.TextWrapWord
+	errorLabel.Importance = widget.DangerImportance
+
+	form := widget.NewForm(
+		widget.NewFormItem("Provider", providerEntry),
+		widget.NewFormItem("Model", modelEntry),
+	)
+	content := container.NewVBox(form, errorLabel)
+
+	var dlg dialog.Dialog
+	dlg = dialog.NewCustomConfirm("Settings", "Save", "Cancel", content, func(confirm bool) {
+		if !confirm {
+			return
+		}
+
+		provider := strings.TrimSpace(providerEntry.Text)
+		model := strings.TrimSpace(modelEntry.Text)
+		if provider == "" {
+			errorLabel.SetText("Provider cannot be empty.")
+			return
+		}
+		if model == "" {
+			errorLabel.SetText("Model cannot be empty.")
+			return
+		}
+		if err := onSave(provider, model); err != nil {
+			errorLabel.SetText(err.Error())
+			return
+		}
+		dlg.Hide()
+	}, p.window)
+	dlg.Resize(fyne.NewSize(420, 0))
+	dlg.Show()
 }
 
 func (p *popupWindow) resizeInput(value string) {
