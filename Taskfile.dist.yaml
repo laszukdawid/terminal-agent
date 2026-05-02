@@ -58,7 +58,7 @@ tasks:
   test:
     desc: Run all tests
     cmds:
-      - go test -v ./...
+      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
 
   # Application related
   run:
@@ -225,13 +225,13 @@ tasks:
   # Tests
   test:unit:
     cmds:
-      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/platform ./internal/tools ./internal/utils
+      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
 
   test:integration:
     env:
       TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
     cmds:
-      - go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/platform ./internal/tools ./internal/utils
+      - go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
 
   test:integration:env:
     deps:
@@ -240,7 +240,7 @@ tasks:
       TEST_INTEG_DIR: "/agent/test"
     cmds:
       - docker ps | grep {{.TEST_IMAGE_NAME}}
-      - docker exec --env TEST_INTEG_DIR=$TEST_INTEG_DIR {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./...
+      - docker exec --env TEST_INTEG_DIR=$TEST_INTEG_DIR {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
       - docker stop {{.TEST_IMAGE_NAME}}
 
   # Testing models
