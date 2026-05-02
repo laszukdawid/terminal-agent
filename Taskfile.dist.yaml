@@ -84,6 +84,18 @@ tasks:
       - bash scripts/integ_fedora.sh --uninstall
     silent: false
 
+  integration:ubuntu:
+    desc: Install Ubuntu desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_ubuntu.sh
+    silent: false
+
+  integration:ubuntu:uninstall:
+    desc: Remove Ubuntu desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_ubuntu.sh --uninstall
+    silent: false
+
   run:ask:
     vars:
       ARGS: "{{.CLI_ARGS}}"

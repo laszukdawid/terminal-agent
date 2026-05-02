@@ -36,14 +36,20 @@ If you prefer to build from source:
 
 This will place the `agent` binary in `~/.local/bin/agent`.
 
-If you want the popup GUI on Fedora, run:
+If you want the popup GUI with user-scoped desktop integration on Ubuntu, run:
+
+```sh
+task integration:ubuntu
+```
+
+If you are on Fedora, use:
 
 ```sh
 task integration:fedora
 ```
 
-This installs `agent-gui` to `~/.local/bin/agent-gui` and sets up the desktop launcher for the current user.
-The Fedora integration configures `Ctrl+Shift+Space` automatically on GNOME. On KDE Plasma, run the integration first, then bind a shortcut to the discovered `Terminal Agent Popup` entry in System Settings -> Keyboard -> Shortcuts.
+Both integrations install `agent-gui` to `~/.local/bin/agent-gui` and set up the desktop launcher for the current user.
+On GNOME, `Ctrl+Shift+Space` is configured automatically. On KDE Plasma, run the integration first, then bind a shortcut to the discovered `Terminal Agent Popup` entry in System Settings -> Keyboard -> Shortcuts.
 
 For local GUI development, especially if a launcher-managed popup instance is already running, start an isolated test instance with:
 

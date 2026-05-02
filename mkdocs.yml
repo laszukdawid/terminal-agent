@@ -31,6 +31,9 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Integration:
+      - Fedora: integration/fedora.md
+      - Ubuntu: integration/ubuntu.md
   - Commands:
       - Overview: commands.md
       - Ask Command: commands/ask.md
