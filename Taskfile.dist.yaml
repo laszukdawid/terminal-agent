@@ -14,7 +14,16 @@ vars:
 tasks:
   build:
     cmds:
+      - task: build:agent
+      - task: build:gui
+    silent: false
+
+  build:agent:
+    cmds:
       - go build -o bin/agent ./cmd/agent/main.go
+
+  build:gui:
+    cmds:
       - go build -o bin/agent-gui ./cmd/agent-gui/main.go
     silent: false
 
