@@ -58,6 +58,9 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 	}
 
 	agentInstance := runtime.NewAgent(prompts)
+	if agentInstance.Connector == nil {
+		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
+	}
 	events := make(chan Event)
 
 	go func() {
@@ -70,13 +73,6 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 			SysPrompt:  &prompts.Ask,
 			Stream:     req.Stream,
 			MaxTokens:  req.Config.GetMaxTokens(),
-		}
-
-		if agentInstance.Connector == nil {
-			failed := newEvent(RunKindAsk, EventFailed)
-			failed.Err = fmt.Errorf("failed to initialize %s connector", req.Provider)
-			_ = emitEvent(events, failed)
-			return
 		}
 
 		if req.Stream {
