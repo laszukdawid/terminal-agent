@@ -39,8 +39,10 @@ After setup:
 
 - `agent-gui` starts the popup app normally
 - `agent-gui --show` reopens the hidden popup in the existing instance
+- `agent-gui --new` starts a separate isolated popup instance for local testing
 - pressing `Escape` hides the popup
 - the desktop shortcut is configured to run `agent-gui --show`
+- the popup `Settings` button updates the shared default provider/model used by GUI asks
 
 ## Fedora GNOME
 
@@ -106,6 +108,7 @@ You can also verify manually:
 ```sh
 ~/.local/bin/agent-gui
 ~/.local/bin/agent-gui --show
+~/.local/bin/agent-gui --new
 desktop-file-validate ~/.local/share/applications/terminal-agent-gui.desktop
 ```
 

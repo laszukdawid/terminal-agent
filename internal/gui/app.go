@@ -167,11 +167,11 @@ func (g *App) wire() {
 
 func (g *App) render() {
 	g.popup.input.SetText(g.state.input)
-	g.popup.questionLabel.SetText(g.state.question)
+	g.popup.questionLabel.Text = g.state.question
+	g.popup.questionLabel.Refresh()
 	g.popup.outputLabel.SetText(g.state.output)
 	g.popup.outputScroll.SetMinSize(fyne.NewSize(0, g.popup.outputHeight()))
-	g.popup.modelLabel.Text = g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId()
-	g.popup.modelLabel.Refresh()
+	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
 	showMeta := g.state.showRequest || showAnswer
 	if showMeta {
@@ -196,7 +196,7 @@ func (g *App) render() {
 	if g.state.errorText != "" {
 		status = g.state.errorText
 	}
-	g.popup.statusLabel.SetText(status)
+	g.popup.headerStatus.SetText(status)
 
 	if g.state.isRunning {
 		g.popup.actionButton.SetText("Cancel")
@@ -219,6 +219,9 @@ func (g *App) openSettings() {
 	g.popup.showSettingsDialog(g.cfg.GetDefaultProvider(), g.cfg.GetDefaultModelId(), func(provider, model string) error {
 		provider = strings.TrimSpace(provider)
 		model = strings.TrimSpace(model)
+		if err := validateProviderModel(provider, model); err != nil {
+			return err
+		}
 		if err := g.cfg.SetDefaultProvider(provider); err != nil {
 			return err
 		}

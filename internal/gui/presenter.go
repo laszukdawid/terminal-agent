@@ -1,6 +1,10 @@
 package gui
 
 import (
+	"context"
+	"errors"
+	"strings"
+
 	"fyne.io/fyne/v2"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
 )
@@ -21,10 +25,26 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 				g.state.clearRunning()
 			case appservice.EventFailed:
 				g.stopThinkingIndicator()
-				g.state.errorText = eventCopy.Err.Error()
+				if isCanceledError(eventCopy.Err) {
+					g.state.errorText = ""
+					g.state.status = "Canceled."
+				} else {
+					g.state.errorText = explainRuntimeError(g.cfg.GetDefaultProvider(), eventCopy.Err)
+				}
 				g.state.clearRunning()
 			}
 			g.render()
 		})
 	}
+}
+
+func isCanceledError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "context canceled") || strings.Contains(message, "context cancelled")
 }

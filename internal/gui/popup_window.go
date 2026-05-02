@@ -33,10 +33,10 @@ type popupWindow struct {
 	answerHeader  *fyne.Container
 	answerMeta    *fyne.Container
 	questionCard  fyne.CanvasObject
-	questionLabel *widget.Label
+	questionLabel *canvas.Text
 	outputLabel   *widget.Label
-	statusLabel   *widget.Label
-	modelLabel    *canvas.Text
+	headerStatus  *widget.Label
+	modelLabel    *widget.Label
 	outputScroll  *container.Scroll
 	actionButton  *widget.Button
 	copyButton    *widget.Button
@@ -102,30 +102,29 @@ func newPopupWindow(app fyne.App) *popupWindow {
 
 	requestHeading := widget.NewLabelWithStyle("Request", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	answerHeading := widget.NewLabelWithStyle("Response", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	questionLabel := widget.NewLabel("")
-	questionLabel.Wrapping = fyne.TextWrapWord
-	questionLabel.Selectable = true
+	questionLabel := canvas.NewText("", color.Black)
+	questionLabel.Alignment = fyne.TextAlignLeading
+	questionLabel.TextSize = theme.TextSize()
 
 	outputLabel := widget.NewLabel("")
 	outputLabel.Wrapping = fyne.TextWrapWord
 	outputLabel.Selectable = true
 
-	statusLabel := widget.NewLabel("")
-	statusLabel.Wrapping = fyne.TextWrapWord
-	statusLabel.Importance = widget.LowImportance
+	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	headerStatus.Alignment = fyne.TextAlignCenter
+	headerStatus.Wrapping = fyne.TextWrapOff
+	headerStatus.Importance = widget.MediumImportance
 
-	modelLabel := canvas.NewText("", color.White)
-	modelLabel.Alignment = fyne.TextAlignTrailing
-	modelLabel.TextStyle = fyne.TextStyle{Bold: true}
+	modelLabel := widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true})
 
 	actionButton := widget.NewButton("Submit", nil)
 	copyButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
 	settingsButton := widget.NewButton("Settings", nil)
 	copyButton.Disable()
 
-	questionCard := withBackground(questionLabel, color.NRGBA{R: 34, G: 39, B: 46, A: 255})
+	questionCard := withBackground(questionLabel, color.NRGBA{R: 232, G: 235, B: 239, A: 255})
 	questionCard.Hide()
-	inputCard := withBackground(input, color.NRGBA{R: 28, G: 32, B: 38, A: 255})
+	inputCard := withBackground(input, theme.Color(theme.ColorNameInputBackground))
 	outputScroll := container.NewVScroll(outputLabel)
 	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 
@@ -139,14 +138,16 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	toolbar := container.NewHBox(actionButton, layout.NewSpacer(), settingsButton)
 
 	content := container.NewBorder(
-		container.NewVBox(
+		container.New(
+			layout.NewVBoxLayout(),
 			container.NewHBox(
 				widget.NewLabelWithStyle("Terminal Agent", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+				layout.NewSpacer(),
+				headerStatus,
 				layout.NewSpacer(),
 				modelLabel,
 			),
 			inputCard,
-			statusLabel,
 		),
 		toolbar,
 		nil,
@@ -167,7 +168,7 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		answerMeta:    answerMeta,
 		questionLabel: questionLabel,
 		outputLabel:   outputLabel,
-		statusLabel:   statusLabel,
+		headerStatus:  headerStatus,
 		modelLabel:    modelLabel,
 		outputScroll:  outputScroll,
 		actionButton:  actionButton,
