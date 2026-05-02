@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"reflect"
 
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
@@ -43,7 +42,7 @@ func NewRuntime(req RuntimeRequest) (*Runtime, error) {
 	}
 
 	conn := connector.NewConnector(req.Provider, req.Model)
-	if conn == nil || reflect.ValueOf(*conn).Kind() == reflect.Ptr && reflect.ValueOf(*conn).IsNil() {
+	if conn == nil {
 		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
 	}
 

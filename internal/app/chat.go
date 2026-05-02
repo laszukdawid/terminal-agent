@@ -60,14 +60,6 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 	}
 
 	agentInstance := runtime.NewAgent(prompts)
-	if agentInstance.Connector == nil {
-		if err := sessionStore.AddMessage("user", userMessage); err != nil {
-			sessionStore.Close()
-			return nil, fmt.Errorf("failed to save user message: %w", err)
-		}
-		sessionStore.Close()
-		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
-	}
 	events := make(chan Event)
 
 	go func() {
