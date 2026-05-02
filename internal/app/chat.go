@@ -61,6 +61,10 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 
 	agentInstance := runtime.NewAgent(prompts)
 	if agentInstance.Connector == nil {
+		if err := sessionStore.AddMessage("user", userMessage); err != nil {
+			sessionStore.Close()
+			return nil, fmt.Errorf("failed to save user message: %w", err)
+		}
 		sessionStore.Close()
 		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
 	}
@@ -117,25 +121,6 @@ func prepareChat(req ChatRequest) (*Runtime, PromptSet, []connector.Message, str
 		return nil, PromptSet{}, nil, "", nil, internalagent.ErrEmptyQuery
 	}
 
-	runtime, err := NewRuntime(RuntimeRequest{
-		Provider:   req.Provider,
-		Model:      req.Model,
-		WorkingDir: req.WorkingDir,
-		Config:     req.Config,
-	})
-	if err != nil {
-		return nil, PromptSet{}, nil, "", nil, err
-	}
-
-	prompts, err := runtime.ResolvePrompts(PromptOptions{
-		AskOverride: req.PromptOverride,
-		UseMemory:   req.UseMemory,
-		MemoryPath:  req.MemoryPath,
-	})
-	if err != nil {
-		return nil, PromptSet{}, nil, "", nil, err
-	}
-
 	sessionStore, err := chat.NewSessionStore(req.ChatDBPath)
 	if err != nil {
 		return nil, PromptSet{}, nil, "", nil, fmt.Errorf("failed to initialize chat session: %w", err)
@@ -182,6 +167,27 @@ func prepareChat(req ChatRequest) (*Runtime, PromptSet, []connector.Message, str
 	if err := sessionStore.AddMessage("user", userMessage); err != nil {
 		sessionStore.Close()
 		return nil, PromptSet{}, nil, "", nil, fmt.Errorf("failed to save user message: %w", err)
+	}
+
+	runtime, err := NewRuntime(RuntimeRequest{
+		Provider:   req.Provider,
+		Model:      req.Model,
+		WorkingDir: req.WorkingDir,
+		Config:     req.Config,
+	})
+	if err != nil {
+		sessionStore.Close()
+		return nil, PromptSet{}, nil, "", nil, err
+	}
+
+	prompts, err := runtime.ResolvePrompts(PromptOptions{
+		AskOverride: req.PromptOverride,
+		UseMemory:   req.UseMemory,
+		MemoryPath:  req.MemoryPath,
+	})
+	if err != nil {
+		sessionStore.Close()
+		return nil, PromptSet{}, nil, "", nil, err
 	}
 
 	return runtime, prompts, connectorMessages, userMessage, sessionStore, nil
