@@ -11,17 +11,17 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 		fyne.Do(func() {
 			switch eventCopy.Type {
 			case appservice.EventStarted:
-				g.state.status = "Thinking..."
+				g.state.advanceThinking("Thinking")
 			case appservice.EventOutputDelta:
 				g.state.output += eventCopy.Text
-				g.state.status = "Responding..."
+				g.state.advanceThinking("Responding")
 			case appservice.EventCompleted:
 				g.state.output = eventCopy.FinalOutput
-				g.state.status = ""
+				g.stopThinkingIndicator()
 				g.state.clearRunning()
 			case appservice.EventFailed:
+				g.stopThinkingIndicator()
 				g.state.errorText = eventCopy.Err.Error()
-				g.state.status = ""
 				g.state.clearRunning()
 			}
 			g.render()

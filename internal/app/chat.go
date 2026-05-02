@@ -73,7 +73,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 			SysPrompt:  &prompts.Ask,
 			Messages:   connectorMessages,
 			Stream:     req.Stream,
-			MaxTokens:  internalagent.MaxTokens,
+			MaxTokens:  req.Config.GetMaxTokens(),
 		}
 
 		if req.Stream {

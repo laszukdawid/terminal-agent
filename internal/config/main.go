@@ -24,6 +24,7 @@ type Config interface {
 	SetMcpFilePath(string) error
 	GetWorkingDir() string
 	SetWorkingDir(string) error
+	GetMaxTokens() int
 	GetMemory() bool
 	SetMemory(bool) error
 	GetPermissions() Permissions
@@ -163,6 +164,13 @@ func (config *config) GetWorkingDir() string {
 		return getDefaultWorkingDir()
 	}
 	return config.WorkingDir
+}
+
+func (config *config) GetMaxTokens() int {
+	if config.MaxTokens <= 0 {
+		return NewDefaultConfig().MaxTokens
+	}
+	return config.MaxTokens
 }
 
 func (config *config) SetWorkingDir(path string) error {

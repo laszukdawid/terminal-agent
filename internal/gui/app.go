@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -18,6 +19,7 @@ type App struct {
 	state   *state
 	popup   *popupWindow
 	quit    func()
+	stopThinking chan struct{}
 }
 
 func NewApp(service appservice.Service, cfg config.Config) *App {
@@ -28,6 +30,7 @@ func NewApp(service appservice.Service, cfg config.Config) *App {
 		cfg:     cfg,
 		state:   &state{},
 		quit:    fyneApp.Quit,
+		stopThinking: make(chan struct{}),
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
@@ -57,6 +60,7 @@ func (g *App) Show() {
 		g.state.status = ""
 	}
 	g.state.isVisible = true
+	g.popup.resizeInput(g.state.input)
 	g.render()
 	g.popup.window.Show()
 	g.popup.window.RequestFocus()
@@ -65,6 +69,7 @@ func (g *App) Show() {
 
 func (g *App) Hide() {
 	if g.state.cancelFunc != nil {
+		g.stopThinkingIndicator()
 		g.state.cancelFunc()
 		g.state.clearRunning()
 		if g.state.status != "" {
@@ -73,6 +78,37 @@ func (g *App) Hide() {
 	}
 	g.state.isVisible = false
 	g.popup.window.Hide()
+}
+
+func (g *App) startThinking() {
+	stop := make(chan struct{})
+	g.stopThinking = stop
+	go func() {
+		ticker := time.NewTicker(450 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				fyne.Do(func() {
+					if !g.state.isRunning || g.state.statusBase == "" {
+						return
+					}
+					g.state.advanceThinking(g.state.statusBase)
+					g.render()
+				})
+			case <-stop:
+				return
+			}
+		}
+	}()
+}
+
+func (g *App) stopThinkingIndicator() {
+	select {
+	case <-g.stopThinking:
+	default:
+		close(g.stopThinking)
+	}
 }
 
 func (g *App) FocusInput() {
@@ -88,10 +124,13 @@ func (g *App) wire() {
 	}
 	g.popup.onInput = func(value string) {
 		g.state.input = value
+		g.state.showRequest = g.state.question != "" && value != g.state.question
 		if g.state.errorText != "" {
 			g.state.errorText = ""
 			g.render()
+			return
 		}
+		g.render()
 	}
 
 	g.popup.window.SetCloseIntercept(func() {
@@ -119,13 +158,22 @@ func (g *App) wire() {
 }
 
 func (g *App) render() {
+	g.popup.input.SetText(g.state.input)
 	g.popup.questionLabel.SetText(g.state.question)
 	g.popup.outputLabel.SetText(g.state.output)
-	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
-	if g.state.question != "" {
-		g.popup.answerPanel.Objects[0].Show()
+	g.popup.outputScroll.SetMinSize(fyne.NewSize(0, g.popup.outputHeight()))
+	g.popup.modelLabel.Text = g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId()
+	g.popup.modelLabel.Refresh()
+	g.popup.answerHeading.Show()
+	if g.state.showRequest {
+		g.popup.requestHeading.Show()
+		g.popup.answerPanel.Objects[1].Show()
 	} else {
-		g.popup.answerPanel.Objects[0].Hide()
+		g.popup.requestHeading.Hide()
+		g.popup.answerPanel.Objects[1].Hide()
+	}
+	if g.state.question == "" && g.state.output == "" && !g.state.isRunning && g.state.errorText == "" {
+		g.popup.answerHeading.Hide()
 	}
 
 	status := g.state.status

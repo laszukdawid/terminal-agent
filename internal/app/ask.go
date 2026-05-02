@@ -69,7 +69,7 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 			UserPrompt: &userQuestion,
 			SysPrompt:  &prompts.Ask,
 			Stream:     req.Stream,
-			MaxTokens:  internalagent.MaxTokens,
+			MaxTokens:  req.Config.GetMaxTokens(),
 		}
 
 		if req.Stream {

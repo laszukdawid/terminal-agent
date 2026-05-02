@@ -21,8 +21,10 @@ func (g *App) submit() {
 
 	g.state.resetOutput()
 	g.state.question = message
+	g.state.showRequest = false
 	ctx, cancel := context.WithCancel(context.Background())
 	g.state.setRunning(cancel)
+	g.startThinking()
 	g.render()
 
 	events, err := g.service.AskEvents(ctx, appservice.AskRequest{
