@@ -231,7 +231,7 @@ tasks:
     env:
       TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
     cmds:
-      - go test -v -tags=integration ./...
+      - go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/platform ./internal/tools ./internal/utils
 
   test:integration:env:
     deps:
