@@ -76,6 +76,13 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 			MaxTokens:  req.Config.GetMaxTokens(),
 		}
 
+		if agentInstance.Connector == nil {
+			failed := newEvent(RunKindChat, EventFailed)
+			failed.Err = fmt.Errorf("failed to initialize %s connector", req.Provider)
+			_ = emitEvent(events, failed)
+			return
+		}
+
 		if req.Stream {
 			qParams.OnStream = func(chunk string) error {
 				event := newEvent(RunKindChat, EventOutputDelta)

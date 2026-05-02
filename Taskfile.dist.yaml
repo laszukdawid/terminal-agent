@@ -224,7 +224,8 @@ tasks:
 
   # Tests
   test:unit:
-    cmd: go test -v ./...
+    cmds:
+      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/platform ./internal/tools ./internal/utils
 
   test:integration:
     env:

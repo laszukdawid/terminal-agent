@@ -72,6 +72,13 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 			MaxTokens:  req.Config.GetMaxTokens(),
 		}
 
+		if agentInstance.Connector == nil {
+			failed := newEvent(RunKindAsk, EventFailed)
+			failed.Err = fmt.Errorf("failed to initialize %s connector", req.Provider)
+			_ = emitEvent(events, failed)
+			return
+		}
+
 		if req.Stream {
 			qParams.OnStream = func(chunk string) error {
 				event := newEvent(RunKindAsk, EventOutputDelta)
