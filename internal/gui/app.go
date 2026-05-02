@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -16,6 +17,7 @@ type App struct {
 	cfg     config.Config
 	state   *state
 	popup   *popupWindow
+	quit    func()
 }
 
 func NewApp(service appservice.Service, cfg config.Config) *App {
@@ -25,6 +27,10 @@ func NewApp(service appservice.Service, cfg config.Config) *App {
 		service: service,
 		cfg:     cfg,
 		state:   &state{},
+		quit:    fyneApp.Quit,
+	}
+	if icon, err := loadAppIcon(); err == nil {
+		fyneApp.SetIcon(icon)
 	}
 	gui.popup = newPopupWindow(fyneApp)
 	gui.wire()
@@ -38,12 +44,34 @@ func (g *App) Run() {
 }
 
 func (g *App) Show() {
+	if g.state.isVisible {
+		g.popup.window.RequestFocus()
+		g.FocusInput()
+		return
+	}
+
+	if g.state.errorText != "" && !g.state.isRunning {
+		g.state.errorText = ""
+	}
+	if !g.state.isRunning {
+		g.state.status = ""
+	}
+	g.state.isVisible = true
+	g.render()
 	g.popup.window.Show()
 	g.popup.window.RequestFocus()
 	g.FocusInput()
 }
 
 func (g *App) Hide() {
+	if g.state.cancelFunc != nil {
+		g.state.cancelFunc()
+		g.state.clearRunning()
+		if g.state.status != "" {
+			g.state.status = ""
+		}
+	}
+	g.state.isVisible = false
 	g.popup.window.Hide()
 }
 
@@ -55,7 +83,9 @@ func (g *App) wire() {
 	g.popup.onSubmit = g.submit
 	g.popup.onCancel = g.cancel
 	g.popup.onCopy = g.copyOutput
-	g.popup.onEscape = g.Hide
+	g.popup.onEscape = func() {
+		g.Hide()
+	}
 	g.popup.onInput = func(value string) {
 		g.state.input = value
 		if g.state.errorText != "" {
@@ -65,8 +95,24 @@ func (g *App) wire() {
 	}
 
 	g.popup.window.SetCloseIntercept(func() {
-		g.fyneApp.Quit()
+		g.Hide()
 	})
+	if desk, ok := g.fyneApp.(desktopApp); ok {
+		trayMenu := fyne.NewMenu(
+			"Terminal Agent",
+			fyne.NewMenuItem("Show", func() {
+				g.Show()
+			}),
+			fyne.NewMenuItem("Hide", func() {
+				g.Hide()
+			}),
+			fyne.NewMenuItemSeparator(),
+			fyne.NewMenuItem("Quit", func() {
+				g.quit()
+			}),
+		)
+		desk.SetSystemTrayMenu(trayMenu)
+	}
 	if desk, ok := g.fyneApp.(interface{ SetIcon(fyne.Resource) }); ok {
 		_ = desk
 	}
@@ -111,4 +157,21 @@ func memoryPath() string {
 		return ""
 	}
 	return filepath.Join(homeDir, ".local", "share", "terminal-agent", "memory.jsonl")
+}
+
+type desktopApp interface {
+	SetSystemTrayMenu(*fyne.Menu)
+}
+
+func loadAppIcon() (fyne.Resource, error) {
+	root, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	iconPath := filepath.Join(root, "assets", "icon.png")
+	data, err := os.ReadFile(iconPath)
+	if err != nil {
+		return nil, fmt.Errorf("read icon: %w", err)
+	}
+	return fyne.NewStaticResource("terminal-agent.png", data), nil
 }

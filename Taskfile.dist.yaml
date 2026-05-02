@@ -63,6 +63,18 @@ tasks:
       - go run cmd/agent-gui/main.go
     silent: false
 
+  integration:fedora:
+    desc: Install Fedora desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_fedora.sh
+    silent: false
+
+  integration:fedora:uninstall:
+    desc: Remove Fedora desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_fedora.sh --uninstall
+    silent: false
+
   run:ask:
     vars:
       ARGS: "{{.CLI_ARGS}}"

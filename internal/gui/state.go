@@ -9,6 +9,7 @@ type state struct {
 	status     string
 	errorText  string
 	isRunning  bool
+	isVisible  bool
 	cancelFunc context.CancelFunc
 }
 

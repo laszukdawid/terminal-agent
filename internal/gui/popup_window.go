@@ -22,7 +22,7 @@ const (
 
 type popupWindow struct {
 	window        fyne.Window
-	input         *widget.Entry
+	input         *popupEntry
 	questionLabel *widget.Label
 	outputLabel   *widget.Label
 	statusLabel   *widget.Label
@@ -41,16 +41,38 @@ type popupWindow struct {
 	onInput      func(string)
 }
 
+type popupEntry struct {
+	widget.Entry
+	onEscape func()
+}
+
+func newPopupEntry() *popupEntry {
+	entry := &popupEntry{}
+	entry.ExtendBaseWidget(entry)
+	entry.MultiLine = true
+	entry.Wrapping = fyne.TextWrapWord
+	entry.Scroll = fyne.ScrollVerticalOnly
+	return entry
+}
+
+func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
+	if key.Name == fyne.KeyEscape {
+		if e.onEscape != nil {
+			e.onEscape()
+		}
+		return
+	}
+	e.Entry.TypedKey(key)
+}
+
 func newPopupWindow(app fyne.App) *popupWindow {
 	window := app.NewWindow("Terminal Agent")
 	window.Resize(fyne.NewSize(defaultWindowWidth, defaultWindowHeight))
 	window.SetFixedSize(false)
 	window.CenterOnScreen()
 
-	input := widget.NewMultiLineEntry()
+	input := newPopupEntry()
 	input.SetPlaceHolder("Ask Terminal Agent")
-	input.Wrapping = fyne.TextWrapWord
-	input.Scroll = fyne.ScrollVerticalOnly
 	input.SetMinRowsVisible(1)
 
 	questionLabel := widget.NewLabel("")
@@ -111,6 +133,11 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		outputScroll:  outputScroll,
 		answerPanel:   answerPanel,
 	}
+	input.onEscape = func() {
+		if p.onEscape != nil {
+			p.onEscape()
+		}
+	}
 
 	input.OnChanged = func(value string) {
 		p.resizeInput(value)
@@ -138,15 +165,6 @@ func newPopupWindow(app fyne.App) *popupWindow {
 			p.onCopy()
 		}
 	}
-
-	window.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
-		switch key.Name {
-		case fyne.KeyEscape:
-			if p.onEscape != nil {
-				p.onEscape()
-			}
-		}
-	})
 
 	return p
 }

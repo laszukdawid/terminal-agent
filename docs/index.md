@@ -13,6 +13,7 @@ Welcome to Terminal Agent - an LLM-powered assistant for your terminal needs.
   - [History Command](commands/history.md) - Query interaction history
 - [Providers](providers.md) - Supported LLM providers
 - [Configuration](configuration.md) - Advanced configuration options
+- [Integration](integration/fedora.md) - Desktop integration guides
 - [Tools](tools.md) - Available tools and extending functionality
 - [Examples](examples.md) - Usage examples and patterns
 - [Developers](developers.md) - Guide for contributors and developers
