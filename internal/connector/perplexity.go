@@ -66,12 +66,17 @@ func NewPerplexityConnector(modelID *PerplexityModelId) *PerplexityConnector {
 func (c *PerplexityConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	u.Logger.Sugar().Debugw("Query", "model", c.modelID, "provider", PerplexityProvider, "userPrompt", *qParams.UserPrompt)
 
+	messages := []Message{{Role: "system", Content: *qParams.SysPrompt}}
+	for _, msg := range qParams.Messages {
+		messages = append(messages, Message{Role: msg.Role, Content: msg.Content})
+	}
+	if qParams.UserPrompt != nil {
+		messages = append(messages, Message{Role: "user", Content: *qParams.UserPrompt})
+	}
+
 	anthropicRequest := PerplexityRequest{
-		Model: c.modelID,
-		Messages: []Message{
-			{Role: "system", Content: *qParams.SysPrompt},
-			{Role: "user", Content: *qParams.UserPrompt},
-		},
+		Model:    c.modelID,
+		Messages: messages,
 	}
 
 	u.Logger.Sugar().Debugw("Request", "anthropicRequest", anthropicRequest)

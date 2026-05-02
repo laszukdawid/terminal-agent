@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Terminal Agent Popup
+GenericName=Terminal Assistant Popup
+Comment=Quick-access popup for Terminal Agent
+Exec=__AGENT_GUI_PATH__ --show
+Icon=__ICON_PATH__
+Terminal=false
+Categories=Utility;Development;
+Keywords=terminal;agent;ai;assistant;
+StartupNotify=true

@@ -139,6 +139,68 @@ func convertToolsToOllama(execTools map[string]tools.Tool) []OllamaTool {
 func (oc *OllamaConnector) Query(ctx context.Context, params *QueryParams) (string, error) {
 	oc.logger.Sugar().Debugw("Query", "model", oc.modelID)
 
+	if len(params.Messages) > 0 {
+		messages := []OllamaMessage{}
+		if params.SysPrompt != nil && *params.SysPrompt != "" {
+			messages = append(messages, OllamaMessage{Role: "system", Content: *params.SysPrompt})
+		}
+		for _, msg := range params.Messages {
+			messages = append(messages, OllamaMessage{Role: msg.Role, Content: msg.Content})
+		}
+		if params.UserPrompt != nil {
+			messages = append(messages, OllamaMessage{Role: "user", Content: *params.UserPrompt})
+		}
+
+		request := OllamaRequest{
+			Model:    oc.modelID,
+			Messages: messages,
+			Stream:   params.Stream,
+		}
+		if params.MaxTokens > 0 {
+			request.Options = map[string]any{"num_predict": params.MaxTokens}
+		}
+		requestBody, err := json.Marshal(request)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal request: %w", err)
+		}
+
+		url := fmt.Sprintf("%s/api/chat", oc.baseURL)
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestBody))
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := oc.httpClient.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("failed to send request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return "", fmt.Errorf("ollama API returned status %d: %s", resp.StatusCode, string(body))
+		}
+
+		if params.Stream {
+			return oc.handleStreamingChatResponse(resp, params.OnStream)
+		}
+
+		responseBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read response: %w", err)
+		}
+
+		var ollamaResp OllamaResponse
+		if err := json.Unmarshal(responseBody, &ollamaResp); err != nil {
+			return "", fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+		if ollamaResp.Message != nil {
+			return ollamaResp.Message.Content, nil
+		}
+		return ollamaResp.Response, nil
+	}
+
 	// Build the prompt from user and system prompts
 	prompt := ""
 	if params.SysPrompt != nil && *params.SysPrompt != "" {
@@ -192,7 +254,7 @@ func (oc *OllamaConnector) Query(ctx context.Context, params *QueryParams) (stri
 
 	// Handle streaming response
 	if params.Stream {
-		return oc.handleStreamingResponse(resp)
+		return oc.handleStreamingResponse(resp, params.OnStream)
 	}
 
 	// Read and parse the non-streaming response
@@ -207,6 +269,62 @@ func (oc *OllamaConnector) Query(ctx context.Context, params *QueryParams) (stri
 	}
 
 	return ollamaResp.Response, nil
+}
+
+func (oc *OllamaConnector) handleStreamingChatResponse(resp *http.Response, onStream func(string) error) (string, error) {
+	var mdRenderer *MarkdownStreamRenderer
+	if onStream == nil {
+		renderer, err := NewMarkdownStreamRenderer()
+		if err != nil {
+			oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		} else {
+			mdRenderer = renderer
+		}
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	var fullResponse string
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		var streamResp OllamaResponse
+		if err := json.Unmarshal(line, &streamResp); err != nil {
+			continue
+		}
+
+		chunk := streamResp.Response
+		if streamResp.Message != nil {
+			chunk = streamResp.Message.Content
+		}
+		fullResponse += chunk
+
+		if chunk != "" {
+			if onStream != nil {
+				if err := onStream(chunk); err != nil {
+					return "", err
+				}
+			} else if mdRenderer != nil {
+				mdRenderer.ProcessChunk(chunk)
+			} else {
+				fmt.Print(chunk)
+			}
+		}
+
+		if streamResp.Done {
+			break
+		}
+	}
+
+	if mdRenderer != nil {
+		mdRenderer.Flush()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading stream: %w", err)
+	}
+
+	return fullResponse, nil
 }
 
 // QueryWithTool implements the QueryWithTool method of the LLMConnector interface
@@ -319,13 +437,15 @@ func (oc *OllamaConnector) QueryWithTool(ctx context.Context, params *QueryParam
 }
 
 // handleStreamingResponse handles the streaming response from Ollama
-func (oc *OllamaConnector) handleStreamingResponse(resp *http.Response) (string, error) {
-	// Create markdown renderer for streaming
-	mdRenderer, err := NewMarkdownStreamRenderer()
-	if err != nil {
-		// Fallback to simple streaming if renderer fails
-		oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
-		mdRenderer = nil
+func (oc *OllamaConnector) handleStreamingResponse(resp *http.Response, onStream func(string) error) (string, error) {
+	var mdRenderer *MarkdownStreamRenderer
+	if onStream == nil {
+		renderer, err := NewMarkdownStreamRenderer()
+		if err != nil {
+			oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		} else {
+			mdRenderer = renderer
+		}
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -345,7 +465,11 @@ func (oc *OllamaConnector) handleStreamingResponse(resp *http.Response) (string,
 
 		// Stream the chunk
 		if streamResp.Response != "" {
-			if mdRenderer != nil {
+			if onStream != nil {
+				if err := onStream(streamResp.Response); err != nil {
+					return "", err
+				}
+			} else if mdRenderer != nil {
 				mdRenderer.ProcessChunk(streamResp.Response)
 			} else {
 				fmt.Print(streamResp.Response)

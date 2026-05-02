@@ -207,6 +207,27 @@ func convertToolsToGoogle(execTools map[string]tools.Tool) ([]*genai.Tool, error
 
 func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
 	gc.model.SystemInstruction = genai.NewUserContent(genai.Text(*qParams.SysPrompt))
+	if len(qParams.Messages) > 0 {
+		session := gc.model.StartChat()
+		for _, msg := range qParams.Messages {
+			var content genai.Part
+			content = genai.Text(msg.Content)
+			if msg.Role == "assistant" {
+				session.History = append(session.History, &genai.Content{Role: "model", Parts: []genai.Part{content}})
+			} else {
+				session.History = append(session.History, &genai.Content{Role: "user", Parts: []genai.Part{content}})
+			}
+		}
+		resp, err := session.SendMessage(ctx, genai.Text(*qParams.UserPrompt))
+		if err != nil {
+			return "", fmt.Errorf("error sending message to Google AI: %w", err)
+		}
+		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
+			return fmt.Sprint(resp.Candidates[0].Content.Parts[0]), nil
+		}
+		return "", fmt.Errorf("no response from Google AI")
+	}
+
 	resp, err := gc.model.GenerateContent(ctx, genai.Text(*qParams.UserPrompt))
 	if err != nil {
 		return "", fmt.Errorf("error sending message to Google AI: %w", err)

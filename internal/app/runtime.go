@@ -42,6 +42,9 @@ func NewRuntime(req RuntimeRequest) (*Runtime, error) {
 	}
 
 	conn := connector.NewConnector(req.Provider, req.Model)
+	if conn == nil {
+		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
+	}
 
 	return &Runtime{
 		Config:       req.Config,

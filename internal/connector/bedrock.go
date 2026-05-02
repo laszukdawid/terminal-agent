@@ -238,12 +238,14 @@ func (bc *BedrockConnector) queryBedrock(
 func (bc *BedrockConnector) queryBedrockStream(
 	ctx context.Context, qParams *QueryParams, toolConfig *types.ToolConfiguration,
 ) (string, error) {
-	// Create markdown renderer for streaming
-	mdRenderer, err := NewMarkdownStreamRenderer()
-	if err != nil {
-		// Fallback to simple streaming if renderer fails
-		bc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
-		mdRenderer = nil
+	var mdRenderer *MarkdownStreamRenderer
+	if qParams.OnStream == nil {
+		renderer, err := NewMarkdownStreamRenderer()
+		if err != nil {
+			bc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
+		} else {
+			mdRenderer = renderer
+		}
 	}
 
 	// Build messages list from history + current user prompt
@@ -299,19 +301,21 @@ func (bc *BedrockConnector) queryBedrockStream(
 		case *types.ConverseStreamOutputMemberContentBlockStart:
 			start := event.Value.Start
 			bc.logger.Debug("ContentBlockStart", zap.Any("start", start))
-			fmt.Println()
 
 		case *types.ConverseStreamOutputMemberContentBlockStop:
 			stop := event.Value
 			bc.logger.Debug("ContentBlockStart", zap.Any("stop", stop))
-			fmt.Println()
 
 		case *types.ConverseStreamOutputMemberContentBlockDelta:
 			chunk, isText := event.Value.Delta.(*types.ContentBlockDeltaMemberText)
 			if !isText {
 				continue
 			}
-			if mdRenderer != nil {
+			if qParams.OnStream != nil {
+				if err := qParams.OnStream(chunk.Value); err != nil {
+					return "", err
+				}
+			} else if mdRenderer != nil {
 				mdRenderer.ProcessChunk(chunk.Value)
 			} else {
 				fmt.Print(chunk.Value)

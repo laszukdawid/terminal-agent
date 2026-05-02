@@ -1,6 +1,9 @@
 package connector
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 func NewConnector(provider string, modelID string) *LLMConnector {
 	if modelID == "" {
@@ -24,6 +27,14 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 		connector = NewOllamaConnector(&modelID)
 	default:
 		panic(fmt.Sprintf("unsupported provider: %s", provider))
+	}
+
+	if connector == nil {
+		return nil
+	}
+	value := reflect.ValueOf(connector)
+	if value.Kind() == reflect.Ptr && value.IsNil() {
+		return nil
 	}
 
 	return &connector

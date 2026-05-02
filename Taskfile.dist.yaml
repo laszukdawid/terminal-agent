@@ -14,7 +14,17 @@ vars:
 tasks:
   build:
     cmds:
+      - task: build:agent
+      - task: build:gui
+    silent: false
+
+  build:agent:
+    cmds:
       - go build -o bin/agent ./cmd/agent/main.go
+
+  build:gui:
+    cmds:
+      - go build -o bin/agent-gui ./cmd/agent-gui/main.go
     silent: false
 
   install:
@@ -54,6 +64,24 @@ tasks:
   run:
     cmds:
       - go run cmd/agent/main.go
+    silent: false
+
+  run:gui:
+    desc: Run the popup GUI
+    cmds:
+      - go run cmd/agent-gui/main.go
+    silent: false
+
+  integration:fedora:
+    desc: Install Fedora desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_fedora.sh
+    silent: false
+
+  integration:fedora:uninstall:
+    desc: Remove Fedora desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_fedora.sh --uninstall
     silent: false
 
   run:ask:
@@ -146,6 +174,36 @@ tasks:
       - docker build -t {{.TEST_IMAGE_NAME}} .
     silent: false
 
+  deps:gui:ubuntu:
+    desc: Install Ubuntu GUI dependencies required for Fyne
+    cmds:
+      - sudo apt-get update
+      # libgl1-mesa-dev: OpenGL headers and linker support used by Fyne's desktop renderer.
+      # xorg-dev: umbrella package for core X11 development headers used by GLFW/Fyne.
+      # libx11-dev: base X11 client library headers.
+      # libxcursor-dev: cursor management support for desktop windows.
+      # libxrandr-dev: monitor sizing and resize notifications.
+      # libxinerama-dev: multi-monitor geometry support.
+      # libxi-dev: keyboard and pointer input extensions.
+      # libxxf86vm-dev: XFree86 video mode extension required by the GLFW stack used by Fyne.
+      - sudo apt-get install -y libgl1-mesa-dev xorg-dev libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxxf86vm-dev
+    silent: false
+
+  deps:gui:fedora:
+    desc: Install Fedora GUI dependencies required for Fyne
+    cmds:
+      # Fedora mirrors can occasionally return transient 404s during metadata refresh.
+      # If dnf finishes with "Complete!", the required packages were installed successfully.
+      # mesa-libGL-devel: OpenGL headers and linker support used by Fyne's desktop renderer.
+      # libX11-devel: base X11 client library headers.
+      # libXcursor-devel: cursor management support for desktop windows.
+      # libXrandr-devel: monitor sizing and resize notifications.
+      # libXinerama-devel: multi-monitor geometry support.
+      # libXi-devel: keyboard and pointer input extensions.
+      # libXxf86vm-devel: XFree86 video mode extension required by the GLFW stack used by Fyne.
+      - sudo dnf install -y mesa-libGL-devel libX11-devel libXcursor-devel libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel
+    silent: false
+
   env:setup:
     desc: Setup the test environment
     deps:
@@ -166,13 +224,14 @@ tasks:
 
   # Tests
   test:unit:
-    cmd: go test -v ./...
+    cmds:
+      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/platform ./internal/tools ./internal/utils
 
   test:integration:
     env:
       TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
     cmds:
-      - go test -v -tags=integration ./...
+      - go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/platform ./internal/tools ./internal/utils
 
   test:integration:env:
     deps:
