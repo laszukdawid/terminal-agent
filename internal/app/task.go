@@ -33,14 +33,12 @@ func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 		return TaskResult{}, err
 	}
 
-	prompts, err := runtime.ResolvePrompts(PromptOptions{
-		TaskOverride: req.PromptOverride,
-	})
+	taskPrompt, err := runtime.ResolveTaskPrompt(req.PromptOverride)
 	if err != nil {
 		return TaskResult{}, err
 	}
 
-	agentInstance := runtime.NewAgent(prompts)
+	agentInstance := runtime.NewAgent(PromptSet{Task: taskPrompt})
 	response, err := agentInstance.TaskWithOptions(ctx, req.Message, internalagent.TaskOptions{Allow: req.Allow})
 	if err != nil {
 		return TaskResult{}, err

@@ -55,22 +55,40 @@ func NewRuntime(req RuntimeRequest) (*Runtime, error) {
 }
 
 func (r *Runtime) ResolvePrompts(opts PromptOptions) (PromptSet, error) {
-	askPrompt, err := internalagent.ResolvePrompt(opts.AskOverride, "ask", r.WorkingDir)
+	askPrompt, err := r.ResolveAskPrompt(opts)
 	if err != nil {
-		return PromptSet{}, fmt.Errorf("failed to resolve ask prompt: %w", err)
+		return PromptSet{}, err
 	}
 
-	taskPrompt, err := internalagent.ResolvePrompt(opts.TaskOverride, "task", r.WorkingDir)
-	if err != nil {
-		return PromptSet{}, fmt.Errorf("failed to resolve task prompt: %w", err)
-	}
-
-	askPrompt, err = BuildAskPrompt(askPrompt, opts.UseMemory, opts.MemoryPath)
+	taskPrompt, err := r.ResolveTaskPrompt(opts.TaskOverride)
 	if err != nil {
 		return PromptSet{}, err
 	}
 
 	return PromptSet{Ask: askPrompt, Task: taskPrompt}, nil
+}
+
+func (r *Runtime) ResolveAskPrompt(opts PromptOptions) (string, error) {
+	askPrompt, err := internalagent.ResolvePrompt(opts.AskOverride, "ask", r.WorkingDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve ask prompt: %w", err)
+	}
+
+	askPrompt, err = BuildAskPrompt(askPrompt, opts.UseMemory, opts.MemoryPath)
+	if err != nil {
+		return "", err
+	}
+
+	return askPrompt, nil
+}
+
+func (r *Runtime) ResolveTaskPrompt(taskOverride string) (string, error) {
+	taskPrompt, err := internalagent.ResolvePrompt(taskOverride, "task", r.WorkingDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve task prompt: %w", err)
+	}
+
+	return taskPrompt, nil
 }
 
 func (r *Runtime) NewAgent(prompts PromptSet) *internalagent.Agent {

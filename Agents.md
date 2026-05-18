@@ -6,6 +6,20 @@ Tool execution permissions can be set in `~/.config/terminal-agent/config.json` 
 
 The repo is structured around the Go implementation of the binary (see `cmd/` and `internal/`), plus documentation in `docs/` that backs the published site. Installation can happen via Homebrew, downloading release archives, `go install`, or building from source with Taskfile tasks such as `task build`/`task install`.
 
+## Architecture Notes
+
+`internal/app` is the shared application-service layer used by both the CLI and the GUI.
+
+- CLI commands in `internal/commands/` call `internal/app` service methods such as `Ask`, `AskEvents`, `Chat`, and `Task`.
+- GUI code in `internal/gui/` also depends on the same `internal/app` service interface rather than talking directly to connectors or prompt helpers.
+- Changes in `internal/app` should therefore be reviewed as cross-surface changes even when only one entrypoint appears to be affected.
+
+Prompt and runtime behavior is also shared through this layer, with one important distinction:
+
+- `ask` and `chat` use ask-prompt resolution and may include memory/context features.
+- `task` should resolve only the task prompt it needs.
+- Do not couple task execution to ask-prompt resolution or ask-only features, because a broken ask prompt should not block task execution.
+
 ## Running Tests
 
 Testing is orchestrated through [Taskfile](https://taskfile.dev/). Common flows:

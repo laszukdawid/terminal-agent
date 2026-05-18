@@ -318,7 +318,7 @@ I've reached the maximum number of iterations. Based on the above, provide a com
 	}
 
 	qParams := connector.QueryParams{
-		UserPrompt: StringPtr(summaryPrompt),
+		UserPrompt: StringPtr(summary.String()),
 		SysPrompt:  a.systemPromptTask,
 		MaxTokens:  a.maxTokens * 2, // Allow more tokens for summary
 	}

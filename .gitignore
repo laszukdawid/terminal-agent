@@ -2,6 +2,7 @@
 *.json
 
 bin/
+dist/
 
 Taskfile.yaml
 .env
