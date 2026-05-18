@@ -39,6 +39,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
+			execConfig := resolveExecutionConfig(config)
 
 			// Check if this is streaming response
 			streamFlag, _ := flags.GetBool("stream")
@@ -58,13 +59,12 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 				Provider:             *provider,
 				Model:                *modelID,
 				PromptOverride:       *promptFlag,
-				UseMemory:            config.GetMemory() || memoryFlag,
+				UseMemory:            execConfig.GetMemory() || memoryFlag,
 				MemoryPath:           getMemoryPath(),
-				WorkingDir:           config.GetWorkingDir(),
 				ContextFiles:         contextFiles,
 				TerminalContextCount: terminalContextCount,
 				Stream:               streamFlag,
-				Config:               config,
+				Config:               execConfig,
 			})
 			if err != nil {
 				handleError(err)

@@ -56,11 +56,16 @@ func GetAllBuiltinTools(config config.Config) map[string]Tool {
 		workDir = config.GetWorkingDir()
 	}
 
+	unixTool := NewUnixTool(&BashExecutor{workDir: workDir})
+	fileEditTool := NewFileEditTool(workDir)
+	fileSearchTool := NewFileSearchTool(workDir)
+	pythonTool := NewPythonTool(workDir)
+
 	tools := map[string]Tool{
-		NewUnixTool(nil).Name():           NewUnixTool(nil),
-		NewFileEditTool(workDir).Name():   NewFileEditTool(workDir),
-		NewFileSearchTool(workDir).Name(): NewFileSearchTool(workDir),
-		NewPythonTool(workDir).Name():     NewPythonTool(workDir),
+		unixTool.Name():       unixTool,
+		fileEditTool.Name():   fileEditTool,
+		fileSearchTool.Name(): fileSearchTool,
+		pythonTool.Name():     pythonTool,
 	}
 
 	// Add Websearch only if possible

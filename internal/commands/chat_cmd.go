@@ -40,6 +40,7 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
+			execConfig := resolveExecutionConfig(config)
 
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
@@ -53,14 +54,13 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 				Provider:       *provider,
 				Model:          *modelID,
 				PromptOverride: *promptFlag,
-				UseMemory:      config.GetMemory() || memoryFlag,
+				UseMemory:      execConfig.GetMemory() || memoryFlag,
 				MemoryPath:     getMemoryPath(),
-				WorkingDir:     config.GetWorkingDir(),
 				ContextFiles:   contextFiles,
 				Stream:         streamFlag,
 				NewSession:     newSession,
 				ChatDBPath:     getChatDBPath(),
-				Config:         config,
+				Config:         execConfig,
 			})
 			if err != nil {
 				handleError(err)

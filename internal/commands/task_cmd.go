@@ -26,6 +26,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
+			execConfig := resolveExecutionConfig(config)
 
 			// Concatenate all remaining args to form the query
 			userRequest := strings.Join(args, " ")
@@ -40,9 +41,8 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				Provider:       *provider,
 				Model:          *modelID,
 				PromptOverride: *promptFlag,
-				WorkingDir:     config.GetWorkingDir(),
 				Allow:          allow,
-				Config:         config,
+				Config:         execConfig,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to request a task: %w", err)
