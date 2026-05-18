@@ -92,7 +92,6 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 		},
 	}
 
-	cmd.MarkFlagRequired("question")
 	provider = cmd.Flags().StringP("provider", "p", config.GetDefaultProvider(), "The provider to use for the question")
 	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
 	promptFlag = cmd.Flags().String("prompt", "", "Custom system prompt (overrides file-based and default prompts)")

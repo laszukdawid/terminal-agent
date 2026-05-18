@@ -47,8 +47,6 @@ func NewHistoryCommand(config config.Config) *cobra.Command {
 		},
 	}
 
-	cmd.MarkFlagRequired("history")
-
 	cmd.Flags().String("after", "", "Filter logs after this date")
 	cmd.Flags().String("before", "", "Filter logs before this date")
 
