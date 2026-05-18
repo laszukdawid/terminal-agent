@@ -47,6 +47,10 @@ func NewFileSearchTool(workDir string) *FileSearchTool {
 				"description": "Set to true only when the search results themselves fully answer the user's request and should be returned directly without another model summary round.",
 			},
 		},
+		"anyOf": []any{
+			map[string]any{"required": []string{"name_pattern"}},
+			map[string]any{"required": []string{"contains"}},
+		},
 	}
 
 	return &FileSearchTool{

@@ -186,8 +186,16 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 		}
 
 		if response.ToolUse {
+			// Reject unknown tools and malformed inputs before confirmation or execution.
+			tool, err := resolveTaskToolCall(response.ToolName, response.ToolInput, a.Tools)
+			if err != nil {
+				logger.Errorw("Tool validation failed", "tool", response.ToolName, "error", err)
+				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
+				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
+				continue
+			}
+
 			// Execute the selected tool
-			tool := a.Tools[response.ToolName]
 			action := BuildActionString(response.ToolName, response.ToolInput)
 			if requiresConfirmation(response.ToolName) {
 				allowed, err := confirmations.Confirm(action)
@@ -454,6 +462,7 @@ func NewAskUserTool() *askUserTool {
 					"description": "Ask a question to the user to get more info required to solve or clarify their problem",
 				},
 			},
+			"required": []string{"question"},
 		},
 	}
 }
@@ -514,6 +523,7 @@ func NewFinalAnswerTool() *finalAnswerTool {
 					"description": "Call this tool when the task is complete and you want to provide the final answer.",
 				},
 			},
+			"required": []string{"answer"},
 		},
 	}
 }

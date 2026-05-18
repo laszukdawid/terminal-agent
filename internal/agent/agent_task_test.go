@@ -23,19 +23,43 @@ func (t *fixedOutputTool) HelpText() string                         { return "" 
 func (t *fixedOutputTool) RunSchema(map[string]any) (string, error) { return t.output, nil }
 func (t *fixedOutputTool) Run(*string) (string, error)              { return t.output, nil }
 
+type schemaOutputTool struct {
+	name   string
+	output string
+	schema map[string]any
+	inputs []map[string]any
+}
+
+func (t *schemaOutputTool) Name() string                { return t.name }
+func (t *schemaOutputTool) Description() string         { return "" }
+func (t *schemaOutputTool) InputSchema() map[string]any { return t.schema }
+func (t *schemaOutputTool) HelpText() string            { return "" }
+func (t *schemaOutputTool) RunSchema(input map[string]any) (string, error) {
+	t.inputs = append(t.inputs, input)
+	return t.output, nil
+}
+func (t *schemaOutputTool) Run(*string) (string, error) { return t.output, nil }
+
 type scriptedToolConnector struct {
 	responses      []connector.LlmResponseWithTools
 	queryCalls     int
 	queryToolCalls int
+	toolPrompts    []string
 }
 
-func (c *scriptedToolConnector) Query(_ context.Context, _ *connector.QueryParams) (string, error) {
+func (c *scriptedToolConnector) Query(_ context.Context, params *connector.QueryParams) (string, error) {
 	c.queryCalls++
+	if params != nil && params.UserPrompt != nil {
+		c.toolPrompts = append(c.toolPrompts, *params.UserPrompt)
+	}
 	return "unexpected query", nil
 }
 
-func (c *scriptedToolConnector) QueryWithTool(_ context.Context, _ *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
+func (c *scriptedToolConnector) QueryWithTool(_ context.Context, params *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
 	c.queryToolCalls++
+	if params != nil && params.UserPrompt != nil {
+		c.toolPrompts = append(c.toolPrompts, *params.UserPrompt)
+	}
 	if len(c.responses) == 0 {
 		return connector.LlmResponseWithTools{}, nil
 	}
@@ -168,4 +192,113 @@ func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 	assert.Equal(t, "a.go\nb.go", result.DisplayText())
 	assert.Equal(t, 1, conn.queryToolCalls)
 	assert.Equal(t, 0, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultHandlesUnknownToolWithoutPanicking(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: "missing_tool", ToolInput: map[string]any{"command": "noop"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			ToolNameFinalAnswer: NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "list matching files", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, conn.toolPrompts, 2)
+	assert.Contains(t, conn.toolPrompts[1], "Failed to execute missing_tool: unknown tool: missing_tool")
+	assert.Contains(t, conn.toolPrompts[1], "Provided tool arguments: map[command:noop]")
+}
+
+func TestTaskWithOptionsResultRejectsMalformedToolInputBeforeExecution(t *testing.T) {
+	utils.GetLogger()
+
+	validatedTool := &schemaOutputTool{
+		name:   "schema_tool",
+		output: "tool-output",
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{"type": "string"},
+			},
+			"required": []string{"command"},
+		},
+	}
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: validatedTool.Name(), ToolInput: map[string]any{"command": true}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			validatedTool.Name(): validatedTool,
+			ToolNameFinalAnswer:  NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "run validated tool", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	assert.Empty(t, validatedTool.inputs)
+	require.Len(t, conn.toolPrompts, 2)
+	assert.Contains(t, conn.toolPrompts[1], "Failed to execute schema_tool: invalid tool input: field \"command\" must be a string")
+}
+
+func TestTaskWithOptionsResultExecutesValidToolInput(t *testing.T) {
+	utils.GetLogger()
+
+	validatedTool := &schemaOutputTool{
+		name:   "schema_tool",
+		output: "tool-output",
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{"type": "string"},
+			},
+			"required": []string{"command"},
+		},
+	}
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: validatedTool.Name(), ToolInput: map[string]any{"command": "pwd"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			validatedTool.Name(): validatedTool,
+			ToolNameFinalAnswer:  NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "run validated tool", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, validatedTool.inputs, 1)
+	require.Len(t, conn.toolPrompts, 2)
+	assert.Contains(t, conn.toolPrompts[1], "tool-output")
+	assert.NotContains(t, conn.toolPrompts[1], "Failed to execute schema_tool")
 }

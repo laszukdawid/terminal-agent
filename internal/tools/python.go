@@ -54,6 +54,10 @@ func NewPythonTool(workDir string) *PythonTool {
 				"description": "Set to true only when the script output itself fully answers the user's request and should be returned directly without another model summary round.",
 			},
 		},
+		"oneOf": []any{
+			map[string]any{"required": []string{"path"}},
+			map[string]any{"required": []string{"code"}},
+		},
 	}
 
 	return &PythonTool{

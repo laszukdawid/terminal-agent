@@ -59,6 +59,7 @@ func TestConvertToGenaiSchema(t *testing.T) {
 						Description: "Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round.",
 					},
 				},
+				Required: []string{"command"},
 			},
 		},
 		{
