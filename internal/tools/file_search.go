@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	fileSearchToolName        = "file_search"
 	fileSearchToolDescription = "Search for files and text using native Go operations."
 )
 
@@ -47,7 +46,7 @@ func NewFileSearchTool(workDir string) *FileSearchTool {
 	}
 
 	return &FileSearchTool{
-		name:        fileSearchToolName,
+		name:        ToolNameFileSearch,
 		description: fileSearchToolDescription,
 		inputSchema: inputSchema,
 		helpText:    "Search for files and content using native Go operations.",

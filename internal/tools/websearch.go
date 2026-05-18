@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	websearchToolName        = "websearch"
 	websearchToolDescription = `Websearch tool provides the ability to search the web using Tavily.
     The input to the tool is a search query. The tool then provides a markdown list of the first few results.`
 	numResults = 5 // Number of results to return
@@ -96,7 +95,7 @@ func NewWebsearchTool() *WebsearchTool {
 	tavily := tavilygo.NewClient(tavilyKey)
 
 	return &WebsearchTool{
-		name:         websearchToolName,
+		name:         ToolNameWebsearch,
 		description:  websearchToolDescription,
 		inputSchema:  inputSchema,
 		systemPrompt: systemPrompt,

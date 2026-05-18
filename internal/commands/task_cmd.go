@@ -51,10 +51,12 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			response := result.Response
 
 			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
-				if plain, _ := flags.GetBool("plain"); !plain {
-					response = handleMarkdown(response)
-				}
-				cmd.Println(response)
+				plain, _ := flags.GetBool("plain")
+				cmd.Print(formatTaskOutput(app.TaskResult{
+					Response:      response,
+					RawOutput:     result.RawOutput,
+					RawOutputTool: result.RawOutputTool,
+				}, plain))
 			}
 
 			if logFlag, err := flags.GetBool("log"); logFlag && err == nil {
@@ -82,4 +84,36 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	cmd.Flags().BoolP("log", "l", false, "Log the input and output to a file")
 
 	return cmd
+}
+
+func formatTaskOutput(result app.TaskResult, plain bool) string {
+	response := result.Response
+	if !plain {
+		response = handleMarkdown(response)
+	}
+
+	if result.RawOutput == "" {
+		return response
+	}
+
+	var output strings.Builder
+	if response != "" {
+		output.WriteString(response)
+		if !strings.HasSuffix(response, "\n") {
+			output.WriteByte('\n')
+		}
+		output.WriteByte('\n')
+	}
+
+	toolName := result.RawOutputTool
+	if toolName == "" {
+		toolName = "tool"
+	}
+	output.WriteString(fmt.Sprintf("Raw output from %s:\n", toolName))
+	output.WriteString(result.RawOutput)
+	if !strings.HasSuffix(result.RawOutput, "\n") {
+		output.WriteByte('\n')
+	}
+
+	return output.String()
 }

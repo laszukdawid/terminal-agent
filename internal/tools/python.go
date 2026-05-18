@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	pythonToolName        = "python"
 	pythonToolDescription = "Run Python scripts using python, python3, or uv run python."
 )
 
@@ -54,7 +53,7 @@ func NewPythonTool(workDir string) *PythonTool {
 	}
 
 	return &PythonTool{
-		name:        pythonToolName,
+		name:        ToolNamePython,
 		description: pythonToolDescription,
 		inputSchema: inputSchema,
 		helpText:    "Execute Python scripts with python, python3, or uv run python.",

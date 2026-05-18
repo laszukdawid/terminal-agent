@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	fileEditToolName        = "file_edit"
 	fileEditToolDescription = "Create and update files using native Go file operations."
 )
 
@@ -54,7 +53,7 @@ func NewFileEditTool(workDir string) *FileEditTool {
 	}
 
 	return &FileEditTool{
-		name:        fileEditToolName,
+		name:        ToolNameFileEdit,
 		description: fileEditToolDescription,
 		inputSchema: inputSchema,
 		helpText:    "Edit files using native Go operations.",

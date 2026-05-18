@@ -39,8 +39,8 @@ func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
 	result, err := agent.finalizeSummary(context.Background(), &TaskState{
 		OriginalQuery: "review the task path",
 		Results: map[string]string{
-			"file_search": "internal/app/task.go",
-			"analysis":    "task prompt resolution is coupled to ask prompt resolution",
+			tools.ToolNameFileSearch: "internal/app/task.go",
+			"analysis":               "task prompt resolution is coupled to ask prompt resolution",
 		},
 	})
 
@@ -52,4 +52,55 @@ func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
 	assert.NotContains(t, conn.userPrompt, "{{range")
 	assert.NotContains(t, conn.userPrompt, "{{$source}}")
 	assert.Equal(t, MaxTokens*2, conn.maxTokens)
+}
+
+func TestSelectRawTaskOutput(t *testing.T) {
+	t.Run("single display tool with multiline output", func(t *testing.T) {
+		selected := selectRawTaskOutput([]taskToolOutput{{
+			ToolName: tools.ToolNameUnix,
+			Output:   "drwxr-xr-x\t2 user staff\n-rw-r--r--\t1 user staff",
+		}})
+
+		assert.Equal(t, tools.ToolNameUnix, selected.ToolName)
+		assert.Contains(t, selected.Output, "\t2 user staff\n")
+	})
+
+	t.Run("single display tool with single-line output", func(t *testing.T) {
+		selected := selectRawTaskOutput([]taskToolOutput{{
+			ToolName: tools.ToolNameUnix,
+			Output:   "/tmp/project",
+		}})
+
+		assert.Empty(t, selected.ToolName)
+		assert.Empty(t, selected.Output)
+	})
+
+	t.Run("multiple tool outputs", func(t *testing.T) {
+		selected := selectRawTaskOutput([]taskToolOutput{
+			{ToolName: tools.ToolNameUnix, Output: "one\ntwo"},
+			{ToolName: tools.ToolNameFileSearch, Output: "a.go\nb.go"},
+		})
+
+		assert.Equal(t, tools.ToolNameFileSearch, selected.ToolName)
+		assert.Equal(t, "a.go\nb.go", selected.Output)
+	})
+
+	t.Run("repeated same tool outputs", func(t *testing.T) {
+		selected := selectRawTaskOutput([]taskToolOutput{
+			{ToolName: tools.ToolNameUnix, Output: "old\nlisting"},
+			{ToolName: tools.ToolNameUnix, Output: "new\tlisting\nwith details"},
+		})
+
+		assert.Equal(t, tools.ToolNameUnix, selected.ToolName)
+		assert.Equal(t, "new\tlisting\nwith details", selected.Output)
+	})
+
+	t.Run("non display tool", func(t *testing.T) {
+		selected := selectRawTaskOutput([]taskToolOutput{{
+			ToolName: tools.ToolNameFileEdit,
+			Output:   "wrote 32 bytes to file.txt\n",
+		}})
+
+		assert.Empty(t, selected.ToolName)
+	})
 }

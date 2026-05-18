@@ -20,8 +20,10 @@ import (
 var ErrEmptyQuery = fmt.Errorf("empty query")
 
 const (
-	MaxTokens     = 400
-	MaxIterations = 10
+	MaxTokens                 = 400
+	MaxIterations             = 10
+	UserClarificationToolName = "user_clarification"
+	ToolNameFinalAnswer       = "final_answer"
 )
 
 type Agent struct {
@@ -94,14 +96,35 @@ type TaskOptions struct {
 	Allow []string
 }
 
+type TaskRunResult struct {
+	Response      string
+	RawOutput     string
+	RawOutputTool string
+}
+
+type taskToolOutput struct {
+	ToolName string
+	Output   string
+}
+
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
 	return a.TaskWithOptions(ctx, s, TaskOptions{})
 }
 
 func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptions) (string, error) {
+	result, err := a.TaskWithOptionsResult(ctx, s, options)
+	if err != nil {
+		return "", err
+	}
+
+	return result.Response, nil
+}
+
+func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options TaskOptions) (TaskRunResult, error) {
 	logger := utils.Logger.Sugar()
 	ctx, cancel := context.WithTimeout(ctx, 900*time.Second) // 15 minutes timeout
 	defer cancel()
+	successfulToolOutputs := make([]taskToolOutput, 0, 1)
 
 	workingDir := ""
 	if a.config != nil {
@@ -113,7 +136,7 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 
 	ruleSets, store, err := config.LoadPermissionRuleSets(workingDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to load permissions: %w", err)
+		return TaskRunResult{}, fmt.Errorf("failed to load permissions: %w", err)
 	}
 
 	confirmations := NewConfirmationManager(options.Allow, ruleSets, func(action string, allow bool) error {
@@ -147,7 +170,7 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 		response, err := a.Connector.QueryWithTool(ctx, &qParams, a.Tools)
 		if err != nil {
 			logger.Errorw("Error querying model", "iteration", taskState.Iterations, "error", err)
-			return "", fmt.Errorf("error during task processing: %w", err)
+			return TaskRunResult{}, fmt.Errorf("error during task processing: %w", err)
 		}
 		taskState.CompletionStatus = min(taskState.CompletionStatus+5, 85)
 		if response.Response != "" {
@@ -162,7 +185,7 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 				allowed, err := confirmations.Confirm(action)
 				if err != nil {
 					logger.Errorw("Tool confirmation failed", "tool", response.ToolName, "error", err)
-					return "", fmt.Errorf("tool confirmation failed: %w", err)
+					return TaskRunResult{}, fmt.Errorf("tool confirmation failed: %w", err)
 				}
 				if !allowed {
 					taskState.Results[fmt.Sprintf("%s confirmation", response.ToolName)] = "user declined execution"
@@ -176,6 +199,12 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
 			} else {
+				if response.ToolName != ToolNameFinalAnswer {
+					successfulToolOutputs = append(successfulToolOutputs, taskToolOutput{
+						ToolName: response.ToolName,
+						Output:   toolResult,
+					})
+				}
 				// TODO: Handle multiple executions of the same tool
 				taskState.Results[fmt.Sprintf("%s justification", response.ToolName)] = response.Response
 				taskState.Results[response.ToolName] = toolResult
@@ -184,9 +213,10 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 			}
 
 			// If the final answer tool is used, set the completion status to 100%
-			if response.ToolName == "final_answer" {
+			if response.ToolName == ToolNameFinalAnswer {
+				rawOutput := selectRawTaskOutput(successfulToolOutputs)
 				taskState.CompletionStatus = 100
-				return toolResult, nil
+				return TaskRunResult{Response: toolResult, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}, nil
 			}
 
 		}
@@ -199,10 +229,15 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 	// If we reached max iterations without completion
 	if taskState.CompletionStatus < 100 {
 		// Make a final attempt to synthesize what we've learned
-		return a.finalizeSummary(ctx, taskState)
+		response, err := a.finalizeSummary(ctx, taskState)
+		if err != nil {
+			return TaskRunResult{}, err
+		}
+		rawOutput := selectRawTaskOutput(successfulToolOutputs)
+		return TaskRunResult{Response: response, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}, nil
 	}
 
-	return "Task completed successfully.", nil
+	return TaskRunResult{Response: "Task completed successfully."}, nil
 }
 
 // TaskState tracks the state of the agent's work on a task
@@ -346,9 +381,34 @@ func TruncateString(s string, maxLen int) string {
 	return s
 }
 
+func selectRawTaskOutput(outputs []taskToolOutput) taskToolOutput {
+	for i := len(outputs) - 1; i >= 0; i-- {
+		output := outputs[i]
+		if !isDisplayOrientedTool(output.ToolName) {
+			continue
+		}
+		if !strings.ContainsAny(output.Output, "\n\t") {
+			continue
+		}
+
+		return output
+	}
+
+	return taskToolOutput{}
+}
+
+func isDisplayOrientedTool(toolName string) bool {
+	switch toolName {
+	case tools.ToolNameUnix, tools.ToolNamePython, tools.ToolNameFileSearch:
+		return true
+	default:
+		return false
+	}
+}
+
 func requiresConfirmation(toolName string) bool {
 	switch toolName {
-	case "unix", "file_edit", "python":
+	case tools.ToolNameUnix, tools.ToolNameFileEdit, tools.ToolNamePython:
 		return true
 	default:
 		return false
@@ -363,7 +423,7 @@ type askUserTool struct {
 
 func NewAskUserTool() *askUserTool {
 	return &askUserTool{
-		name:        "user_clarification",
+		name:        UserClarificationToolName,
 		description: "Ask the user for clarification or additional information. This tool is used when the model needs more context to proceed with the task.",
 		inputSchema: map[string]any{
 			"type": "object",
@@ -380,16 +440,20 @@ func NewAskUserTool() *askUserTool {
 func (t *askUserTool) Name() string {
 	return t.name
 }
+
 func (t *askUserTool) Description() string {
 	return t.description
 }
+
 func (t *askUserTool) InputSchema() map[string]any {
 	return t.inputSchema
 }
+
 func (t *askUserTool) HelpText() string {
 	return fmt.Sprintf("Help for %s: %s\n\n%s",
 		t.Name(), t.Description(), t.InputSchema())
 }
+
 func (t *askUserTool) RunSchema(input map[string]any) (string, error) {
 	// Extract question from input
 	question, ok := input["question"].(string)
@@ -406,6 +470,7 @@ func (t *askUserTool) RunSchema(input map[string]any) (string, error) {
 
 	return userInput, nil
 }
+
 func (t *askUserTool) Run(input *string) (string, error) {
 	return t.RunSchema(map[string]any{"question": *input})
 }
@@ -418,7 +483,7 @@ type finalAnswerTool struct {
 
 func NewFinalAnswerTool() *finalAnswerTool {
 	return &finalAnswerTool{
-		name:        "final_answer",
+		name:        ToolNameFinalAnswer,
 		description: "Provide the final answer to the task.",
 		inputSchema: map[string]any{
 			"type": "object",
@@ -431,19 +496,24 @@ func NewFinalAnswerTool() *finalAnswerTool {
 		},
 	}
 }
+
 func (t *finalAnswerTool) Name() string {
 	return t.name
 }
+
 func (t *finalAnswerTool) Description() string {
 	return t.description
 }
+
 func (t *finalAnswerTool) InputSchema() map[string]any {
 	return t.inputSchema
 }
+
 func (t *finalAnswerTool) HelpText() string {
 	return fmt.Sprintf("Help for %s: %s\n\n%s",
 		t.Name(), t.Description(), t.InputSchema())
 }
+
 func (t *finalAnswerTool) RunSchema(input map[string]any) (string, error) {
 	// Extract answer from input
 	answer, ok := input["answer"].(string)
@@ -454,6 +524,7 @@ func (t *finalAnswerTool) RunSchema(input map[string]any) (string, error) {
 	// Provide the final answer
 	return answer, nil
 }
+
 func (t *finalAnswerTool) Run(input *string) (string, error) {
 	return t.RunSchema(map[string]any{"answer": *input})
 }

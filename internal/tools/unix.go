@@ -5,7 +5,6 @@ import (
 )
 
 const (
-	unixToolName        = "unix"
 	unixToolDescription = `Unix tool is for coming up with and executing Unix commands.
 	One would use this tool to either execute a specific command, e.g. "ls -la",
 	or to generate a command based on a description, e.g. "list all files in the
@@ -97,7 +96,7 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 	}
 
 	return &UnixTool{
-		name:         unixToolName,
+		name:         ToolNameUnix,
 		description:  unixToolDescription,
 		inputSchema:  inputSchema,
 		systemPrompt: systemPrompt,

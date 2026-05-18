@@ -18,8 +18,10 @@ type TaskRequest struct {
 }
 
 type TaskResult struct {
-	Request  string
-	Response string
+	Request       string
+	Response      string
+	RawOutput     string
+	RawOutputTool string
 }
 
 func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error) {
@@ -39,10 +41,15 @@ func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 	}
 
 	agentInstance := runtime.NewAgent(PromptSet{Task: taskPrompt})
-	response, err := agentInstance.TaskWithOptions(ctx, req.Message, internalagent.TaskOptions{Allow: req.Allow})
+	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{Allow: req.Allow})
 	if err != nil {
 		return TaskResult{}, err
 	}
 
-	return TaskResult{Request: req.Message, Response: response}, nil
+	return TaskResult{
+		Request:       req.Message,
+		Response:      response.Response,
+		RawOutput:     response.RawOutput,
+		RawOutputTool: response.RawOutputTool,
+	}, nil
 }
