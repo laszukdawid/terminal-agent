@@ -41,14 +41,14 @@ func NewRuntime(req RuntimeRequest) (*Runtime, error) {
 		workingDir = req.Config.GetWorkingDir()
 	}
 
-	conn := connector.NewConnector(req.Provider, req.Model)
-	if conn == nil {
-		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
+	conn, err := connector.NewConnector(req.Provider, req.Model)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Runtime{
 		Config:       req.Config,
-		Connector:    *conn,
+		Connector:    conn,
 		ToolProvider: tools.NewToolProvider(req.Config),
 		WorkingDir:   workingDir,
 	}, nil

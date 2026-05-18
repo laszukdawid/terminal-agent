@@ -5,11 +5,7 @@ import (
 	"reflect"
 )
 
-func NewConnector(provider string, modelID string) *LLMConnector {
-	if modelID == "" {
-		panic("modelID is empty")
-	}
-
+func NewConnector(provider string, modelID string) (LLMConnector, error) {
 	var connector LLMConnector
 	switch provider {
 	case BedrockProvider:
@@ -26,16 +22,25 @@ func NewConnector(provider string, modelID string) *LLMConnector {
 	case OllamaProvider:
 		connector = NewOllamaConnector(&modelID)
 	default:
-		panic(fmt.Sprintf("unsupported provider: %s", provider))
+		return nil, fmt.Errorf("unsupported provider: %s", provider)
 	}
 
-	if connector == nil {
-		return nil
+	if isNilConnector(connector) {
+		return nil, fmt.Errorf("failed to initialize %s connector", provider)
 	}
+
+	return connector, nil
+}
+
+func isNilConnector(connector LLMConnector) bool {
+	if connector == nil {
+		return true
+	}
+
 	value := reflect.ValueOf(connector)
 	if value.Kind() == reflect.Ptr && value.IsNil() {
-		return nil
+		return true
 	}
 
-	return &connector
+	return false
 }
