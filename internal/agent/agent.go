@@ -97,9 +97,10 @@ type TaskOptions struct {
 }
 
 type TaskRunResult struct {
-	Response      string
-	RawOutput     string
-	RawOutputTool string
+	Response        string
+	RawOutput       string
+	RawOutputTool   string
+	DirectRawOutput bool
 }
 
 type taskToolOutput struct {
@@ -117,7 +118,14 @@ func (a *Agent) TaskWithOptions(ctx context.Context, s string, options TaskOptio
 		return "", err
 	}
 
-	return result.Response, nil
+	return result.DisplayText(), nil
+}
+
+func (r TaskRunResult) DisplayText() string {
+	if r.DirectRawOutput && r.RawOutput != "" {
+		return r.RawOutput
+	}
+	return r.Response
 }
 
 func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options TaskOptions) (TaskRunResult, error) {
@@ -199,6 +207,14 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
 			} else {
+				if toolInputRequestsFinal(response.ToolInput) && isDisplayOrientedTool(response.ToolName) {
+					return TaskRunResult{
+						Response:        toolResult,
+						RawOutput:       toolResult,
+						RawOutputTool:   response.ToolName,
+						DirectRawOutput: true,
+					}, nil
+				}
 				if response.ToolName != ToolNameFinalAnswer {
 					successfulToolOutputs = append(successfulToolOutputs, taskToolOutput{
 						ToolName: response.ToolName,
@@ -395,6 +411,11 @@ func selectRawTaskOutput(outputs []taskToolOutput) taskToolOutput {
 	}
 
 	return taskToolOutput{}
+}
+
+func toolInputRequestsFinal(input map[string]any) bool {
+	requested, ok := input["final"].(bool)
+	return ok && requested
 }
 
 func isDisplayOrientedTool(toolName string) bool {

@@ -5,6 +5,7 @@ import "testing"
 func TestBuildActionString(t *testing.T) {
 	action := BuildActionString("unix", map[string]any{
 		"command": "aws login sso",
+		"final":   true,
 		"flag":    "value",
 	})
 

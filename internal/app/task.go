@@ -18,10 +18,11 @@ type TaskRequest struct {
 }
 
 type TaskResult struct {
-	Request       string
-	Response      string
-	RawOutput     string
-	RawOutputTool string
+	Request         string
+	Response        string
+	RawOutput       string
+	RawOutputTool   string
+	DirectRawOutput bool
 }
 
 func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error) {
@@ -47,9 +48,10 @@ func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 	}
 
 	return TaskResult{
-		Request:       req.Message,
-		Response:      response.Response,
-		RawOutput:     response.RawOutput,
-		RawOutputTool: response.RawOutputTool,
+		Request:         req.Message,
+		Response:        response.DisplayText(),
+		RawOutput:       response.RawOutput,
+		RawOutputTool:   response.RawOutputTool,
+		DirectRawOutput: response.DirectRawOutput,
 	}, nil
 }

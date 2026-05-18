@@ -14,6 +14,17 @@ func TestFormatTaskOutput(t *testing.T) {
 		assert.Equal(t, "done", output)
 	})
 
+	t.Run("direct raw output", func(t *testing.T) {
+		output := formatTaskOutput(app.TaskResult{
+			Response:        "drwxr-xr-x\t2 user staff\n-rw-r--r--\t1 user staff",
+			RawOutputTool:   tools.ToolNameUnix,
+			RawOutput:       "drwxr-xr-x\t2 user staff\n-rw-r--r--\t1 user staff",
+			DirectRawOutput: true,
+		}, false)
+
+		assert.Equal(t, "drwxr-xr-x\t2 user staff\n-rw-r--r--\t1 user staff\n", output)
+	})
+
 	t.Run("plain response with raw output", func(t *testing.T) {
 		output := formatTaskOutput(app.TaskResult{
 			Response:      "Here are the files.",

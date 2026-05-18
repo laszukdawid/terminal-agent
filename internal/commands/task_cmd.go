@@ -53,9 +53,10 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
 				plain, _ := flags.GetBool("plain")
 				cmd.Print(formatTaskOutput(app.TaskResult{
-					Response:      response,
-					RawOutput:     result.RawOutput,
-					RawOutputTool: result.RawOutputTool,
+					Response:        response,
+					RawOutput:       result.RawOutput,
+					RawOutputTool:   result.RawOutputTool,
+					DirectRawOutput: result.DirectRawOutput,
 				}, plain))
 			}
 
@@ -88,6 +89,12 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 func formatTaskOutput(result app.TaskResult, plain bool) string {
 	response := result.Response
+	if result.DirectRawOutput {
+		if !strings.HasSuffix(response, "\n") {
+			return response + "\n"
+		}
+		return response
+	}
 	if !plain {
 		response = handleMarkdown(response)
 	}

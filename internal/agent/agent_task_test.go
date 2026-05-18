@@ -6,9 +6,43 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fixedOutputTool struct {
+	name   string
+	output string
+}
+
+func (t *fixedOutputTool) Name() string                             { return t.name }
+func (t *fixedOutputTool) Description() string                      { return "" }
+func (t *fixedOutputTool) InputSchema() map[string]any              { return map[string]any{} }
+func (t *fixedOutputTool) HelpText() string                         { return "" }
+func (t *fixedOutputTool) RunSchema(map[string]any) (string, error) { return t.output, nil }
+func (t *fixedOutputTool) Run(*string) (string, error)              { return t.output, nil }
+
+type scriptedToolConnector struct {
+	responses      []connector.LlmResponseWithTools
+	queryCalls     int
+	queryToolCalls int
+}
+
+func (c *scriptedToolConnector) Query(_ context.Context, _ *connector.QueryParams) (string, error) {
+	c.queryCalls++
+	return "unexpected query", nil
+}
+
+func (c *scriptedToolConnector) QueryWithTool(_ context.Context, _ *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
+	c.queryToolCalls++
+	if len(c.responses) == 0 {
+		return connector.LlmResponseWithTools{}, nil
+	}
+	response := c.responses[0]
+	c.responses = c.responses[1:]
+	return response, nil
+}
 
 type summaryCaptureConnector struct {
 	userPrompt string
@@ -103,4 +137,35 @@ func TestSelectRawTaskOutput(t *testing.T) {
 
 		assert.Empty(t, selected.ToolName)
 	})
+}
+
+func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{{
+			ToolUse:   true,
+			ToolName:  tools.ToolNameFileSearch,
+			ToolInput: map[string]any{"contains": "task", "final": true},
+		}},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tools.ToolNameFileSearch: &fixedOutputTool{name: tools.ToolNameFileSearch, output: "a.go\nb.go"},
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "list matching files", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.True(t, result.DirectRawOutput)
+	assert.Equal(t, "a.go\nb.go", result.RawOutput)
+	assert.Equal(t, tools.ToolNameFileSearch, result.RawOutputTool)
+	assert.Equal(t, "a.go\nb.go", result.DisplayText())
+	assert.Equal(t, 1, conn.queryToolCalls)
+	assert.Equal(t, 0, conn.queryCalls)
 }

@@ -20,6 +20,13 @@ Prompt and runtime behavior is also shared through this layer, with one importan
 - `task` should resolve only the task prompt it needs.
 - Do not couple task execution to ask-prompt resolution or ask-only features, because a broken ask prompt should not block task execution.
 
+Task execution has a direct-output path for output-oriented tools:
+
+- `unix`, `python`, and `file_search` support an optional boolean tool argument `final`.
+- When `final=true` and the tool succeeds, the task agent should return that raw tool output immediately instead of doing another LLM summarization round.
+- Use this for requests where the tool output itself is the answer, such as listing files or printing search results.
+- Permission matching should ignore the `final` field so `unix("ls -la", final=true)` is treated like `unix("ls -la")` for allow/deny purposes.
+
 ## Running Tests
 
 Testing is orchestrated through [Taskfile](https://taskfile.dev/). Common flows:
