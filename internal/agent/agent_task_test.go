@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
@@ -45,12 +46,20 @@ type scriptedToolConnector struct {
 	queryCalls     int
 	queryToolCalls int
 	toolPrompts    []string
+	queryResponse  string
+	queryErr       error
 }
 
 func (c *scriptedToolConnector) Query(_ context.Context, params *connector.QueryParams) (string, error) {
 	c.queryCalls++
 	if params != nil && params.UserPrompt != nil {
 		c.toolPrompts = append(c.toolPrompts, *params.UserPrompt)
+	}
+	if c.queryErr != nil {
+		return "", c.queryErr
+	}
+	if c.queryResponse != "" {
+		return c.queryResponse, nil
 	}
 	return "unexpected query", nil
 }
@@ -301,4 +310,44 @@ func TestTaskWithOptionsResultExecutesValidToolInput(t *testing.T) {
 	require.Len(t, conn.toolPrompts, 2)
 	assert.Contains(t, conn.toolPrompts[1], "tool-output")
 	assert.NotContains(t, conn.toolPrompts[1], "Failed to execute schema_tool")
+}
+
+func TestTaskWithOptionsResultUsesSummaryFallbackAtMaxIterations(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{queryResponse: "summary output"}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "finish without tools", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "summary output", result.Response)
+	assert.Equal(t, MaxIterations, conn.queryToolCalls)
+	assert.Equal(t, 1, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultReturnsErrorWhenSummaryFallbackFails(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{queryErr: errors.New("summary failed")}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	_, err := agent.TaskWithOptionsResult(context.Background(), "finish without tools", TaskOptions{})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "summary failed")
+	assert.Equal(t, MaxIterations, conn.queryToolCalls)
+	assert.Equal(t, 1, conn.queryCalls)
 }

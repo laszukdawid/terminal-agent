@@ -103,6 +103,15 @@ type TaskRunResult struct {
 	DirectRawOutput bool
 }
 
+type TaskPhase string
+
+const (
+	TaskPhaseRunning    TaskPhase = "running"
+	TaskPhaseFinalizing TaskPhase = "finalizing"
+	TaskPhaseCompleted  TaskPhase = "completed"
+	TaskPhaseFailed     TaskPhase = "failed"
+)
+
 type taskToolOutput struct {
 	ToolName string
 	Output   string
@@ -153,16 +162,16 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 
 	// Create initial task state
 	taskState := &TaskState{
-		OriginalQuery:    s,
-		CurrentThought:   "I'll solve this task step by step.",
-		CompletionStatus: 0, // 0% complete
-		Iterations:       0,
-		MaxIterations:    MaxIterations, // Configurable maximum iterations
-		Results:          make(map[string]string),
+		OriginalQuery:  s,
+		CurrentThought: "I'll solve this task step by step.",
+		Iterations:     0,
+		MaxIterations:  MaxIterations, // Configurable maximum iterations
+		Phase:          TaskPhaseRunning,
+		Results:        make(map[string]string),
 	}
 
 	// Main agent loop
-	for taskState.CompletionStatus < 100 && taskState.Iterations < taskState.MaxIterations {
+	for taskState.Phase == TaskPhaseRunning && taskState.Iterations < taskState.MaxIterations {
 		taskState.Iterations++
 
 		// Build context-aware prompt that includes previous steps and current state
@@ -180,7 +189,6 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 			logger.Errorw("Error querying model", "iteration", taskState.Iterations, "error", err)
 			return TaskRunResult{}, fmt.Errorf("error during task processing: %w", err)
 		}
-		taskState.CompletionStatus = min(taskState.CompletionStatus+5, 85)
 		if response.Response != "" {
 			taskState.CurrentThought = response.Response // Store the model's response
 		}
@@ -190,6 +198,7 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 			tool, err := resolveTaskToolCall(response.ToolName, response.ToolInput, a.Tools)
 			if err != nil {
 				logger.Errorw("Tool validation failed", "tool", response.ToolName, "error", err)
+				taskState.LastError = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
 				continue
@@ -212,10 +221,12 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 			toolResult, err := tool.RunSchema(response.ToolInput)
 			if err != nil {
 				logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)
+				taskState.LastError = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
 				taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
 			} else {
 				if toolInputRequestsFinal(response.ToolInput) && isDisplayOrientedTool(response.ToolName) {
+					taskState.Phase = TaskPhaseCompleted
 					return TaskRunResult{
 						Response:        toolResult,
 						RawOutput:       toolResult,
@@ -232,14 +243,14 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 				// TODO: Handle multiple executions of the same tool
 				taskState.Results[fmt.Sprintf("%s justification", response.ToolName)] = response.Response
 				taskState.Results[response.ToolName] = toolResult
-				taskState.CompletionStatus = min(taskState.CompletionStatus+5, 90) // Progress but not complete
+				taskState.LastError = ""
 				taskState.CurrentThought = ""
 			}
 
-			// If the final answer tool is used, set the completion status to 100%
+			// If the final answer tool is used, the task is complete.
 			if response.ToolName == ToolNameFinalAnswer {
 				rawOutput := selectRawTaskOutput(successfulToolOutputs)
-				taskState.CompletionStatus = 100
+				taskState.Phase = TaskPhaseCompleted
 				return TaskRunResult{Response: toolResult, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}, nil
 			}
 
@@ -247,31 +258,35 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 
 		logger.Debugw("Task iteration complete",
 			"iteration", taskState.Iterations,
-			"status", taskState.CompletionStatus)
+			"phase", taskState.Phase)
 	}
 
 	// If we reached max iterations without completion
-	if taskState.CompletionStatus < 100 {
+	if taskState.Phase == TaskPhaseRunning && taskState.Iterations >= taskState.MaxIterations {
 		// Make a final attempt to synthesize what we've learned
+		taskState.Phase = TaskPhaseFinalizing
 		response, err := a.finalizeSummary(ctx, taskState)
 		if err != nil {
+			taskState.Phase = TaskPhaseFailed
 			return TaskRunResult{}, err
 		}
 		rawOutput := selectRawTaskOutput(successfulToolOutputs)
+		taskState.Phase = TaskPhaseCompleted
 		return TaskRunResult{Response: response, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}, nil
 	}
 
-	return TaskRunResult{Response: "Task completed successfully."}, nil
+	return TaskRunResult{}, fmt.Errorf("task ended without an explicit completion path")
 }
 
 // TaskState tracks the state of the agent's work on a task
 type TaskState struct {
-	OriginalQuery    string
-	CurrentThought   string
-	CompletionStatus int // 0-100%
-	Iterations       int
-	MaxIterations    int
-	Results          map[string]string // Holds results from tools and user interactions
+	OriginalQuery  string
+	CurrentThought string
+	Iterations     int
+	MaxIterations  int
+	Phase          TaskPhase
+	Results        map[string]string // Holds results from tools and user interactions
+	LastError      string
 }
 
 // AgentDecision represents a parsed agent response
@@ -288,7 +303,7 @@ type AgentDecision struct {
 func buildTaskPrompt(state *TaskState) string {
 	const promptTemplate = `Original task: {{.OriginalQuery}}
 
-Current progress: {{.CompletionStatus}}%
+Current phase: {{.Phase}}
 Iteration: {{.Iterations}} of {{.MaxIterations}}
 
 {{if .HasResults}}Information gathered so far:
@@ -297,6 +312,10 @@ Iteration: {{.Iterations}} of {{.MaxIterations}}
 {{$result}}
 </RESULTS>
 {{end}}
+{{end}}
+
+{{if .LastError}}Latest error:
+{{.LastError}}
 {{end}}
 
 Current thought: {{.CurrentThought}}
@@ -356,6 +375,10 @@ Here's what I've learned and done so far:
 
 {{range $source, $result := .Results}}- From {{$source}}: {{$result}}
 {{end}}
+{{if .LastError}}
+Latest error encountered:
+{{.LastError}}
+{{end}}
 I've reached the maximum number of iterations. Based on the above, provide a comprehensive final answer.
 `
 
@@ -388,14 +411,6 @@ I've reached the maximum number of iterations. Based on the above, provide a com
 // Helper function for string pointer
 func StringPtr(s string) *string {
 	return &s
-}
-
-// Helper function
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func TruncateString(s string, maxLen int) string {
