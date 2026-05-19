@@ -41,15 +41,20 @@ func NewRuntime(req RuntimeRequest) (*Runtime, error) {
 		workingDir = req.Config.GetWorkingDir()
 	}
 
+	runtimeConfig := req.Config
+	if runtimeConfig != nil && workingDir != "" {
+		runtimeConfig = config.WithWorkingDir(runtimeConfig, workingDir)
+	}
+
 	conn, err := connector.NewConnector(req.Provider, req.Model)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Runtime{
-		Config:       req.Config,
+		Config:       runtimeConfig,
 		Connector:    conn,
-		ToolProvider: tools.NewToolProvider(req.Config),
+		ToolProvider: tools.NewToolProvider(runtimeConfig),
 		WorkingDir:   workingDir,
 	}, nil
 }

@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
@@ -350,4 +352,42 @@ func TestTaskWithOptionsResultReturnsErrorWhenSummaryFallbackFails(t *testing.T)
 	assert.Contains(t, err.Error(), "summary failed")
 	assert.Equal(t, MaxIterations, conn.queryToolCalls)
 	assert.Equal(t, 1, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultUpdatesCurrentDirectoryExplicitly(t *testing.T) {
+	utils.GetLogger()
+
+	rootDir := t.TempDir()
+	subDir := filepath.Join(rootDir, "nested")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "match.txt"), []byte("hello"), 0o644))
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: ToolNameChangeDirectory, ToolInput: map[string]any{"path": "nested"}},
+			{ToolUse: true, ToolName: tools.ToolNameFileSearch, ToolInput: map[string]any{"name_pattern": "*.txt"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			ToolNameChangeDirectory:  NewChangeDirectoryTool(),
+			tools.ToolNameFileSearch: tools.NewFileSearchTool(rootDir),
+			ToolNameFinalAnswer:      NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "search after changing directory", TaskOptions{
+		Dirs: TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, conn.toolPrompts, 3)
+	assert.Contains(t, conn.toolPrompts[1], "Current working directory: "+subDir)
+	assert.Contains(t, conn.toolPrompts[2], "match.txt")
 }

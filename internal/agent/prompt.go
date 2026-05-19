@@ -24,8 +24,8 @@ type SystemInfo struct {
 	GoVersion    string
 }
 
-// GetSystemInfo collects information about the current system
-func GetSystemInfo() SystemInfo {
+// GetSystemInfo collects information about the current system.
+func GetSystemInfo(workingDir string) SystemInfo {
 	info := SystemInfo{
 		CurrentTime:  time.Now().Format("2006-01-02 15:04:05 MST"),
 		OS:           runtime.GOOS,
@@ -47,8 +47,10 @@ func GetSystemInfo() SystemInfo {
 		info.Username = "unknown"
 	}
 
-	// Get working directory
-	if wd, err := os.Getwd(); err == nil {
+	// Use explicit working directory when provided.
+	if workingDir != "" {
+		info.WorkingDir = workingDir
+	} else if wd, err := os.Getwd(); err == nil {
 		info.WorkingDir = wd
 	} else {
 		info.WorkingDir = "unknown"
@@ -60,9 +62,9 @@ func GetSystemInfo() SystemInfo {
 	return info
 }
 
-// SystemPromptHeader returns the system prompt header with current system information
-func SystemPromptHeader() string {
-	info := GetSystemInfo()
+// SystemPromptHeader returns the system prompt header with current system information.
+func SystemPromptHeader(workingDir string) string {
+	info := GetSystemInfo(workingDir)
 
 	osLine := fmt.Sprintf("%s/%s", info.OS, info.Architecture)
 	if info.OSVersion != "" {
@@ -189,7 +191,7 @@ func ResolvePrompt(flagPrompt string, promptType string, workingDir string) (str
 	}
 
 	// Apply {{header}} substitution
-	resolved := strings.Replace(rawPrompt, "{{header}}", SystemPromptHeader(), 1)
+	resolved := strings.Replace(rawPrompt, "{{header}}", SystemPromptHeader(workingDir), 1)
 	return resolved, nil
 }
 

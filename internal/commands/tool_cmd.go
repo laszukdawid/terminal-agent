@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
@@ -28,7 +29,10 @@ func NewToolCommand(config config.Config) *cobra.Command {
 		Short: "List all available tools",
 		Long:  `List all available tools, including built-in tools and tools from the MCP file if configured.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			execConfig := resolveExecutionConfig(config)
+			execConfig, err := resolveToolExecutionConfig(config)
+			if err != nil {
+				return err
+			}
 			toolProvider := tools.NewToolProvider(execConfig)
 			allTools := toolProvider.GetAllTools()
 			if len(allTools) == 0 {
@@ -57,7 +61,10 @@ func NewToolCommand(config config.Config) *cobra.Command {
 				// Show the general help for the tool command when no specific tool is mentioned
 				return cmd.Help()
 			}
-			execConfig := resolveExecutionConfig(config)
+			execConfig, err := resolveToolExecutionConfig(config)
+			if err != nil {
+				return err
+			}
 			toolProvider := tools.NewToolProvider(execConfig)
 			allTools := toolProvider.GetAllTools()
 
@@ -104,7 +111,10 @@ Usage requires at least two positional arguments:
 			if len(args) < 2 {
 				return fmt.Errorf("not enough arguments, expected: tool [tool-name] [query]")
 			}
-			execConfig := resolveExecutionConfig(config)
+			execConfig, err := resolveToolExecutionConfig(config)
+			if err != nil {
+				return err
+			}
 			toolProvider := tools.NewToolProvider(execConfig)
 			allTools := toolProvider.GetAllTools()
 
@@ -140,4 +150,12 @@ Usage requires at least two positional arguments:
 	cmd.AddCommand(listCmd, helpCmd, execCmd)
 
 	return cmd
+}
+
+func resolveToolExecutionConfig(cfg config.Config) (config.Config, error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve tool working directory: %w", err)
+	}
+	return config.WithWorkingDir(cfg, workingDir), nil
 }

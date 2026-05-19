@@ -90,6 +90,10 @@ func (t *PythonTool) Run(input *string) (string, error) {
 }
 
 func (t *PythonTool) RunSchema(input map[string]any) (string, error) {
+	return t.RunSchemaWithContext(input, ToolExecutionContext{RootDir: t.workDir, CurrentDir: t.workDir})
+}
+
+func (t *PythonTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error) {
 	pathValue, _ := input["path"].(string)
 	code, _ := input["code"].(string)
 	runner, _ := input["runner"].(string)
@@ -108,15 +112,20 @@ func (t *PythonTool) RunSchema(input map[string]any) (string, error) {
 		return "", err
 	}
 
+	normalizedCtx, err := normalizeExecutionContext(ctx, t.workDir)
+	if err != nil {
+		return "", err
+	}
+
 	resolvedPath := ""
 	if pathValue != "" {
-		resolvedPath, err = resolvePath(pathValue, t.workDir)
+		resolvedPath, err = resolvePathInContext(pathValue, normalizedCtx, t.workDir)
 		if err != nil {
 			return "", err
 		}
 	}
 
-	commandName, commandArgs, _, cleanup, err := t.buildCommand(selectedRunner, uvMode, resolvedPath, code, args)
+	commandName, commandArgs, _, cleanup, err := t.buildCommand(selectedRunner, uvMode, resolvedPath, code, args, normalizedCtx.CurrentDir)
 	if err != nil {
 		return "", err
 	}
@@ -125,7 +134,7 @@ func (t *PythonTool) RunSchema(input map[string]any) (string, error) {
 	}
 
 	cmd := exec.Command(commandName, commandArgs...)
-	cmd.Dir = t.workDir
+	cmd.Dir = normalizedCtx.CurrentDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("python execution failed: %w", err)
@@ -134,7 +143,7 @@ func (t *PythonTool) RunSchema(input map[string]any) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func (t *PythonTool) buildCommand(runner string, uvMode string, pathValue string, code string, args []string) (string, []string, string, func(), error) {
+func (t *PythonTool) buildCommand(runner string, uvMode string, pathValue string, code string, args []string, currentDir string) (string, []string, string, func(), error) {
 	cleanup := func() {}
 
 	if runner == "uv" {
@@ -143,7 +152,7 @@ func (t *PythonTool) buildCommand(runner string, uvMode string, pathValue string
 				if code == "" {
 					return "", nil, "", nil, fmt.Errorf("path or code required for uv script mode")
 				}
-				tmpPath, tmpCleanup, err := t.writeTempScript(code)
+				tmpPath, tmpCleanup, err := t.writeTempScript(code, currentDir)
 				if err != nil {
 					return "", nil, "", nil, err
 				}
@@ -170,20 +179,20 @@ func (t *PythonTool) buildCommand(runner string, uvMode string, pathValue string
 	return runner, commandArgs, fmt.Sprintf("%s %s", runner, strings.Join(commandArgs, " ")), cleanup, nil
 }
 
-func (t *PythonTool) writeTempScript(code string) (string, func(), error) {
-	if t.workDir == "" {
+func (t *PythonTool) writeTempScript(code string, currentDir string) (string, func(), error) {
+	if currentDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to resolve working directory: %w", err)
 		}
-		t.workDir = cwd
+		currentDir = cwd
 	}
 
-	if err := os.MkdirAll(t.workDir, 0o755); err != nil {
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
 		return "", nil, fmt.Errorf("failed to prepare working directory: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(t.workDir, "task-python-*.py")
+	tmp, err := os.CreateTemp(currentDir, "task-python-*.py")
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temp script: %w", err)
 	}

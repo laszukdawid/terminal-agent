@@ -40,7 +40,7 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
-			execConfig := resolveExecutionConfig(config)
+			execConfig := config
 
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")

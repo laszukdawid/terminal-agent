@@ -83,6 +83,10 @@ func (t *FileSearchTool) Run(input *string) (string, error) {
 }
 
 func (t *FileSearchTool) RunSchema(input map[string]any) (string, error) {
+	return t.RunSchemaWithContext(input, ToolExecutionContext{RootDir: t.workDir, CurrentDir: t.workDir})
+}
+
+func (t *FileSearchTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error) {
 	root, _ := input["root"].(string)
 	namePattern, _ := input["name_pattern"].(string)
 	contains, _ := input["contains"].(string)
@@ -101,7 +105,7 @@ func (t *FileSearchTool) RunSchema(input map[string]any) (string, error) {
 		return "", fmt.Errorf("name_pattern or contains is required")
 	}
 
-	rootPath, err := resolveRoot(root, t.workDir)
+	rootPath, err := resolveRootInContext(root, ctx, t.workDir)
 	if err != nil {
 		return "", err
 	}
