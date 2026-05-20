@@ -39,7 +39,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
-			execConfig := resolveExecutionConfig(config)
+			execConfig := config
 
 			// Check if this is streaming response
 			streamFlag, _ := flags.GetBool("stream")

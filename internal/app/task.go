@@ -2,6 +2,10 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
@@ -26,11 +30,21 @@ type TaskResult struct {
 }
 
 func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error) {
+	taskRootDir, err := resolveTaskRootDir(req)
+	if err != nil {
+		return TaskResult{}, err
+	}
+
+	runtimeConfig := req.Config
+	if runtimeConfig != nil {
+		runtimeConfig = config.WithWorkingDir(runtimeConfig, taskRootDir)
+	}
+
 	runtime, err := NewRuntime(RuntimeRequest{
 		Provider:   req.Provider,
 		Model:      req.Model,
-		WorkingDir: req.WorkingDir,
-		Config:     req.Config,
+		WorkingDir: taskRootDir,
+		Config:     runtimeConfig,
 	})
 	if err != nil {
 		return TaskResult{}, err
@@ -42,7 +56,13 @@ func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 	}
 
 	agentInstance := runtime.NewAgent(PromptSet{Task: taskPrompt})
-	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{Allow: req.Allow})
+	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{
+		Allow: req.Allow,
+		Dirs: internalagent.TaskDirs{
+			RootDir:    taskRootDir,
+			CurrentDir: taskRootDir,
+		},
+	})
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -54,4 +74,23 @@ func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 		RawOutputTool:   response.RawOutputTool,
 		DirectRawOutput: response.DirectRawOutput,
 	}, nil
+}
+
+func resolveTaskRootDir(req TaskRequest) (string, error) {
+	if workingDir := strings.TrimSpace(req.WorkingDir); workingDir != "" {
+		return filepath.Abs(workingDir)
+	}
+
+	if req.Config != nil {
+		if configuredDir := strings.TrimSpace(req.Config.GetConfiguredWorkingDir()); configuredDir != "" {
+			return filepath.Abs(configuredDir)
+		}
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve task working directory: %w", err)
+	}
+
+	return filepath.Abs(workingDir)
 }

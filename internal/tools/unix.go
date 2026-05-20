@@ -137,7 +137,6 @@ func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (str
 		return "", fmt.Errorf("no Unix command found in the response")
 	}
 
-	// Execute the Unix command
 	cmdOutput, err := executor.Exec(code)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute Unix command: %v", err)
@@ -151,10 +150,18 @@ func (u *UnixTool) Run(cmd *string) (string, error) {
 }
 
 func (u *UnixTool) RunSchema(input map[string]any) (string, error) {
-	// Extract command from input
+	return u.RunSchemaWithContext(input, ToolExecutionContext{})
+}
+
+func (u *UnixTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error) {
 	cmd, ok := input["command"].(string)
 	if !ok {
 		return "", fmt.Errorf("failed to extract command from tool input")
 	}
-	return u.ExecCode(cmd)
+
+	executor := u.executor
+	if ctx.CurrentDir != "" {
+		executor = &BashExecutor{workDir: ctx.CurrentDir}
+	}
+	return u.execCodeWithExecutor(cmd, executor)
 }

@@ -23,6 +23,7 @@ const (
 	MaxTokens                 = 400
 	MaxIterations             = 10
 	UserClarificationToolName = "user_clarification"
+	ToolNameChangeDirectory   = "change_directory"
 	ToolNameFinalAnswer       = "final_answer"
 )
 
@@ -48,6 +49,9 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 
 	finalAnswerTool := NewFinalAnswerTool()
 	allTools[finalAnswerTool.Name()] = finalAnswerTool
+
+	changeDirectoryTool := NewChangeDirectoryTool()
+	allTools[changeDirectoryTool.Name()] = changeDirectoryTool
 
 	return &Agent{
 		Connector:        connector,
@@ -94,6 +98,7 @@ func (a *Agent) Chat(ctx context.Context, userMessage string, history []connecto
 
 type TaskOptions struct {
 	Allow []string
+	Dirs  TaskDirs
 }
 
 type TaskRunResult struct {
@@ -111,6 +116,11 @@ const (
 	TaskPhaseCompleted  TaskPhase = "completed"
 	TaskPhaseFailed     TaskPhase = "failed"
 )
+
+type TaskDirs struct {
+	RootDir    string
+	CurrentDir string
+}
 
 type taskToolOutput struct {
 	ToolName string
@@ -143,15 +153,12 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 	defer cancel()
 	successfulToolOutputs := make([]taskToolOutput, 0, 1)
 
-	workingDir := ""
-	if a.config != nil {
-		workingDir = a.config.GetWorkingDir()
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		workingDir = cwd
+	taskDirs, err := resolveInitialTaskDirs(options.Dirs, a.config)
+	if err != nil {
+		return TaskRunResult{}, err
 	}
 
-	ruleSets, store, err := config.LoadPermissionRuleSets(workingDir)
+	ruleSets, store, err := config.LoadPermissionRuleSets(taskDirs.RootDir)
 	if err != nil {
 		return TaskRunResult{}, fmt.Errorf("failed to load permissions: %w", err)
 	}
@@ -167,6 +174,7 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 		Iterations:     0,
 		MaxIterations:  MaxIterations, // Configurable maximum iterations
 		Phase:          TaskPhaseRunning,
+		Dirs:           taskDirs,
 		Results:        make(map[string]string),
 	}
 
@@ -204,6 +212,21 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 				continue
 			}
 
+			if response.ToolName == ToolNameChangeDirectory {
+				changeMessage, err := changeTaskDirectory(response.ToolInput, &taskState.Dirs)
+				if err != nil {
+					logger.Errorw("Directory change failed", "tool", response.ToolName, "error", err)
+					taskState.LastError = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
+					taskState.Results["tool_error"] = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
+					taskState.Results["tool_input"] = fmt.Sprintf("Provided tool arguments: %v", response.ToolInput)
+				} else {
+					taskState.Results[response.ToolName] = changeMessage
+					taskState.LastError = ""
+					taskState.CurrentThought = ""
+				}
+				continue
+			}
+
 			// Execute the selected tool
 			action := BuildActionString(response.ToolName, response.ToolInput)
 			if requiresConfirmation(response.ToolName) {
@@ -218,7 +241,7 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 				}
 			}
 
-			toolResult, err := tool.RunSchema(response.ToolInput)
+			toolResult, err := runTaskTool(tool, response.ToolInput, taskState.Dirs)
 			if err != nil {
 				logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)
 				taskState.LastError = fmt.Sprintf("Failed to execute %s: %v", response.ToolName, err)
@@ -285,6 +308,7 @@ type TaskState struct {
 	Iterations     int
 	MaxIterations  int
 	Phase          TaskPhase
+	Dirs           TaskDirs
 	Results        map[string]string // Holds results from tools and user interactions
 	LastError      string
 }
@@ -305,6 +329,8 @@ func buildTaskPrompt(state *TaskState) string {
 
 Current phase: {{.Phase}}
 Iteration: {{.Iterations}} of {{.MaxIterations}}
+Task root directory: {{.Dirs.RootDir}}
+Current working directory: {{.Dirs.CurrentDir}}
 
 {{if .HasResults}}Information gathered so far:
 {{range $source, $result := .Results}}Results source: {{$source}}
@@ -371,6 +397,9 @@ func getUserInput() (string, error) {
 func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, error) {
 	summaryPrompt := `I've been working on this task: {{.OriginalQuery}}
 
+Task root directory: {{.Dirs.RootDir}}
+Current working directory: {{.Dirs.CurrentDir}}
+
 Here's what I've learned and done so far:
 
 {{range $source, $result := .Results}}- From {{$source}}: {{$result}}
@@ -421,33 +450,15 @@ func TruncateString(s string, maxLen int) string {
 }
 
 func selectRawTaskOutput(outputs []taskToolOutput) taskToolOutput {
-	for i := len(outputs) - 1; i >= 0; i-- {
-		output := outputs[i]
-		if !isDisplayOrientedTool(output.ToolName) {
-			continue
-		}
-		if !strings.ContainsAny(output.Output, "\n\t") {
-			continue
-		}
-
-		return output
-	}
-
-	return taskToolOutput{}
+	return selectTaskRawOutput(outputs)
 }
 
 func toolInputRequestsFinal(input map[string]any) bool {
-	requested, ok := input["final"].(bool)
-	return ok && requested
+	return taskToolInputRequestsFinal(input)
 }
 
 func isDisplayOrientedTool(toolName string) bool {
-	switch toolName {
-	case tools.ToolNameUnix, tools.ToolNamePython, tools.ToolNameFileSearch:
-		return true
-	default:
-		return false
-	}
+	return isTaskDisplayOrientedTool(toolName)
 }
 
 func requiresConfirmation(toolName string) bool {

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/laszukdawid/terminal-agent/internal/app"
@@ -26,7 +27,10 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
-			execConfig := resolveExecutionConfig(config)
+			taskWorkingDir, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to resolve task working directory: %w", err)
+			}
 
 			// Concatenate all remaining args to form the query
 			userRequest := strings.Join(args, " ")
@@ -41,8 +45,9 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				Provider:       *provider,
 				Model:          *modelID,
 				PromptOverride: *promptFlag,
+				WorkingDir:     taskWorkingDir,
 				Allow:          allow,
-				Config:         execConfig,
+				Config:         config,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to request a task: %w", err)

@@ -82,6 +82,10 @@ func (t *FileEditTool) Run(input *string) (string, error) {
 }
 
 func (t *FileEditTool) RunSchema(input map[string]any) (string, error) {
+	return t.RunSchemaWithContext(input, ToolExecutionContext{RootDir: t.workDir, CurrentDir: t.workDir})
+}
+
+func (t *FileEditTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error) {
 	path, _ := input["path"].(string)
 	operation, _ := input["operation"].(string)
 	content, _ := input["content"].(string)
@@ -94,7 +98,7 @@ func (t *FileEditTool) RunSchema(input map[string]any) (string, error) {
 	if operation == "" {
 		return "", fmt.Errorf("operation is required")
 	}
-	resolvedPath, err := resolvePath(path, t.workDir)
+	resolvedPath, err := resolvePathInContext(path, ctx, t.workDir)
 	if err != nil {
 		return "", err
 	}

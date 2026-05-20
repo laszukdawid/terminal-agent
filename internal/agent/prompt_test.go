@@ -1,13 +1,15 @@
 package agent
 
 import (
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestGetSystemInfo(t *testing.T) {
-	info := GetSystemInfo()
+	workingDir := filepath.Join(t.TempDir(), "project")
+	info := GetSystemInfo(workingDir)
 
 	// Test that all fields are populated (not empty or "unknown" unless there's an error)
 	tests := []struct {
@@ -50,7 +52,8 @@ func TestGetSystemInfo(t *testing.T) {
 }
 
 func TestSystemPromptHeader(t *testing.T) {
-	header := SystemPromptHeader()
+	workingDir := filepath.Join(t.TempDir(), "project")
+	header := SystemPromptHeader(workingDir)
 
 	// Test that the header contains expected content
 	expectedStrings := []string{
@@ -70,8 +73,11 @@ func TestSystemPromptHeader(t *testing.T) {
 	}
 
 	// Test that system info is actually populated (not just placeholders)
-	info := GetSystemInfo()
+	info := GetSystemInfo(workingDir)
 	if !strings.Contains(header, info.Hostname) {
 		t.Errorf("SystemPromptHeader should contain actual hostname: %s", info.Hostname)
+	}
+	if !strings.Contains(header, workingDir) {
+		t.Errorf("SystemPromptHeader should contain explicit working directory: %s", workingDir)
 	}
 }

@@ -1,0 +1,48 @@
+package app
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestResolveTaskRootDirUsesExplicitRequestWorkingDir(t *testing.T) {
+	requestDir := t.TempDir()
+	configuredDir := t.TempDir()
+
+	rootDir, err := resolveTaskRootDir(TaskRequest{
+		WorkingDir: requestDir,
+		Config:     config.WithWorkingDir(config.NewDefaultConfig(), configuredDir),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, requestDir, rootDir)
+}
+
+func TestResolveTaskRootDirFallsBackToConfiguredWorkingDir(t *testing.T) {
+	configuredDir := t.TempDir()
+
+	rootDir, err := resolveTaskRootDir(TaskRequest{
+		Config: config.WithWorkingDir(config.NewDefaultConfig(), configuredDir),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, configuredDir, rootDir)
+}
+
+func TestResolveTaskRootDirFallsBackToProcessCwd(t *testing.T) {
+	originalWD, err := os.Getwd()
+	require.NoError(t, err)
+	tempDir := t.TempDir()
+	require.NoError(t, os.Chdir(tempDir))
+	defer os.Chdir(originalWD)
+
+	rootDir, err := resolveTaskRootDir(TaskRequest{Config: config.NewDefaultConfig()})
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Clean(tempDir), rootDir)
+}

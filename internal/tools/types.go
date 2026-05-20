@@ -16,6 +16,16 @@ type Tool interface {
 	HelpText() string
 }
 
+type ToolExecutionContext struct {
+	RootDir    string
+	CurrentDir string
+}
+
+type ContextualTool interface {
+	Tool
+	RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error)
+}
+
 type CodeExecutor interface {
 	Exec(code string) (string, error)
 }
