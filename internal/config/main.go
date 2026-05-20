@@ -23,6 +23,7 @@ type Config interface {
 	SetDefaultModelId(string) error
 	GetMcpFilePath() string
 	SetMcpFilePath(string) error
+	GetConfiguredWorkingDir() string
 	GetWorkingDir() string
 	SetWorkingDir(string) error
 	GetMaxTokens() int
@@ -82,7 +83,7 @@ func NewDefaultConfig() *config {
 		LlamaModels: map[string]string{},
 		LogLevel:    "info",
 		McpFilePath: "",
-		WorkingDir:  getDefaultWorkingDir(),
+		WorkingDir:  "",
 		MaxTokens:   600,
 	}
 }
@@ -174,6 +175,10 @@ func (config *config) GetWorkingDir() string {
 	if config.WorkingDir == "" {
 		return getDefaultWorkingDir()
 	}
+	return config.WorkingDir
+}
+
+func (config *config) GetConfiguredWorkingDir() string {
 	return config.WorkingDir
 }
 

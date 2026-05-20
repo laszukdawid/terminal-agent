@@ -28,3 +28,10 @@ func (c *workingDirConfig) GetWorkingDir() string {
 	}
 	return c.Config.GetWorkingDir()
 }
+
+func (c *workingDirConfig) GetConfiguredWorkingDir() string {
+	if c.workingDir != "" {
+		return c.workingDir
+	}
+	return c.Config.GetConfiguredWorkingDir()
+}
