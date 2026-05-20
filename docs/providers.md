@@ -13,6 +13,65 @@ agent config set model <model-id>
 
 ## Provider-Specific Setup
 
+### Llama.cpp
+
+**Setup:**
+1. Obtain a local GGUF model file.
+2. Install llama.cpp shared libraries compatible with your machine.
+3. Set the runtime library path:
+   ```sh
+   export YZMA_LIB=/absolute/path/to/libdir
+   ```
+4. Add a model alias to `~/.config/terminal-agent/config.json` under `llama_models`.
+
+Example Linux CPU setup:
+
+```sh
+go install github.com/hybridgroup/yzma@v1.14.1
+mkdir -p ~/.local/share/yzma/lib
+~/go/bin/yzma install --lib ~/.local/share/yzma/lib --processor cpu --version b9180
+export YZMA_LIB=$HOME/.local/share/yzma/lib
+```
+
+There are matching Taskfile helpers:
+
+```sh
+task deps:llama
+task run:set:llama
+```
+
+**Configuration:**
+```sh
+agent config set provider llama
+agent config set model llama3.2
+```
+
+Example config:
+
+```json
+{
+  "default_provider": "llama",
+  "providers": {
+    "llama": "llama3.2"
+  },
+  "llama_models": {
+    "llama3.2": "/absolute/path/to/llama3.2.gguf"
+  }
+}
+```
+
+**Special Features:**
+- Direct local inference without a separate HTTP server
+- Supports streaming output with the `--stream` flag
+- Uses the model's chat template when available
+
+**Limitations:**
+- Requires `YZMA_LIB` to point at the directory containing local llama.cpp shared libraries
+- Requires local GGUF model files and alias configuration
+- Currently supports `ask` and GUI query flows only
+- Does not currently support the `task` command's tool usage capability
+- The documented Linux install path uses llama.cpp runtime build `b9180`
+
 ### OpenAI
 
 **Setup:**
@@ -112,8 +171,9 @@ In case your Ollama serve is running on a non-default server you can set the URL
 export OLLAMA_HOST=http://localhost:11345  # modify
 ```
 
-**Limitations:**
-- Currently only `ask` is supported
+**Special Features:**
+- Supports streaming output with the `--stream` flag
+- Supports tool usage for the `task` command
 
 ### Amazon Bedrock
 
@@ -178,4 +238,4 @@ Different providers excel at different tasks:
 - **Complex reasoning**: Anthropic Claude models (direct or via Bedrock)
 - **Speed and cost-efficiency**: OpenAI's GPT-3.5, Google's Gemini Flash models
 - **Creative tasks**: OpenAI's GPT-4 series, Anthropic Claude Opus
-- **Open-source options**: Llama models via Perplexity or Bedrock
+- **Open-source options**: Llama models via the local `llama` provider, Ollama, Perplexity, or Bedrock

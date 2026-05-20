@@ -1,6 +1,6 @@
 # Terminal Agent Documentation
 
-Welcome to Terminal Agent - an LLM-powered assistant for your terminal needs.
+Welcome to Terminal Agent - an LLM-powered assistant for your terminal needs, with support for both hosted model APIs and local runtimes such as Ollama and direct `llama.cpp` GGUF inference.
 
 ## Contents
 

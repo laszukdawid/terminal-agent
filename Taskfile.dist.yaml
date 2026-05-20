@@ -173,6 +173,21 @@ tasks:
       - go run cmd/agent/main.go config set provider ollama
       - go run cmd/agent/main.go config set model llama3.2
 
+  run:set:llama:
+    desc: Set the provider to direct local llama.cpp
+    cmds:
+      - go run cmd/agent/main.go config set provider llama
+      - go run cmd/agent/main.go config set model llama3.2
+
+  deps:llama:
+    desc: Install the yzma CLI used for local llama.cpp runtime setup
+    cmds:
+      - go install github.com/hybridgroup/yzma@v1.14.1
+      - mkdir -p ~/.local/share/yzma/lib
+      - ~/go/bin/yzma install --lib ~/.local/share/yzma/lib {{if .VERSION}}--version {{.VERSION}}{{end}}
+      - |
+        printf 'Set YZMA_LIB in your shell profile, for example:\n  echo '\''export YZMA_LIB="$HOME/.local/share/yzma/lib"'\'' >> ~/.bashrc\n'
+
   run:generate:
     desc: Execute generation
     cmds:
