@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewConnectorReturnsErrorForUnsupportedProvider(t *testing.T) {
-	conn, err := NewConnector("nope", "model")
+	conn, err := NewConnector("nope", "model", nil)
 
 	require.Error(t, err)
 	assert.Nil(t, conn)
@@ -16,7 +16,7 @@ func TestNewConnectorReturnsErrorForUnsupportedProvider(t *testing.T) {
 }
 
 func TestNewConnectorUsesProviderDefaultModelWhenModelIDEmpty(t *testing.T) {
-	conn, err := NewConnector(OpenaiProvider, "")
+	conn, err := NewConnector(OpenaiProvider, "", nil)
 
 	require.NoError(t, err)
 	assert.IsType(t, &OpenAIConnector{}, conn)

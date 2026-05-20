@@ -41,7 +41,7 @@ func NewRuntime(req RuntimeRequest) (*Runtime, error) {
 		workingDir = req.Config.GetWorkingDir()
 	}
 
-	conn, err := connector.NewConnector(req.Provider, req.Model)
+	conn, err := connector.NewConnector(req.Provider, req.Model, req.Config)
 	if err != nil {
 		return nil, err
 	}

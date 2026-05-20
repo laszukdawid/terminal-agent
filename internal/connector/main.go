@@ -3,9 +3,11 @@ package connector
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/laszukdawid/terminal-agent/internal/config"
 )
 
-func NewConnector(provider string, modelID string) (LLMConnector, error) {
+func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnector, error) {
 	var connector LLMConnector
 	switch provider {
 	case BedrockProvider:
@@ -19,6 +21,8 @@ func NewConnector(provider string, modelID string) (LLMConnector, error) {
 		connector = NewAnthropicConnector(&modelID)
 	case GoogleProvider:
 		connector = NewGoogleConnector(&modelID)
+	case LlamaProvider:
+		connector = NewLlamaConnector(&modelID, cfg)
 	case OllamaProvider:
 		connector = NewOllamaConnector(&modelID)
 	default:
