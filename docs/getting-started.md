@@ -90,6 +90,39 @@ export PERPLEXITY_KEY=your_api_key_here
 # For Amazon Bedrock, configure your AWS credentials as usual
 ```
 
+If you want to use the direct local `llama` provider instead of an API-backed provider:
+
+```sh
+agent config set provider llama
+agent config set model llama3.2
+go install github.com/hybridgroup/yzma@v1.14.1
+mkdir -p ~/.local/share/yzma/lib
+~/go/bin/yzma install --lib ~/.local/share/yzma/lib --processor cpu --version b9180
+export YZMA_LIB=$HOME/.local/share/yzma/lib
+```
+
+You can also use the bundled helpers:
+
+```sh
+task deps:llama:cpu
+task run:set:llama
+```
+
+Then add a `llama_models` alias map to `~/.config/terminal-agent/config.json`:
+
+```json
+{
+  "providers": {
+    "llama": "llama3.2"
+  },
+  "llama_models": {
+    "llama3.2": "/absolute/path/to/llama3.2.gguf"
+  }
+}
+```
+
+The `llama` provider currently supports `ask` and GUI query flows. It does not support `task` tool use yet.
+
 ## Quick Start
 
 Once installed and configured, you can start using Terminal Agent:

@@ -14,6 +14,7 @@ var supportedProviders = []string{
 	connector.AnthropicProvider,
 	connector.BedrockProvider,
 	connector.GoogleProvider,
+	connector.LlamaProvider,
 	connector.OllamaProvider,
 	connector.OpenaiProvider,
 	connector.PerplexityProvider,

@@ -4,6 +4,8 @@ An LLM Agent to help you from and within the terminal.
 
 Read more https://laszukdawid.github.io/terminal-agent/.
 
+Terminal Agent supports both API-backed providers and local model runtimes, including Ollama and direct `llama.cpp`-based GGUF inference through the `llama` provider.
+
 ## Example
 
 <img src="./docs/assets/aa-how-to-attach-image.png" width="500" alt="answer to how to attach an image to Readme" />
@@ -210,6 +212,67 @@ $ agent config set model llama3.2
 
 **Note**: Make sure the model you specify is already pulled and available in your local Ollama installation. You can list available models with `ollama list`.
 
+### Llama.cpp
+
+The `llama` provider runs local GGUF models directly in the `agent` process using a llama.cpp-compatible runtime. This avoids an HTTP hop through Ollama, but it requires local model files and local llama.cpp shared libraries.
+
+Setup requirements:
+
+1. Obtain a GGUF model file locally.
+2. Install a llama.cpp runtime compatible with your machine.
+3. Set `YZMA_LIB` to the directory containing those llama.cpp shared libraries.
+4. Configure a model alias in `~/.config/terminal-agent/config.json`.
+
+On Linux, the supported setup path is to install `yzma`, install the llama.cpp runtime into a local library directory, and set `YZMA_LIB` to that directory:
+
+```sh
+go install github.com/hybridgroup/yzma@v1.14.1
+mkdir -p ~/.local/share/yzma/lib
+~/go/bin/yzma install --lib ~/.local/share/yzma/lib --processor cpu --version b9180
+export YZMA_LIB=$HOME/.local/share/yzma/lib
+```
+
+There are matching Taskfile helpers for this flow:
+
+```sh
+task deps:llama:cpu
+task run:set:llama
+```
+
+Use the library directory, not the `.so` file path itself:
+
+```sh
+export YZMA_LIB=$HOME/.local/share/yzma/lib
+```
+
+Example config:
+
+```json
+{
+  "default_provider": "llama",
+  "providers": {
+    "llama": "llama3.2"
+  },
+  "llama_models": {
+    "llama3.2": "/absolute/path/to/llama3.2.gguf"
+  }
+}
+```
+
+CLI configuration still uses the logical alias:
+
+```sh
+agent config set provider llama
+agent config set model llama3.2
+```
+
+Current limitations:
+
+- `ask` and GUI query flows are supported
+- `task` is not supported yet because structured tool calling is not implemented for the direct local runtime
+- the current runtime requires `YZMA_LIB`; there is no built-in library auto-discovery yet
+- the documented Linux install flow uses llama.cpp runtime build `b9180`
+
 
 
 ## Features
@@ -222,6 +285,11 @@ $ agent config set model llama3.2
 - [x] **websearch**: Can search the web and display links
 - [x] **unix**: Designs and evaluates a unix command
 - [x] **custom prompts**: Override system prompts via CLI flag or project files
+
+Provider-specific capability notes:
+
+- `llama` currently supports direct local query generation for `ask` and GUI flows
+- `llama` does not yet support `task` tool use
 
 In case some capabilities are missing please create a Feature Request github issue. Looking forward to extending this agent with useful features.
 

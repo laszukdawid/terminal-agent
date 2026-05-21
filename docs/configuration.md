@@ -24,6 +24,31 @@ agent config set provider openai
 agent config set model gpt-4o-mini
 ```
 
+### Llama Local Model Aliases
+
+The `llama` provider resolves logical model names through a `llama_models` alias map in the main config file.
+
+Example:
+
+```json
+{
+  "default_provider": "llama",
+  "providers": {
+    "llama": "llama3.2"
+  },
+  "llama_models": {
+    "llama3.2": "/absolute/path/to/llama3.2.gguf",
+    "qwen2.5-coder": "/absolute/path/to/qwen2.5-coder.gguf"
+  }
+}
+```
+
+When `provider` is `llama`, the configured model name is resolved in this order:
+
+1. exact file path if the configured model value already points to a readable local file
+2. alias lookup in `llama_models`
+3. clear runtime error if neither resolves
+
 ### Viewing Current Configuration
 
 ```sh
@@ -86,12 +111,28 @@ Terminal Agent uses environment variables for API keys:
 | Perplexity | `PERPLEXITY_KEY` | API key for Perplexity AI |
 | Google | `GOOGLE_API_KEY` | API key for Google AI (Gemini) |
 | AWS Bedrock | AWS credentials | Standard AWS credential configuration |
+| Llama.cpp | `YZMA_LIB` | Path to the directory containing the local llama.cpp shared libraries used by the `llama` provider |
 | Ollama | `OLLAMA_HOST` | Host URL for Ollama server |
 
 Example of setting an environment variable:
 
 ```sh
 export OPENAI_API_KEY=your_api_key_here
+```
+
+For the `llama` provider, example runtime setup is:
+
+```sh
+export YZMA_LIB=$HOME/.local/share/yzma/lib
+```
+
+Example Linux CPU runtime install flow:
+
+```sh
+go install github.com/hybridgroup/yzma@v1.14.1
+mkdir -p ~/.local/share/yzma/lib
+~/go/bin/yzma install --lib ~/.local/share/yzma/lib --processor cpu --version b9180
+export YZMA_LIB=$HOME/.local/share/yzma/lib
 ```
 
 For persistent configuration, add this to your shell profile (`.bashrc`, `.zshrc`, etc.).
@@ -209,6 +250,8 @@ task run:set:perplexity
 # Set provider to Ollama
 task run:set:ollama
 ```
+
+If you use the direct local `llama` provider, configure it manually through `agent config set` plus the `llama_models` alias map in `config.json`. The repo also includes `task deps:llama:cpu`, `task deps:llama:vulkan`, `task deps:llama:rocm`, and `task run:set:llama` helpers.
 
 To see all available tasks:
 

@@ -18,6 +18,7 @@ func getConfigPath() string {
 type Config interface {
 	GetDefaultProvider() string
 	GetDefaultModelId() string
+	GetLlamaModels() map[string]string
 	SetDefaultProvider(string) error
 	SetDefaultModelId(string) error
 	GetMcpFilePath() string
@@ -35,6 +36,7 @@ type config struct {
 	LogLevel        string
 	DefaultProvider string            `json:"default_provider"`
 	Providers       map[string]string `json:"providers"`
+	LlamaModels     map[string]string `json:"llama_models,omitempty"`
 	McpFilePath     string            `json:"mcp_file_path"`
 	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
@@ -72,11 +74,13 @@ func NewDefaultConfig() *config {
 		Providers: map[string]string{
 			"anthropic":  "claude-3-5-haiku-latest",
 			"bedrock":    "anthropic.claude-3-haiku-20240307-v1:0",
+			"llama":      "llama3.2",
 			"perplexity": "llama-3-8b-instruct",
 			"openai":     "gpt-4o-mini",
 			"google":     "gemini-2.0-flash-lite",
 			"ollama":     "llama3.2",
 		},
+		LlamaModels: map[string]string{},
 		LogLevel:    "info",
 		McpFilePath: "",
 		WorkingDir:  "",
@@ -142,6 +146,13 @@ func (config *config) SetDefaultProvider(provider string) error {
 
 func (config *config) GetDefaultModelId() string {
 	return config.Providers[config.DefaultProvider]
+}
+
+func (config *config) GetLlamaModels() map[string]string {
+	if config.LlamaModels == nil {
+		return map[string]string{}
+	}
+	return config.LlamaModels
 }
 
 func (config *config) SetDefaultModelId(modelId string) error {

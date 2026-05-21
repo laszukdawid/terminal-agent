@@ -1,6 +1,6 @@
 # Terminal Agent Overview
 
-Terminal Agent is a CLI-first AI assistant that lets you collaborate with large language models directly from your shell. It wraps multiple provider APIs (OpenAI, Anthropic, Bedrock, Perplexity, Ollama, etc.), renders markdown responses with Glamour, and exposes commands like `agent ask` for general questions and `agent task` for planning and executing terminal workflows. Configuration lives in `~/.config/terminal-agent/config.json`, can be overridden via CLI flags, and supports provider/model switching as well as MCP tool definitions.
+Terminal Agent is a CLI-first AI assistant that lets you collaborate with large language models directly from your shell. It wraps multiple provider APIs (OpenAI, Anthropic, Bedrock, Perplexity, Ollama, etc.), and also supports direct local `llama.cpp`-based GGUF inference through the `llama` provider. It renders markdown responses with Glamour, and exposes commands like `agent ask` for general questions and `agent task` for planning and executing terminal workflows. Configuration lives in `~/.config/terminal-agent/config.json`, can be overridden via CLI flags, and supports provider/model switching as well as MCP tool definitions.
 
 Tool execution permissions can be set in `~/.config/terminal-agent/config.json` and in project-local `.terminal-agent.json` files. Local configs are discovered by walking from the current working directory up to the filesystem root; the closest file wins when priorities overlap. Permissions use the same action expression format shown in confirmations (for example `unix("aws sso login", profile="dev")`) and support `allow`, `deny`, and `ask` lists. When prompted, `yes!` or `no!` will remember a decision by writing to the nearest `.terminal-agent.json`, falling back to the global config when no local file exists.
 
@@ -13,12 +13,14 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 - CLI commands in `internal/commands/` call `internal/app` service methods such as `Ask`, `AskEvents`, `Chat`, and `Task`.
 - GUI code in `internal/gui/` also depends on the same `internal/app` service interface rather than talking directly to connectors or prompt helpers.
 - Changes in `internal/app` should therefore be reviewed as cross-surface changes even when only one entrypoint appears to be affected.
+- The `llama` provider is a direct local runtime, not an HTTP API integration. It resolves model aliases from config and loads GGUF files plus a local llama.cpp shared library inside the current process.
 
 Prompt and runtime behavior is also shared through this layer, with one important distinction:
 
 - `ask` and `chat` use ask-prompt resolution and may include memory/context features.
 - `task` should resolve only the task prompt it needs.
 - Do not couple task execution to ask-prompt resolution or ask-only features, because a broken ask prompt should not block task execution.
+- The current `llama` provider supports direct local query generation for `ask`/GUI flows, but not `task` tool calling yet.
 
 Task execution has a direct-output path for output-oriented tools:
 
@@ -42,6 +44,7 @@ Taskfile commands will install Go dependencies automatically, but if you need to
 - Install Task (`brew install go-task/tap/go-task` or follow upstream docs) and Docker before running integration tests.
 - `task build` produces the `agent` binary; `task install` additionally copies it to `~/.local/bin/agent`.
 - Configuration helpers live under `task run:set:*` (e.g., `task run:set:openai`) for quickly switching providers during manual testing.
+- The direct local `llama` provider currently requires `YZMA_LIB` to point at the directory containing the llama.cpp shared libraries, plus `llama_models` aliases in `~/.config/terminal-agent/config.json`. The documented Linux install path uses llama.cpp runtime build `b9180`.
 
 ## System Prompt Context
 

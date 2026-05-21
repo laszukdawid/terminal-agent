@@ -14,6 +14,7 @@ var supportedProviders = []string{
 	connector.AnthropicProvider,
 	connector.BedrockProvider,
 	connector.GoogleProvider,
+	connector.LlamaProvider,
 	connector.OllamaProvider,
 	connector.OpenaiProvider,
 	connector.PerplexityProvider,
@@ -50,6 +51,8 @@ func providerSetupHint(provider string) string {
 		if os.Getenv("PERPLEXITY_KEY") == "" {
 			return "Perplexity requires PERPLEXITY_KEY to be set."
 		}
+	case connector.LlamaProvider:
+		return "Llama uses local GGUF model aliases from config.json under llama_models."
 	case connector.OllamaProvider:
 		return "Ollama uses the local server configuration from OLLAMA_HOST when set."
 	case connector.BedrockProvider:
