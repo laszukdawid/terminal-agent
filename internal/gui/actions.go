@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
@@ -24,7 +25,12 @@ func (g *App) submit() {
 	g.state.showRequest = false
 	ctx, cancel := context.WithCancel(context.Background())
 	g.state.setRunning(cancel)
-	g.startThinking()
+	separator := "\n────────────────────────\n\n"
+	if g.popup.outputField.Text == "" {
+		separator = ""
+	}
+	g.popup.outputField.SetText(separator + fmt.Sprintf("Response to: %s\n\n", message))
+	g.startIndicator()
 	g.render()
 
 	events, err := g.service.AskEvents(ctx, appservice.AskRequest{
@@ -38,6 +44,7 @@ func (g *App) submit() {
 		Config:     g.cfg,
 	})
 	if err != nil {
+		g.stopIndicatorAnimation()
 		g.state.clearRunning()
 		g.state.errorText = err.Error()
 		g.render()

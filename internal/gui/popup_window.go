@@ -21,8 +21,12 @@ const (
 	maxWindowHeight     float32 = 760
 	maxInputRows                = 3
 	compactOutputHeight float32 = 110
+	statusMinWidth      float32 = 130
+	statusIndicatorSize float32 = 18
 	maxVisibleOutputLines       = 5
 )
+
+var spinnerFrames = []string{"|", "/", "-", "\\"}
 
 type popupWindow struct {
 	window        fyne.Window
@@ -34,10 +38,12 @@ type popupWindow struct {
 	answerMeta    *fyne.Container
 	questionCard  fyne.CanvasObject
 	questionLabel *canvas.Text
-	outputLabel   *widget.Label
+	outputField   *readOnlyEntry
 	headerStatus  *widget.Label
+	headerBrain   *canvas.Text
+	headerSpinner *canvas.Text
+	headerStatusBox  fyne.CanvasObject
 	modelLabel    *widget.Label
-	outputScroll  *container.Scroll
 	actionButton  *widget.Button
 	copyButton    *widget.Button
 	settingsButton *widget.Button
@@ -57,6 +63,10 @@ type popupEntry struct {
 	app      fyne.App
 	onEscape func()
 	onSubmit func()
+}
+
+type readOnlyEntry struct {
+	widget.Entry
 }
 
 func newPopupEntry(app fyne.App) *popupEntry {
@@ -90,6 +100,24 @@ func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 	e.Entry.TypedKey(key)
 }
 
+func newReadOnlyEntry() *readOnlyEntry {
+	entry := &readOnlyEntry{}
+	entry.ExtendBaseWidget(entry)
+	entry.MultiLine = true
+	entry.Wrapping = fyne.TextWrapWord
+	entry.Scroll = fyne.ScrollVerticalOnly
+	return entry
+}
+
+func (e *readOnlyEntry) TypedRune(rune) {}
+
+func (e *readOnlyEntry) TypedKey(key *fyne.KeyEvent) {
+	switch key.Name {
+	case fyne.KeyUp, fyne.KeyDown, fyne.KeyLeft, fyne.KeyRight, fyne.KeyPageUp, fyne.KeyPageDown, fyne.KeyHome, fyne.KeyEnd:
+		e.Entry.TypedKey(key)
+	}
+}
+
 func newPopupWindow(app fyne.App) *popupWindow {
 	window := app.NewWindow("Terminal Agent")
 	window.Resize(fyne.NewSize(defaultWindowWidth, defaultWindowHeight))
@@ -106,14 +134,21 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	questionLabel.Alignment = fyne.TextAlignLeading
 	questionLabel.TextSize = theme.TextSize()
 
-	outputLabel := widget.NewLabel("")
-	outputLabel.Wrapping = fyne.TextWrapWord
-	outputLabel.Selectable = true
+	outputField := newReadOnlyEntry()
+	outputField.SetMinRowsVisible(6)
 
 	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	headerStatus.Alignment = fyne.TextAlignCenter
 	headerStatus.Wrapping = fyne.TextWrapOff
 	headerStatus.Importance = widget.MediumImportance
+	headerBrain := canvas.NewText("🧠", theme.PrimaryColor())
+	headerBrain.Alignment = fyne.TextAlignCenter
+	headerBrain.TextSize = theme.TextSize() + 2
+	headerBrain.Hide()
+	headerSpinner := canvas.NewText(spinnerFrames[0], theme.PrimaryColor())
+	headerSpinner.Alignment = fyne.TextAlignCenter
+	headerSpinner.TextSize = theme.TextSize() + 4
+	headerSpinner.Hide()
 
 	modelLabel := widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true})
 
@@ -125,8 +160,8 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	questionCard := withBackground(questionLabel, color.NRGBA{R: 232, G: 235, B: 239, A: 255})
 	questionCard.Hide()
 	inputCard := withBackground(input, theme.Color(theme.ColorNameInputBackground))
-	outputScroll := container.NewVScroll(outputLabel)
-	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
+	outputCard := withBackground(outputField, theme.Color(theme.ColorNameInputBackground))
+	outputCard.Resize(fyne.NewSize(0, compactOutputHeight))
 
 	answerHeader := container.NewHBox(
 		answerHeading,
@@ -134,8 +169,13 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		copyButton,
 	)
 	answerMeta := container.NewVBox(requestHeading, questionCard, answerHeader)
-	answerPanel := container.NewVBox(answerMeta, outputScroll)
+	answerPanel := container.NewBorder(answerMeta, nil, nil, nil, outputCard)
 	toolbar := container.NewHBox(actionButton, layout.NewSpacer(), settingsButton)
+	statusSlot := container.NewGridWrap(
+		fyne.NewSize(statusMinWidth, max(headerStatus.MinSize().Height, statusIndicatorSize)),
+		container.NewCenter(headerStatus),
+	)
+	headerStatusBox := container.NewMax(statusSlot, container.NewCenter(headerBrain), container.NewCenter(headerSpinner))
 
 	content := container.NewBorder(
 		container.New(
@@ -143,7 +183,7 @@ func newPopupWindow(app fyne.App) *popupWindow {
 			container.NewHBox(
 				widget.NewLabelWithStyle("Terminal Agent", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 				layout.NewSpacer(),
-				headerStatus,
+				headerStatusBox,
 				layout.NewSpacer(),
 				modelLabel,
 			),
@@ -167,10 +207,12 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		answerHeader:  answerHeader,
 		answerMeta:    answerMeta,
 		questionLabel: questionLabel,
-		outputLabel:   outputLabel,
+		outputField:   outputField,
 		headerStatus:  headerStatus,
+		headerBrain:   headerBrain,
+		headerSpinner: headerSpinner,
+		headerStatusBox:  headerStatusBox,
 		modelLabel:    modelLabel,
-		outputScroll:  outputScroll,
 		actionButton:  actionButton,
 		copyButton:    copyButton,
 		settingsButton: settingsButton,
@@ -213,6 +255,37 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	})
 
 	return p
+}
+
+func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int) {
+	p.headerBrain.Color = theme.PrimaryColor()
+	p.headerBrain.Refresh()
+	p.headerSpinner.Color = theme.PrimaryColor()
+	p.headerSpinner.Refresh()
+	p.headerBrain.Hide()
+	p.headerSpinner.Hide()
+	p.headerStatus.Show()
+
+	switch status {
+	case "thinking":
+		p.headerStatus.SetText("")
+		p.headerStatus.Hide()
+		p.headerBrain.Show()
+	case "responding":
+		if isRunning {
+			p.headerStatus.SetText("")
+			p.headerStatus.Hide()
+			p.headerSpinner.Text = spinnerFrames[spinnerFrame%len(spinnerFrames)]
+			p.headerSpinner.Refresh()
+			p.headerSpinner.Show()
+			return
+		}
+		p.headerStatus.SetText("")
+	default:
+		p.headerStatus.SetText(status)
+		p.headerSpinner.Text = spinnerFrames[0]
+		p.headerSpinner.Refresh()
+	}
 }
 
 func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, onSave func(provider, model string) error) {
@@ -265,7 +338,6 @@ func (p *popupWindow) resizeInput(value string) {
 		rows = maxInputRows
 	}
 	p.input.SetMinRowsVisible(rows)
-	p.outputScroll.SetMinSize(fyne.NewSize(0, p.outputHeight()))
 	current := p.window.Canvas().Size()
 	height := current.Height
 	if height < minWindowHeight {
@@ -275,22 +347,6 @@ func (p *popupWindow) resizeInput(value string) {
 		height = maxWindowHeight
 	}
 	p.window.Resize(fyne.NewSize(max(current.Width, defaultWindowWidth), height))
-}
-
-func (p *popupWindow) outputHeight() float32 {
-	lineCount := strings.Count(p.outputLabel.Text, "\n") + 1
-	if lineCount < 1 {
-		lineCount = 1
-	}
-	if lineCount > maxVisibleOutputLines {
-		lineCount = maxVisibleOutputLines
-	}
-	lineHeight := theme.TextSize() + theme.Padding()
-	height := float32(lineCount)*lineHeight + theme.Padding()*2
-	if height < compactOutputHeight {
-		return compactOutputHeight
-	}
-	return height
 }
 
 func withBackground(content fyne.CanvasObject, fill color.Color) fyne.CanvasObject {

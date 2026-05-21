@@ -20,7 +20,7 @@ type App struct {
 	state   *state
 	popup   *popupWindow
 	quit    func()
-	stopThinking chan struct{}
+	stopIndicator chan struct{}
 }
 
 func NewApp(service appservice.Service, cfg config.Config, appID string) *App {
@@ -31,7 +31,7 @@ func NewApp(service appservice.Service, cfg config.Config, appID string) *App {
 		cfg:     cfg,
 		state:   &state{},
 		quit:    fyneApp.Quit,
-		stopThinking: make(chan struct{}),
+		stopIndicator: make(chan struct{}),
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
@@ -70,7 +70,6 @@ func (g *App) Show() {
 
 func (g *App) Hide() {
 	if g.state.cancelFunc != nil {
-		g.stopThinkingIndicator()
 		g.state.cancelFunc()
 		g.state.clearRunning()
 		if g.state.status != "" {
@@ -81,21 +80,21 @@ func (g *App) Hide() {
 	g.popup.window.Hide()
 }
 
-func (g *App) startThinking() {
+func (g *App) startIndicator() {
 	stop := make(chan struct{})
-	g.stopThinking = stop
+	g.stopIndicator = stop
 	go func() {
-		ticker := time.NewTicker(450 * time.Millisecond)
+		ticker := time.NewTicker(140 * time.Millisecond)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				fyne.Do(func() {
-					if !g.state.isRunning || g.state.statusBase == "" {
+					if !g.state.isRunning || g.state.status != "responding" {
 						return
 					}
-					g.state.advanceThinking(g.state.statusBase)
-					g.render()
+					g.state.spinnerFrame = (g.state.spinnerFrame + 1) % len(spinnerFrames)
+					g.popup.setStatus(g.state.status, g.state.isRunning, g.state.spinnerFrame)
 				})
 			case <-stop:
 				return
@@ -104,11 +103,11 @@ func (g *App) startThinking() {
 	}()
 }
 
-func (g *App) stopThinkingIndicator() {
+func (g *App) stopIndicatorAnimation() {
 	select {
-	case <-g.stopThinking:
+	case <-g.stopIndicator:
 	default:
-		close(g.stopThinking)
+		close(g.stopIndicator)
 	}
 }
 
@@ -169,8 +168,9 @@ func (g *App) render() {
 	g.popup.input.SetText(g.state.input)
 	g.popup.questionLabel.Text = g.state.question
 	g.popup.questionLabel.Refresh()
-	g.popup.outputLabel.SetText(g.state.output)
-	g.popup.outputScroll.SetMinSize(fyne.NewSize(0, g.popup.outputHeight()))
+	if !g.state.isRunning && g.popup.outputField.Text != g.state.output {
+		g.popup.outputField.SetText(g.state.output)
+	}
 	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
 	showMeta := g.state.showRequest || showAnswer
@@ -196,7 +196,7 @@ func (g *App) render() {
 	if g.state.errorText != "" {
 		status = g.state.errorText
 	}
-	g.popup.headerStatus.SetText(status)
+	g.popup.setStatus(status, g.state.isRunning, g.state.spinnerFrame)
 
 	if g.state.isRunning {
 		g.popup.actionButton.SetText("Cancel")
@@ -212,7 +212,6 @@ func (g *App) render() {
 		g.popup.copyButton.Disable()
 	}
 
-	g.popup.outputScroll.ScrollToBottom()
 }
 
 func (g *App) openSettings() {

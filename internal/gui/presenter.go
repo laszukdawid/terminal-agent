@@ -15,16 +15,19 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 		fyne.Do(func() {
 			switch eventCopy.Type {
 			case appservice.EventStarted:
-				g.state.advanceThinking("Thinking")
+				g.state.status = "thinking"
 			case appservice.EventOutputDelta:
 				g.state.output += eventCopy.Text
-				g.state.advanceThinking("Responding")
+				g.popup.outputField.Append(eventCopy.Text)
+				g.popup.outputField.TypedKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+				g.state.status = "responding"
 			case appservice.EventCompleted:
 				g.state.output = eventCopy.FinalOutput
-				g.stopThinkingIndicator()
+				g.popup.outputField.SetText(g.state.output)
+				g.stopIndicatorAnimation()
 				g.state.clearRunning()
 			case appservice.EventFailed:
-				g.stopThinkingIndicator()
+				g.stopIndicatorAnimation()
 				if isCanceledError(eventCopy.Err) {
 					g.state.errorText = ""
 					g.state.status = "Canceled."
