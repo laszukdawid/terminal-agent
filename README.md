@@ -8,9 +8,13 @@ Terminal Agent supports both API-backed providers and local model runtimes, incl
 
 ## Example
 
-<img src="./docs/assets/aa-how-to-attach-image.png" width="500" alt="answer to how to attach an image to Readme" />
+<table>
+  <tr>
+    <td><img src="./docs/assets/aa-how-to-attach-image.png" width="400" alt="answer to how to attach an image to Readme" /></td>
+    <td><img src="./docs/assets/stream-example.gif" width="400" alt="example of streaming in terminal" /></td>
+  </tr>
+</table>
 
-<img src="./docs/assets/stream-example.gif" width="500" alt="example of streaming in terminal" />
 
 ## Installation
 
@@ -53,6 +57,8 @@ go install github.com/laszukdawid/terminal-agent/cmd/agent@latest
 This will install the `agent` binary in your `$GOPATH/bin` directory (typically `~/go/bin`). Make sure this directory is in your PATH.
 
 ### Option 4: Compile from source
+
+<img src="./docs/assets/gui.png" width="400" alt="example of simple gui" />
 
 You can compile the code yourself.
 To do so, make sure you have golang installed for compilation and we recommend using [Taskfile](https://taskfile.dev/installation/) for task execution.
