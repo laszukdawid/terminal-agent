@@ -50,6 +50,20 @@ tasks:
       - printf 'alias aa="agent ask "\n' >> {{.SHELL_CFG}}
       - printf '\n# END terminal-agent alias\n' >> {{.SHELL_CFG}}
 
+  install:pre-commit:
+    desc: Install the Git pre-commit hook
+    preconditions:
+      - sh: git rev-parse --is-inside-work-tree >/dev/null 2>&1
+        msg: "This task must be run inside a Git worktree."
+      - sh: test -f .githooks/pre-commit
+        msg: "Missing versioned hook script at .githooks/pre-commit."
+    cmds:
+      - |
+        HOOK_DIR="$(git rev-parse --git-path hooks)" &&
+        mkdir -p "$HOOK_DIR" &&
+        install -m 0755 .githooks/pre-commit "$HOOK_DIR/pre-commit"
+      - echo "Installed Git pre-commit hook to $(git rev-parse --git-path hooks)/pre-commit"
+
   uninstall:alias:
     desc: Remove aliases for the agent
     cmds:

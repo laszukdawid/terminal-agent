@@ -56,6 +56,11 @@ task build
 # Install to your PATH
 task install
 
+# Install the Git pre-commit hook
+task install:pre-commit
+# or, on distros that package the binary under a different name
+go-task install:pre-commit
+
 # Run unit tests
 task test
 
@@ -80,6 +85,8 @@ To see all available tasks:
 ```sh
 task --list
 ```
+
+The pre-commit installer copies the repository-tracked hook from `.githooks/pre-commit` into Git's active hooks directory, so rerun `task install:pre-commit` or `go-task install:pre-commit` after pulling hook changes. The installed hook will use `task` or `go-task`, whichever is available.
 
 ### Project Structure
 
