@@ -3,13 +3,11 @@ package connector
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -834,7 +832,11 @@ func (lc *LlamaConnector) buildPrompt(model llama.Model, params *QueryParams) (s
 		lc.logger.Warn("Failed to apply model chat template, falling back to plain prompt assembly", zap.Error(err), zap.String("model", lc.modelID))
 	}
 
-	var prompt strings.Builder
+	return formatPlainLlamaPrompt(messages), nil
+}
+
+func formatPlainLlamaPrompt(messages []yzmamessage.Message) string {
+	parts := make([]string, 0, len(messages)+1)
 	for _, msg := range messages {
 		chatMsg, ok := msg.(yzmamessage.Chat)
 		if !ok {
@@ -844,137 +846,20 @@ func (lc *LlamaConnector) buildPrompt(model llama.Model, params *QueryParams) (s
 		if role == "" {
 			role = "user"
 		}
-		prompt.WriteString(strings.ToUpper(role))
-		prompt.WriteString(": ")
-		prompt.WriteString(chatMsg.Content)
-		prompt.WriteString("\n\n")
+		parts = append(parts, fmt.Sprintf("%s: %s", strings.ToUpper(role), chatMsg.Content))
 	}
-	prompt.WriteString("ASSISTANT: ")
-
-	return prompt.String(), nil
+	parts = append(parts, "ASSISTANT: ")
+	return strings.Join(parts, "\n\n")
 }
 
-type llamaToolChoice struct {
-	Type     string         `json:"type"`
-	ToolName string         `json:"tool_name,omitempty"`
-	Input    map[string]any `json:"input,omitempty"`
-	Answer   string         `json:"answer,omitempty"`
-	Thought  string         `json:"thought,omitempty"`
-}
-
-func (lc *LlamaConnector) QueryWithTool(ctx context.Context, params *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
+func (lc *LlamaConnector) QueryWithTool(_ context.Context, _ *QueryParams, _ map[string]tools.Tool) (LlmResponseWithTools, error) {
 	if _, err := lc.requireModelPath(); err != nil {
 		return LlmResponseWithTools{}, err
 	}
-	if params == nil {
-		return LlmResponseWithTools{}, fmt.Errorf("llama query params cannot be nil")
-	}
 
-	prompt := lc.buildToolPrompt(params, execTools)
-	toolParams := *params
-	toolParams.UserPrompt = &prompt
-	toolParams.Messages = nil
-	toolParams.Stream = false
-	toolParams.OnStream = nil
-
-	raw, err := lc.Query(ctx, &toolParams)
-	if err != nil {
-		return LlmResponseWithTools{}, err
-	}
-
-	choice, err := parseLlamaToolChoice(raw)
-	if err != nil {
-		return LlmResponseWithTools{}, err
-	}
-
-	response := LlmResponseWithTools{Response: strings.TrimSpace(choice.Thought)}
-	switch choice.Type {
-	case "final_answer":
-		response.ToolUse = true
-		response.ToolName = "final_answer"
-		response.ToolInput = map[string]any{"answer": strings.TrimSpace(choice.Answer)}
-		return response, nil
-	case "tool":
-		response.ToolUse = true
-		response.ToolName = strings.TrimSpace(choice.ToolName)
-		if response.ToolName == "" {
-			return LlmResponseWithTools{}, fmt.Errorf("llama tool response is missing tool_name")
-		}
-		if choice.Input == nil {
-			choice.Input = map[string]any{}
-		}
-		response.ToolInput = choice.Input
-		return response, nil
-	default:
-		return LlmResponseWithTools{}, fmt.Errorf("llama tool response has invalid type %q", choice.Type)
-	}
+	return LlmResponseWithTools{}, fmt.Errorf("llama provider does not support native tool calling")
 }
 
-func (lc *LlamaConnector) buildToolPrompt(params *QueryParams, execTools map[string]tools.Tool) string {
-	var prompt strings.Builder
-	if params.SysPrompt != nil && strings.TrimSpace(*params.SysPrompt) != "" {
-		prompt.WriteString(*params.SysPrompt)
-		prompt.WriteString("\n\n")
-	}
-	prompt.WriteString("You must respond with exactly one JSON object and no surrounding markdown or prose.\n")
-	prompt.WriteString("Choose one of these response shapes:\n")
-	prompt.WriteString(`{"type":"tool","tool_name":"<tool>","input":{...},"thought":"brief reason"}`)
-	prompt.WriteString("\n")
-	prompt.WriteString(`{"type":"final_answer","answer":"<final answer>","thought":"brief reason"}`)
-	prompt.WriteString("\n\nAvailable tools:\n")
-	prompt.WriteString(formatLlamaTools(execTools))
-	prompt.WriteString("\n\nConversation:\n")
-	for _, msg := range params.Messages {
-		prompt.WriteString(strings.ToUpper(strings.TrimSpace(msg.Role)))
-		prompt.WriteString(": ")
-		prompt.WriteString(msg.Content)
-		prompt.WriteString("\n\n")
-	}
-	if params.UserPrompt != nil && *params.UserPrompt != "" {
-		prompt.WriteString("USER: ")
-		prompt.WriteString(*params.UserPrompt)
-		prompt.WriteString("\n\n")
-	}
-	prompt.WriteString("Return valid JSON only.")
-	return prompt.String()
-}
-
-func formatLlamaTools(execTools map[string]tools.Tool) string {
-	names := make([]string, 0, len(execTools))
-	for name := range execTools {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	var prompt strings.Builder
-	for _, name := range names {
-		tool := execTools[name]
-		prompt.WriteString("- ")
-		prompt.WriteString(tool.Name())
-		prompt.WriteString(": ")
-		prompt.WriteString(tool.Description())
-		prompt.WriteString("\n")
-		schema, err := json.Marshal(tool.InputSchema())
-		if err == nil {
-			prompt.WriteString("  input_schema: ")
-			prompt.Write(schema)
-			prompt.WriteString("\n")
-		}
-	}
-	return prompt.String()
-}
-
-func parseLlamaToolChoice(raw string) (llamaToolChoice, error) {
-	trimmed := strings.TrimSpace(raw)
-	start := strings.Index(trimmed, "{")
-	end := strings.LastIndex(trimmed, "}")
-	if start < 0 || end < start {
-		return llamaToolChoice{}, fmt.Errorf("llama tool response did not contain a JSON object: %q", trimmed)
-	}
-
-	var choice llamaToolChoice
-	if err := json.Unmarshal([]byte(trimmed[start:end+1]), &choice); err != nil {
-		return llamaToolChoice{}, fmt.Errorf("failed to parse llama tool response as JSON: %w", err)
-	}
-	return choice, nil
+func (lc *LlamaConnector) SupportsNativeToolCalling() bool {
+	return false
 }

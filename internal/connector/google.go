@@ -281,3 +281,7 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 
 	return response, nil
 }
+
+func (gc *GoogleConnector) SupportsNativeToolCalling() bool {
+	return true
+}

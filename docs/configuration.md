@@ -38,7 +38,7 @@ agent ask --device gpu "Explain this stack trace"
 
 `--device` overrides the config value when provided. If neither is set, Terminal Agent uses `auto`.
 
-The setting only affects the direct `llama` provider. It is ignored for `ollama` and network-backed providers.
+The setting only affects the direct `llama` provider. It applies to direct local query runs and `task` executions for `llama`, and is ignored for `ollama` and network-backed providers.
 
 ### Llama Local Model Aliases
 

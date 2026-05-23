@@ -66,12 +66,14 @@ Example config:
 - Supports streaming output with the `--stream` flag
 - Uses the model's chat template when available
 - Supports runtime device selection with `--device auto|cpu|gpu` and `agent config set device ...`
+- Supports `task` through an agent-managed structured fallback when native tool calling is unavailable in the local runtime
+- Reuses the loaded model across repeated turns within a single `task` run to avoid repeated model loads
 
 **Limitations:**
 - Requires `YZMA_LIB` to point at the directory containing local llama.cpp shared libraries
 - Requires local GGUF model files and alias configuration
-- Currently supports `ask` and GUI query flows only
-- Does not currently support the `task` command's tool usage capability
+- The direct local runtime still does not expose provider-native structured tool calling
+- `task` support depends on the selected model following the structured JSON action protocol, so it can be less reliable than providers with native tool APIs
 - The documented Linux install path uses llama.cpp runtime build `b9180`
 
 `--device` and the `device` config key affect only the direct `llama` provider. They do not change `ollama` or remote provider execution.

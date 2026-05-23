@@ -86,6 +86,10 @@ func (c *scriptedToolConnector) QueryWithTool(_ context.Context, params *connect
 	return response, nil
 }
 
+func (c *scriptedToolConnector) SupportsNativeToolCalling() bool {
+	return true
+}
+
 type summaryCaptureConnector struct {
 	userPrompt string
 	maxTokens  int
@@ -99,8 +103,42 @@ func (c *summaryCaptureConnector) Query(_ context.Context, params *connector.Que
 	return c.userPrompt, nil
 }
 
-func (c *summaryCaptureConnector) QueryWithTool(_ context.Context, _ *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
-	return connector.LlmResponseWithTools{}, nil
+type fallbackTaskConnector struct {
+	queryCalls     int
+	toolCalls      int
+	queryResponse  string
+	queryResponses []string
+	queryErr       error
+	devices        []string
+	prompts        []string
+}
+
+func (c *fallbackTaskConnector) Query(_ context.Context, params *connector.QueryParams) (string, error) {
+	c.queryCalls++
+	if params != nil && params.UserPrompt != nil {
+		c.prompts = append(c.prompts, *params.UserPrompt)
+	}
+	if params != nil {
+		c.devices = append(c.devices, params.Device)
+	}
+	if c.queryErr != nil {
+		return "", c.queryErr
+	}
+	if len(c.queryResponses) > 0 {
+		response := c.queryResponses[0]
+		c.queryResponses = c.queryResponses[1:]
+		return response, nil
+	}
+	return c.queryResponse, nil
+}
+
+func (c *fallbackTaskConnector) QueryWithTool(_ context.Context, _ *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
+	c.toolCalls++
+	return connector.LlmResponseWithTools{}, errors.New("native tool calling should not be used")
+}
+
+func (c *fallbackTaskConnector) SupportsNativeToolCalling() bool {
+	return false
 }
 
 func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
@@ -236,6 +274,60 @@ func TestTaskWithOptionsResultPropagatesDevice(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, conn.devices)
 	assert.Equal(t, "cpu", conn.devices[0])
+}
+
+func TestTaskWithOptionsResultFallsBackWithoutNativeToolCalling(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &fallbackTaskConnector{
+		queryResponse: `{"action":"final_answer","answer":"done","thought":"task complete"}`,
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{ToolNameFinalAnswer: NewFinalAnswerTool()},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+		device:           "gpu",
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "finish without native tools", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	assert.Equal(t, 1, conn.queryCalls)
+	assert.Empty(t, conn.toolCalls)
+	require.NotEmpty(t, conn.prompts)
+	assert.Contains(t, conn.prompts[0], `{"action":"tool"`)
+	assert.NotContains(t, conn.prompts[0], `task system prompt`)
+	assert.Equal(t, "gpu", conn.devices[0])
+}
+
+func TestTaskWithOptionsResultRetriesMalformedFallbackResponse(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &fallbackTaskConnector{
+		queryResponses: []string{
+			`{"type":"object","properties":{"answer":{"type":"string"}}}`,
+			`{"action":"final_answer","answer":"done","thought":"task complete"}`,
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{ToolNameFinalAnswer: NewFinalAnswerTool()},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "finish after one malformed response", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	assert.Equal(t, 2, conn.queryCalls)
+	require.Len(t, conn.prompts, 2)
+	assert.Contains(t, conn.prompts[1], "Your previous response was invalid.")
+	assert.Contains(t, conn.prompts[1], `{"type":"object"`)
 }
 
 func TestTaskWithOptionsResultHandlesUnknownToolWithoutPanicking(t *testing.T) {

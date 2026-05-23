@@ -436,6 +436,10 @@ func (oc *OllamaConnector) QueryWithTool(ctx context.Context, params *QueryParam
 	return response, nil
 }
 
+func (oc *OllamaConnector) SupportsNativeToolCalling() bool {
+	return true
+}
+
 // handleStreamingResponse handles the streaming response from Ollama
 func (oc *OllamaConnector) handleStreamingResponse(resp *http.Response, onStream func(string) error) (string, error) {
 	var mdRenderer *MarkdownStreamRenderer

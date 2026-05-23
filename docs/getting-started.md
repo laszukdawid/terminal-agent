@@ -121,7 +121,9 @@ Then add a `llama_models` alias map to `~/.config/terminal-agent/config.json`:
 }
 ```
 
-The `llama` provider currently supports `ask` and GUI query flows. It does not support `task` tool use yet.
+The `llama` provider supports direct local query flows and the `task` command.
+
+`task` currently works through an agent-managed structured fallback rather than provider-native tool calling. Multi-step task runs also reuse the loaded model within a single command execution to reduce repeated load cost.
 
 ## Quick Start
 

@@ -419,3 +419,7 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 
 	return response, nil
 }
+
+func (bc *BedrockConnector) SupportsNativeToolCalling() bool {
+	return true
+}

@@ -102,5 +102,10 @@ type LlmResponseWithTools struct {
 
 type LLMConnector interface {
 	Query(ctx context.Context, params *QueryParams) (string, error)
+	}
+
+type ToolCallingConnector interface {
+	LLMConnector
+	SupportsNativeToolCalling() bool
 	QueryWithTool(ctx context.Context, params *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error)
 }

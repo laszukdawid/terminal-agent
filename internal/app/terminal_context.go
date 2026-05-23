@@ -23,6 +23,16 @@ type terminalContextEntry struct {
 	Output     string
 }
 
+const terminalContextTemplate = `<context>
+Terminal context (latest commands):
+
+%s
+</context>`
+
+const terminalContextEntryTemplate = `[%d] $ %s
+exit_code: %d
+%s`
+
 func BuildContextFromTerminal(maxEntries int) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -50,27 +60,23 @@ func BuildContextFromTerminal(maxEntries int) (string, error) {
 		return "", fmt.Errorf("no terminal context found yet. Run a few bash commands and try again")
 	}
 
-	var builder strings.Builder
-	builder.WriteString("<context>\n")
-	builder.WriteString("Terminal context (latest commands):\n")
+	return fmt.Sprintf(terminalContextTemplate, formatTerminalContextEntries(entries)), nil
+}
 
+func formatTerminalContextEntries(entries []terminalContextEntry) string {
+	parts := make([]string, 0, len(entries))
 	for i, entry := range entries {
-		builder.WriteString(fmt.Sprintf("\n[%d] $ %s\n", i+1, entry.Command))
-		builder.WriteString(fmt.Sprintf("exit_code: %d\n", entry.ExitCode))
-		if strings.TrimSpace(entry.Output) == "" {
-			builder.WriteString("output: <no output>\n")
-			continue
+		output := "output: <no output>"
+		if strings.TrimSpace(entry.Output) != "" {
+			output = "output:\n" + entry.Output
+			if !strings.HasSuffix(output, "\n") {
+				output += "\n"
+			}
+			output = strings.TrimRight(output, "\n")
 		}
-
-		builder.WriteString("output:\n")
-		builder.WriteString(entry.Output)
-		if !strings.HasSuffix(entry.Output, "\n") {
-			builder.WriteString("\n")
-		}
+		parts = append(parts, fmt.Sprintf(terminalContextEntryTemplate, i+1, entry.Command, entry.ExitCode, output))
 	}
-
-	builder.WriteString("</context>")
-	return builder.String(), nil
+	return strings.Join(parts, "\n\n")
 }
 
 func BashReaderScriptPath(homeDir string) string {

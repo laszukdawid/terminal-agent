@@ -274,8 +274,10 @@ agent config set model llama3.2
 
 Current limitations:
 
-- `ask` and GUI query flows are supported
-- `task` is not supported yet because structured tool calling is not implemented for the direct local runtime
+- normal direct local query flows are supported
+- `task` is supported through an agent-managed structured fallback because the direct local runtime does not expose provider-native tool calling
+- multi-turn `task` executions reuse the loaded model within a single command run to avoid repeated model loads
+- task reliability depends more on model adherence to the structured JSON action protocol than on providers with native tool APIs
 - the current runtime requires `YZMA_LIB`; there is no built-in library auto-discovery yet
 - the documented Linux install flow uses llama.cpp runtime build `b9180`
 
@@ -294,8 +296,8 @@ Current limitations:
 
 Provider-specific capability notes:
 
-- `llama` currently supports direct local query generation for `ask` and GUI flows
-- `llama` does not yet support `task` tool use
+- `llama` supports direct local query generation and `task`
+- `llama task` currently uses the agent-managed structured fallback path rather than provider-native tool calling
 
 In case some capabilities are missing please create a Feature Request github issue. Looking forward to extending this agent with useful features.
 

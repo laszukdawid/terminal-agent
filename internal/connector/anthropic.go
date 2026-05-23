@@ -247,3 +247,7 @@ func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryP
 	ac.logger.Sugar().Debugw("Response", "toolResponse", response)
 	return response, nil
 }
+
+func (ac *AnthropicConnector) SupportsNativeToolCalling() bool {
+	return true
+}

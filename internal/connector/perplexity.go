@@ -127,3 +127,7 @@ func (c *PerplexityConnector) Query(ctx context.Context, qParams *QueryParams) (
 func (c *PerplexityConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTool map[string]tools.Tool) (LlmResponseWithTools, error) {
 	return LlmResponseWithTools{}, fmt.Errorf("not implemented")
 }
+
+func (c *PerplexityConnector) SupportsNativeToolCalling() bool {
+	return true
+}

@@ -14,6 +14,8 @@ The agent will:
 3. Ask for your permission before executing any commands
 4. Provide the results
 
+When the selected provider does not expose dependable native tool calling, Terminal Agent can fall back to a structured JSON action protocol. The direct local `llama` provider uses this path today, so `task` works there as well, although providers with native tool APIs are generally more reliable for complex workflows.
+
 ## Examples
 
 ```sh
@@ -81,6 +83,7 @@ Currently, the task command has some limitations:
 - Not all Unix commands are supported for automatic execution
 - Some advanced operations may require manual intervention
 - The task command is not supported by the Perplexity provider
+- Direct local `llama` tasks currently use the agent-managed structured fallback rather than provider-native tool calling
 
 ## History and Logging
 
