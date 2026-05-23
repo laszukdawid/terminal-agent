@@ -73,7 +73,6 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "claude-3-5-haiku-latest", config.Providers["anthropic"])
 		assert.Equal(t, "anthropic.claude-3-haiku-20240307-v1:0", config.Providers["bedrock"])
 		assert.Equal(t, "llama3.2", config.Providers["llama"])
-		assert.Equal(t, "llama-3-8b-instruct", config.Providers["perplexity"])
 		assert.Equal(t, "gpt-4o-mini", config.Providers["openai"])
 		assert.Equal(t, "gemini-2.0-flash-lite", config.Providers["google"])
 		assert.Equal(t, "llama3.2", config.Providers["ollama"])
@@ -113,8 +112,8 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, expectedConfig.GetDefaultModelId(), loadedConfig.GetDefaultModelId())
 	})
 
-	// Test Ollama provider configuration
-	t.Run("OllamaProviderConfig", func(t *testing.T) {
+		// Test Ollama provider configuration
+		t.Run("OllamaProviderConfig", func(t *testing.T) {
 		_, cleanup := setupTempConfig(t)
 		defer cleanup()
 

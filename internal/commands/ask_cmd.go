@@ -105,7 +105,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 		*provider = os.Getenv("PROVIDER")
 	}
 	if *provider == "" {
-		*provider = connector.PerplexityProvider
+		*provider = connector.OpenaiProvider
 	}
 
 	// 'print' flag whether to print response to the stdout (default: true)
@@ -178,8 +178,6 @@ func handleError(err error) {
 	switch err {
 	case agent.ErrEmptyQuery:
 		fmt.Println("Query is empty")
-	case connector.ErrPerplexityForbidden:
-		fmt.Println("Couldn't authenticate with the Perplexity API. Make sure you have the correct API key in the environment variable PERPLEXITY_KEY.")
 	case connector.ErrBedrockForbidden:
 		fmt.Println("Couldn't authenticate with the Bedrock API. Make sure you have the correct AWS credentials set up.")
 	}

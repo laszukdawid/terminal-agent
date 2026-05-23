@@ -17,7 +17,6 @@ var supportedProviders = []string{
 	connector.LlamaProvider,
 	connector.OllamaProvider,
 	connector.OpenaiProvider,
-	connector.PerplexityProvider,
 }
 
 const (

@@ -96,7 +96,7 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 		*provider = os.Getenv("PROVIDER")
 	}
 	if *provider == "" {
-		*provider = connector.PerplexityProvider
+		*provider = connector.OpenaiProvider
 	}
 
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")

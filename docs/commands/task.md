@@ -82,7 +82,6 @@ Currently, the task command has some limitations:
 
 - Not all Unix commands are supported for automatic execution
 - Some advanced operations may require manual intervention
-- The task command is not supported by the Perplexity provider
 - Direct local `llama` tasks currently use the agent-managed structured fallback rather than provider-native tool calling
 
 ## History and Logging

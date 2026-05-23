@@ -170,19 +170,6 @@ $ agent config set anthropic.claude-3-haiku-20240307-v1:0
 ```
 
 
-### Perplexity AI
-
-Perplexity AI has an "in development" functionality to provide access to models via their API. To read more on this visit their [documentation](https://docs.perplexity.ai/guides/getting-started).
-
-To use `agent` with Perplexity AI, you need to set `PERPLEXITY_KEY` env variable with your individual key, and then set the provider to `perplexity`.
-
-Setting `perplexity` provider with `llama-3.1-8b-instruct` model can be done with `task run:set:perplexity` or directly
-
-```sh
-$ agent config set provider perplexity
-$ agent config set model llama-3.1-8b-instruct
-```
-
 ### OpenAI
 
 To use `agent` with OpenAI, you need to set the `OPENAI_API_KEY` environment variable with your individual key, and then set the provider to `openai`.
@@ -286,8 +273,8 @@ Current limitations:
 ## Features
 
 - [x] **ask**: Ask general questions via terminal (all models)
-- [x] **task**: Ability to propose and execute a command (expect Perplexity)
-- [x] **stream**: Ask only (except Perplexity)
+- [x] **task**: Ability to propose and execute a command
+- [x] **stream**: Ask with streaming responses
 - [x] **markdown**: By default, provide nicely formatted outputs in terminal
 - [x] **MCP**: Supports Model Context Protocol (MCP) defined in a file
 - [x] **websearch**: Can search the web and display links

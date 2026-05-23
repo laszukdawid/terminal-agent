@@ -124,7 +124,6 @@ Terminal Agent uses environment variables for API keys:
 |----------|---------------------|-------------|
 | OpenAI | `OPENAI_API_KEY` | API key for OpenAI services |
 | Anthropic | `ANTHROPIC_API_KEY` | API key for Anthropic Claude models |
-| Perplexity | `PERPLEXITY_KEY` | API key for Perplexity AI |
 | Google | `GOOGLE_API_KEY` | API key for Google AI (Gemini) |
 | AWS Bedrock | AWS credentials | Standard AWS credential configuration |
 | Llama.cpp | `YZMA_LIB` | Path to the directory containing the local llama.cpp shared libraries used by the `llama` provider |
@@ -259,9 +258,6 @@ task run:set:bedrock
 
 # Set provider to Google
 task run:set:google
-
-# Set provider to Perplexity
-task run:set:perplexity
 
 # Set provider to Ollama
 task run:set:ollama

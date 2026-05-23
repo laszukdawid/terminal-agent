@@ -12,9 +12,6 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 	switch provider {
 	case BedrockProvider:
 		connector = NewBedrockConnector((*BedrockModelID)(&modelID))
-	case PerplexityProvider:
-		ac := NewPerplexityConnector((*PerplexityModelId)(&modelID))
-		connector = LLMConnector(ac)
 	case OpenaiProvider:
 		connector = NewOpenAIConnector(&modelID)
 	case AnthropicProvider:

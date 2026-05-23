@@ -212,31 +212,6 @@ agent config set model anthropic.claude-3-haiku-20240307-v1:0
 - Tool usage capability for the `task` command
 - Supports streaming output with the `--stream` flag
 
-### Perplexity
-
-**Setup:**
-1. Create an account at [Perplexity AI](https://www.perplexity.ai/)
-2. Generate an API key
-3. Set the key as an environment variable:
-   ```sh
-   export PERPLEXITY_KEY=your_api_key_here
-   ```
-
-**Configuration:**
-```sh
-agent config set provider perplexity
-agent config set model llama-3-8b-instruct
-```
-
-**Recommended Models:**
-- `llama-3-8b-instruct` - Compact open-source model
-- `llama-3-70b-instruct` - More capable open-source model
-- `llama-3.1-8b-instruct` - Updated version
-
-**Limitations:**
-- Does not support streaming output
-- Does not support the `task` command's tool usage capability
-
 ## Performance Considerations
 
 Different providers excel at different tasks:
@@ -244,4 +219,4 @@ Different providers excel at different tasks:
 - **Complex reasoning**: Anthropic Claude models (direct or via Bedrock)
 - **Speed and cost-efficiency**: OpenAI's GPT-3.5, Google's Gemini Flash models
 - **Creative tasks**: OpenAI's GPT-4 series, Anthropic Claude Opus
-- **Open-source options**: Llama models via the local `llama` provider, Ollama, Perplexity, or Bedrock
+- **Open-source options**: Llama models via the local `llama` provider, Ollama, or Bedrock-hosted Llama models

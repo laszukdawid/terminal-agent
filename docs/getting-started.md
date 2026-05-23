@@ -68,7 +68,7 @@ Inside the popup:
 Before using Terminal Agent, you'll need to configure it with your preferred LLM provider:
 
 ```sh
-# Set your provider (e.g., "openai", "anthropic", "bedrock", "perplexity")
+# Set your provider (e.g., "openai", "anthropic", "bedrock", "google", "ollama", "llama")
 agent config set provider openai
 
 # Set your preferred model
@@ -84,8 +84,8 @@ export OPENAI_API_KEY=your_api_key_here
 # For Anthropic
 export ANTHROPIC_API_KEY=your_api_key_here
 
-# For Perplexity
-export PERPLEXITY_KEY=your_api_key_here
+# For Google
+export GOOGLE_API_KEY=your_api_key_here
 
 # For Amazon Bedrock, configure your AWS credentials as usual
 ```

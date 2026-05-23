@@ -72,7 +72,6 @@ task run:task -- "List files in current directory"
 task run:set:openai
 task run:set:anthropic
 task run:set:bedrock
-task run:set:perplexity
 task run:set:google
 ```
 

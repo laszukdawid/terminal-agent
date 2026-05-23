@@ -38,7 +38,7 @@ agent config set <key> <value>
 
 | Key | Description | Example Values |
 |-----|-------------|---------------|
-| `provider` | The LLM provider to use | `openai`, `anthropic`, `bedrock`, `perplexity`, `google` |
+| `provider` | The LLM provider to use | `openai`, `anthropic`, `bedrock`, `google`, `ollama`, `llama` |
 | `model` | The model ID to use | `gpt-4o-mini`, `claude-3-haiku-20240307`, etc. |
 | `device` | Runtime device preference for direct `llama` provider | `auto`, `cpu`, `gpu` |
 | `mcp-path` | Path to MCP JSON file | `/path/to/mcp.json` |
@@ -103,14 +103,20 @@ agent config set provider bedrock
 agent config set model anthropic.claude-3-haiku-20240307-v1:0
 ```
 
-### Perplexity
-```sh
-agent config set provider perplexity
-agent config set model llama-3-8b-instruct
-```
-
 ### Google
 ```sh
 agent config set provider google
 agent config set model gemini-2.0-flash-lite
+```
+
+### Ollama
+```sh
+agent config set provider ollama
+agent config set model llama3.2
+```
+
+### Llama.cpp
+```sh
+agent config set provider llama
+agent config set model llama3.2
 ```

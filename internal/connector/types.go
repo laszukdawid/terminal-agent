@@ -17,33 +17,6 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-type PerplexityUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
-
-type Delta struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type Choice struct {
-	Index        int     `json:"index"`
-	FinishReason string  `json:"finish_reason"`
-	Message      Message `json:"message"`
-	Delta        Delta   `json:"delta"`
-}
-
-type PerplexityResponse struct {
-	ID      string          `json:"id"`
-	Model   string          `json:"model"`
-	Created int64           `json:"created"`
-	Usage   PerplexityUsage `json:"usage"`
-	Object  string          `json:"object"`
-	Choices []Choice        `json:"choices"`
-}
-
 type ClaudeResponseContent struct {
 	Responses []struct {
 		Type string `json:"type"`
@@ -102,7 +75,7 @@ type LlmResponseWithTools struct {
 
 type LLMConnector interface {
 	Query(ctx context.Context, params *QueryParams) (string, error)
-	}
+}
 
 type ToolCallingConnector interface {
 	LLMConnector

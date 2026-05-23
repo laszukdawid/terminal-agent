@@ -93,8 +93,6 @@ When using the `--stream` flag, you'll see the output appear gradually as it's g
 agent ask --stream "How does Docker containerization work?"
 ```
 
-Note: Streaming is not supported with the Perplexity provider.
-
 ## Logging
 
 If you use the `--log` flag, your question and the response will be saved to the history log:
