@@ -40,6 +40,7 @@ agent config set <key> <value>
 |-----|-------------|---------------|
 | `provider` | The LLM provider to use | `openai`, `anthropic`, `bedrock`, `perplexity`, `google` |
 | `model` | The model ID to use | `gpt-4o-mini`, `claude-3-haiku-20240307`, etc. |
+| `device` | Runtime device preference for direct `llama` provider | `auto`, `cpu`, `gpu` |
 | `mcp-path` | Path to MCP JSON file | `/path/to/mcp.json` |
 
 ## Examples
@@ -51,11 +52,17 @@ agent config set provider openai
 # Set the model to GPT-4o Mini
 agent config set model gpt-4o-mini
 
+# Prefer CPU for direct llama inference
+agent config set device cpu
+
 # Check the current provider
 agent config get provider
 
 # Check the current model
 agent config get model
+
+# Check the current device preference
+agent config get device
 
 # Set the MCP file path
 agent config set mcp-path /home/user/mcp.json

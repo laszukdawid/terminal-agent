@@ -18,6 +18,7 @@ type TaskRequest struct {
 	PromptOverride string
 	WorkingDir     string
 	Allow          []string
+	Device         string
 	Config         config.Config
 }
 
@@ -56,6 +57,7 @@ func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 	}
 
 	agentInstance := runtime.NewAgent(PromptSet{Task: taskPrompt})
+	agentInstance.SetDevice(req.Device)
 	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{
 		Allow: req.Allow,
 		Dirs: internalagent.TaskDirs{

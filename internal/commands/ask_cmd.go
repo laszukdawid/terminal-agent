@@ -40,6 +40,10 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			flags := cmd.Flags()
 			service := app.NewService()
 			execConfig := config
+			device, err := resolveDevice(flags, execConfig)
+			if err != nil {
+				return err
+			}
 
 			// Check if this is streaming response
 			streamFlag, _ := flags.GetBool("stream")
@@ -64,6 +68,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 				ContextFiles:         contextFiles,
 				TerminalContextCount: terminalContextCount,
 				Stream:               streamFlag,
+				Device:               device,
 				Config:               execConfig,
 			})
 			if err != nil {

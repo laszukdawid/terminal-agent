@@ -41,6 +41,10 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 			flags := cmd.Flags()
 			service := app.NewService()
 			execConfig := config
+			device, err := resolveDevice(flags, execConfig)
+			if err != nil {
+				return err
+			}
 
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
@@ -58,6 +62,7 @@ The conversation history is persisted between calls. Use --new to start a fresh 
 				MemoryPath:     getMemoryPath(),
 				ContextFiles:   contextFiles,
 				Stream:         streamFlag,
+				Device:         device,
 				NewSession:     newSession,
 				ChatDBPath:     getChatDBPath(),
 				Config:         execConfig,

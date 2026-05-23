@@ -44,6 +44,7 @@ task run:set:llama
 ```sh
 agent config set provider llama
 agent config set model llama3.2
+agent config set device cpu
 ```
 
 Example config:
@@ -64,6 +65,7 @@ Example config:
 - Direct local inference without a separate HTTP server
 - Supports streaming output with the `--stream` flag
 - Uses the model's chat template when available
+- Supports runtime device selection with `--device auto|cpu|gpu` and `agent config set device ...`
 
 **Limitations:**
 - Requires `YZMA_LIB` to point at the directory containing local llama.cpp shared libraries
@@ -71,6 +73,8 @@ Example config:
 - Currently supports `ask` and GUI query flows only
 - Does not currently support the `task` command's tool usage capability
 - The documented Linux install path uses llama.cpp runtime build `b9180`
+
+`--device` and the `device` config key affect only the direct `llama` provider. They do not change `ollama` or remote provider execution.
 
 ### OpenAI
 

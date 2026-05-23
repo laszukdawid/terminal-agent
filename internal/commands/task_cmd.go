@@ -27,6 +27,10 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
 			service := app.NewService()
+			device, err := resolveDevice(flags, config)
+			if err != nil {
+				return err
+			}
 			taskWorkingDir, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to resolve task working directory: %w", err)
@@ -47,6 +51,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				PromptOverride: *promptFlag,
 				WorkingDir:     taskWorkingDir,
 				Allow:          allow,
+				Device:         device,
 				Config:         config,
 			})
 			if err != nil {

@@ -88,6 +88,7 @@ type QueryParams struct {
 	Messages   []Message
 	Stream     bool
 	MaxTokens  int
+	Device     string
 	OnStream   func(string) error
 }
 

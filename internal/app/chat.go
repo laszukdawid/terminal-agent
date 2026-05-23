@@ -21,6 +21,7 @@ type ChatRequest struct {
 	WorkingDir     string
 	ContextFiles   []string
 	Stream         bool
+	Device         string
 	NewSession     bool
 	ChatDBPath     string
 	Config         config.Config
@@ -60,6 +61,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 	}
 
 	agentInstance := runtime.NewAgent(prompts)
+	agentInstance.SetDevice(req.Device)
 	events := make(chan Event)
 
 	go func() {
@@ -74,6 +76,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 			Messages:   connectorMessages,
 			Stream:     req.Stream,
 			MaxTokens:  req.Config.GetMaxTokens(),
+			Device:     req.Device,
 		}
 
 		if req.Stream {

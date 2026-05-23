@@ -35,6 +35,7 @@ type Agent struct {
 	maxTokens        int
 	systemPromptAsk  *string
 	systemPromptTask *string
+	device           string
 }
 
 func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider, config config.Config, systemPromptAsk, systemPromptTask string) *Agent {
@@ -63,6 +64,10 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 	}
 }
 
+func (a *Agent) SetDevice(device string) {
+	a.device = device
+}
+
 // Question sends a question to the agent and returns the response.
 // It queries the model using the provided question string and the system prompt.
 // If an error occurs during the query, it returns an empty string and an error.
@@ -75,6 +80,7 @@ func (a *Agent) Question(ctx context.Context, s string, isStream bool) (string, 
 		SysPrompt:  a.systemPromptAsk,
 		Stream:     isStream,
 		MaxTokens:  a.maxTokens,
+		Device:     a.device,
 	}
 	res, err := a.Connector.Query(ctx, &qParams)
 	return res, err
@@ -91,6 +97,7 @@ func (a *Agent) Chat(ctx context.Context, userMessage string, history []connecto
 		Messages:   history,
 		Stream:     isStream,
 		MaxTokens:  a.maxTokens,
+		Device:     a.device,
 	}
 	res, err := a.Connector.Query(ctx, &qParams)
 	return res, err
@@ -189,6 +196,7 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 			UserPrompt: &promptWithState,
 			SysPrompt:  a.systemPromptTask, // Using task-specific system prompt
 			MaxTokens:  a.maxTokens,
+			Device:     a.device,
 		}
 
 		// Query the model with tools
@@ -432,6 +440,7 @@ I've reached the maximum number of iterations. Based on the above, provide a com
 		UserPrompt: StringPtr(summary.String()),
 		SysPrompt:  a.systemPromptTask,
 		MaxTokens:  a.maxTokens * 2, // Allow more tokens for summary
+		Device:     a.device,
 	}
 
 	return a.Connector.Query(ctx, &qParams)

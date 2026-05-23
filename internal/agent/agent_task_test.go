@@ -48,6 +48,7 @@ type scriptedToolConnector struct {
 	queryCalls     int
 	queryToolCalls int
 	toolPrompts    []string
+	devices        []string
 	queryResponse  string
 	queryErr       error
 }
@@ -56,6 +57,9 @@ func (c *scriptedToolConnector) Query(_ context.Context, params *connector.Query
 	c.queryCalls++
 	if params != nil && params.UserPrompt != nil {
 		c.toolPrompts = append(c.toolPrompts, *params.UserPrompt)
+	}
+	if params != nil {
+		c.devices = append(c.devices, params.Device)
 	}
 	if c.queryErr != nil {
 		return "", c.queryErr
@@ -70,6 +74,9 @@ func (c *scriptedToolConnector) QueryWithTool(_ context.Context, params *connect
 	c.queryToolCalls++
 	if params != nil && params.UserPrompt != nil {
 		c.toolPrompts = append(c.toolPrompts, *params.UserPrompt)
+	}
+	if params != nil {
+		c.devices = append(c.devices, params.Device)
 	}
 	if len(c.responses) == 0 {
 		return connector.LlmResponseWithTools{}, nil
@@ -203,6 +210,32 @@ func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 	assert.Equal(t, "a.go\nb.go", result.DisplayText())
 	assert.Equal(t, 1, conn.queryToolCalls)
 	assert.Equal(t, 0, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultPropagatesDevice(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{{
+			ToolUse:   true,
+			ToolName:  ToolNameFinalAnswer,
+			ToolInput: map[string]any{"answer": "done"},
+		}},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+		device:           "cpu",
+	}
+
+	_, err := agent.TaskWithOptionsResult(context.Background(), "finish on cpu", TaskOptions{})
+
+	require.NoError(t, err)
+	require.NotEmpty(t, conn.devices)
+	assert.Equal(t, "cpu", conn.devices[0])
 }
 
 func TestTaskWithOptionsResultHandlesUnknownToolWithoutPanicking(t *testing.T) {

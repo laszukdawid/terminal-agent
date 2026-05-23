@@ -26,6 +26,7 @@ const (
 	cmdMcpPath    = "mcp-path"
 	cmdWorkingDir = "working-dir"
 	cmdMemory     = "memory"
+	cmdDevice     = "device"
 )
 
 func NewConfigCommand(config config.Config) *cobra.Command {
@@ -68,6 +69,8 @@ func ConfigGetCommand(config config.Config) *cobra.Command {
 				fmt.Println(config.GetWorkingDir())
 			case cmdMemory:
 				fmt.Println(config.GetMemory())
+			case cmdDevice:
+				fmt.Println(config.GetDevice())
 			default:
 				fmt.Println("Unknown key:", key)
 				cmd.Help()
@@ -84,13 +87,14 @@ func ConfigSetCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set the configuration",
-		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir, memory.
+		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir, memory, device.
 
 For example:
   terminal-agent config set provider bedrock
   terminal-agent config set mcp-path /path/to/mcp.json
   terminal-agent config set working-dir /path/to/workdir
-  terminal-agent config set memory true`,
+  terminal-agent config set memory true
+  terminal-agent config set device cpu`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 2 {
 				cmd.Help()
@@ -126,10 +130,22 @@ For example:
 					config.SetMemory(false)
 					fmt.Println("Memory set to: false")
 				} else {
-					fmt.Println("Invalid value for memory. Use 'true' or 'false'.")
+					cmd.PrintErrln("Invalid value for memory. Use 'true' or 'false'.")
+					cmd.SilenceUsage = true
+					_ = cmd.Help()
+					return
 				}
+			case cmdDevice:
+				if err := config.SetDevice(value); err != nil {
+					cmd.SilenceUsage = true
+					cmd.PrintErrln(err.Error())
+					return
+				}
+				fmt.Println("Device set to:", config.GetDevice())
 			default:
-				fmt.Println("Unknown key:", key)
+				cmd.SilenceUsage = true
+				cmd.PrintErrln("Unknown key:", key)
+				return
 			}
 		},
 	}
@@ -144,6 +160,7 @@ func ConfigShowAllCommand(config config.Config) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Default provider:", cmdProvider, "=", config.GetDefaultProvider())
 			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
+			fmt.Println("Device:", cmdDevice, "=", config.GetDevice())
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
 			fmt.Println("Memory:", cmdMemory, "=", config.GetMemory())
@@ -161,6 +178,7 @@ func ConfigGetAll(config config.Config) *cobra.Command {
 			// Print each key and value on a new line
 			fmt.Println("Default provider: ", cmdProvider, "=", config.GetDefaultProvider())
 			fmt.Println("Default model ID:", cmdModel, "=", config.GetDefaultModelId())
+			fmt.Println("Device:", cmdDevice, "=", config.GetDevice())
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
 			fmt.Println("Memory:", cmdMemory, "=", config.GetMemory())

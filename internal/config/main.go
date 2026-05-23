@@ -19,8 +19,10 @@ type Config interface {
 	GetDefaultProvider() string
 	GetDefaultModelId() string
 	GetLlamaModels() map[string]string
+	GetDevice() string
 	SetDefaultProvider(string) error
 	SetDefaultModelId(string) error
+	SetDevice(string) error
 	GetMcpFilePath() string
 	SetMcpFilePath(string) error
 	GetConfiguredWorkingDir() string
@@ -37,6 +39,7 @@ type config struct {
 	DefaultProvider string            `json:"default_provider"`
 	Providers       map[string]string `json:"providers"`
 	LlamaModels     map[string]string `json:"llama_models,omitempty"`
+	Device          string            `json:"device,omitempty"`
 	McpFilePath     string            `json:"mcp_file_path"`
 	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
@@ -82,6 +85,7 @@ func NewDefaultConfig() *config {
 		},
 		LlamaModels: map[string]string{},
 		LogLevel:    "info",
+		Device:      "auto",
 		McpFilePath: "",
 		WorkingDir:  "",
 		MaxTokens:   600,
@@ -155,9 +159,38 @@ func (config *config) GetLlamaModels() map[string]string {
 	return config.LlamaModels
 }
 
+func normalizeDevice(device string) string {
+	switch device {
+	case "", "auto":
+		return "auto"
+	case "cpu", "gpu":
+		return device
+	default:
+		return ""
+	}
+}
+
+func (config *config) GetDevice() string {
+	device := normalizeDevice(config.Device)
+	if device == "" {
+		return "auto"
+	}
+	return device
+}
+
 func (config *config) SetDefaultModelId(modelId string) error {
 	log.Println("Setting default model ID to:", modelId)
 	config.Providers[config.DefaultProvider] = modelId
+	return SaveConfig(config)
+}
+
+func (config *config) SetDevice(device string) error {
+	normalized := normalizeDevice(device)
+	if normalized == "" {
+		return fmt.Errorf("invalid device %q: must be one of auto, cpu, gpu", device)
+	}
+	log.Println("Setting device to:", normalized)
+	config.Device = normalized
 	return SaveConfig(config)
 }
 

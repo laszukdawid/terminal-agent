@@ -24,6 +24,22 @@ agent config set provider openai
 agent config set model gpt-4o-mini
 ```
 
+### Setting Device Preference
+
+Use `device` to control direct local `llama` inference placement. Valid values are `auto`, `cpu`, and `gpu`.
+
+```sh
+# Persist a CPU preference for direct llama runs
+agent config set device cpu
+
+# Override per command when needed
+agent ask --device gpu "Explain this stack trace"
+```
+
+`--device` overrides the config value when provided. If neither is set, Terminal Agent uses `auto`.
+
+The setting only affects the direct `llama` provider. It is ignored for `ollama` and network-backed providers.
+
 ### Llama Local Model Aliases
 
 The `llama` provider resolves logical model names through a `llama_models` alias map in the main config file.

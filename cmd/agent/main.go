@@ -15,6 +15,7 @@ import (
 
 var (
 	loglevel string
+	device   string
 	version  = "dev"
 	commit   = "none"
 	date     = "unknown"
@@ -89,6 +90,7 @@ func NewCommand() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "set the log level (debug, info, warn, error, dpanic, panic, fatal)")
+	cmd.PersistentFlags().StringVar(&device, "device", "", "set runtime device preference for direct llama provider (auto, cpu, gpu)")
 	cmd.Flags().BoolP("version", "v", false, "Print the version of the CLI")
 
 	return cmd

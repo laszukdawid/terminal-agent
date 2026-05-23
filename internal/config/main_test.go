@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetConfigPath(t *testing.T) {
@@ -143,4 +144,35 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "llama3.1", config.GetDefaultModelId())
 		assert.Equal(t, "llama3.1", config.Providers["ollama"])
 	})
+}
+
+func TestDeviceDefaultsToAuto(t *testing.T) {
+	cfg := NewDefaultConfig()
+	assert.Equal(t, "auto", cfg.GetDevice())
+
+	cfg.Device = ""
+	assert.Equal(t, "auto", cfg.GetDevice())
+
+	cfg.Device = "invalid"
+	assert.Equal(t, "auto", cfg.GetDevice())
+}
+
+func TestSetDevice(t *testing.T) {
+	_, cleanup := setupTempConfig(t)
+	defer cleanup()
+
+	cfg := NewDefaultConfig()
+
+	require.NoError(t, cfg.SetDevice("cpu"))
+	assert.Equal(t, "cpu", cfg.GetDevice())
+
+	require.NoError(t, cfg.SetDevice("gpu"))
+	assert.Equal(t, "gpu", cfg.GetDevice())
+
+	require.NoError(t, cfg.SetDevice("auto"))
+	assert.Equal(t, "auto", cfg.GetDevice())
+
+	err := cfg.SetDevice("tpu")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be one of auto, cpu, gpu")
 }

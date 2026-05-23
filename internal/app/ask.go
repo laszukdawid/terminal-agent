@@ -21,6 +21,7 @@ type AskRequest struct {
 	ContextFiles         []string
 	TerminalContextCount int
 	Stream               bool
+	Device               string
 	Config               config.Config
 }
 
@@ -58,6 +59,7 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 	}
 
 	agentInstance := runtime.NewAgent(prompts)
+	agentInstance.SetDevice(req.Device)
 	if agentInstance.Connector == nil {
 		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
 	}
@@ -73,6 +75,7 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 			SysPrompt:  &prompts.Ask,
 			Stream:     req.Stream,
 			MaxTokens:  req.Config.GetMaxTokens(),
+			Device:     req.Device,
 		}
 
 		if req.Stream {
