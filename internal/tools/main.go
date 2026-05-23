@@ -70,10 +70,8 @@ func GetAllBuiltinTools(config config.Config) map[string]Tool {
 		readTool.Name():       readTool,
 	}
 
-	// Add Websearch only if possible
-	if websearchTool := NewWebsearchTool(); websearchTool != nil {
-		tools[websearchTool.Name()] = websearchTool
-	}
+	websearchTool := NewWebsearchTool()
+	tools[websearchTool.Name()] = websearchTool
 	return tools
 }
 

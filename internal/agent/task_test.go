@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
@@ -165,6 +166,27 @@ func (c *fallbackTaskConnector) QueryWithTool(_ context.Context, _ *connector.Qu
 
 func (c *fallbackTaskConnector) SupportsNativeToolCalling() bool {
 	return false
+}
+
+func TestNewAgentFiltersUnavailableTools(t *testing.T) {
+	connector := &scriptedToolConnector{}
+	cfg := config.NewDefaultConfig()
+
+	t.Run("websearch excluded when unavailable", func(t *testing.T) {
+		t.Setenv("TAVILY_KEY", "")
+
+		agentInstance := NewAgent(connector, tools.NewToolProvider(cfg), cfg, "ask", "task")
+
+		assert.NotContains(t, agentInstance.Tools, tools.ToolNameWebsearch)
+	})
+
+	t.Run("websearch included when available", func(t *testing.T) {
+		t.Setenv("TAVILY_KEY", "test_key")
+
+		agentInstance := NewAgent(connector, tools.NewToolProvider(cfg), cfg, "ask", "task")
+
+		assert.Contains(t, agentInstance.Tools, tools.ToolNameWebsearch)
+	})
 }
 
 func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {

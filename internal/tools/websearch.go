@@ -6,15 +6,16 @@ import (
 	"strings"
 
 	tavilygo "github.com/diverged/tavily-go"
-	"github.com/diverged/tavily-go/client"
 	"github.com/diverged/tavily-go/models"
-	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 const (
 	websearchToolDescription = `Websearch tool provides the ability to search the web using Tavily.
-    The input to the tool is a search query. The tool then provides a markdown list of the first few results.`
+	    The input to the tool is a search query. The tool then provides a markdown list of the first few results.
+	    Requires the TAVILY_KEY environment variable to execute searches.`
 	numResults = 5 // Number of results to return
+
+	websearchMissingKeyMessage = "websearch requires TAVILY_KEY environment variable to be set"
 
 	websearchSystemPrompt = `You use the websearch tool to find relevant information based on the user's query.
     The input is provided in English and you provide the search query.
@@ -57,8 +58,8 @@ OUTPUT
     - [Result Title 2](https://url2.example.com)
     - ...
 
-REQUIREMENTS
-    - Requires a Tavily API key set as the TAVILY_KEY environment variable
+	REQUIREMENTS
+	    - Requires a Tavily API key set as the TAVILY_KEY environment variable to execute searches
 `
 )
 
@@ -69,13 +70,10 @@ type WebsearchTool struct {
 	inputSchema  map[string]any
 	systemPrompt string
 	helpText     string
-
-	tavily *client.TavilyClient
 }
 
 // NewWebsearchTool returns a new WebsearchTool
 func NewWebsearchTool() *WebsearchTool {
-	logger := *utils.GetLogger()
 	inputSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -87,21 +85,17 @@ func NewWebsearchTool() *WebsearchTool {
 		"required": []string{"query"},
 	}
 
-	tavilyKey := os.Getenv("TAVILY_KEY")
-	if tavilyKey == "" {
-		logger.Debug("Websearch tool requires TAVILY_KEY environment variable to be set")
-		return nil
-	}
-	tavily := tavilygo.NewClient(tavilyKey)
-
 	return &WebsearchTool{
 		name:         ToolNameWebsearch,
 		description:  websearchToolDescription,
 		inputSchema:  inputSchema,
-		systemPrompt: systemPrompt,
+		systemPrompt: websearchSystemPrompt,
 		helpText:     websearchToolHelp,
-		tavily:       tavily,
 	}
+}
+
+func (w *WebsearchTool) IsAvailable() bool {
+	return strings.TrimSpace(os.Getenv("TAVILY_KEY")) != ""
 }
 
 func (w *WebsearchTool) Name() string {
@@ -137,12 +131,17 @@ func (w *WebsearchTool) RunSchema(input map[string]any) (string, error) {
 }
 
 func (w *WebsearchTool) searchTavily(query string) (string, error) {
+	tavilyKey := strings.TrimSpace(os.Getenv("TAVILY_KEY"))
+	if tavilyKey == "" {
+		return "", fmt.Errorf(websearchMissingKeyMessage)
+	}
+
 	searchReq := models.SearchRequest{
 		Query:       query,
 		SearchDepth: "basic",
 	}
 
-	response, err := tavilygo.Search(w.tavily, searchReq)
+	response, err := tavilygo.Search(tavilygo.NewClient(tavilyKey), searchReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to make Tavily API request: %w", err)
 	}

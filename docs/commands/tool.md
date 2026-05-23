@@ -70,6 +70,8 @@ Search the web for information:
 agent tool exec websearch "go language benefits"
 ```
 
+Requires `TAVILY_KEY` to execute searches.
+
 ### MCP Tools
 
 If you've configured Model Context Protocol (MCP) tools, they'll also be available through the tool command:

@@ -132,10 +132,18 @@ Usage requires at least two positional arguments:
 			}
 
 			// Execute the tool with the query
-			jsonQuery := make(map[string]any)
-			json.Unmarshal([]byte(query), &jsonQuery)
+			trimmedQuery := strings.TrimSpace(query)
+			var result string
+			if strings.HasPrefix(trimmedQuery, "{") {
+				jsonQuery := make(map[string]any)
+				if err := json.Unmarshal([]byte(query), &jsonQuery); err != nil {
+					return fmt.Errorf("failed to parse JSON input for tool %s: %w", toolName, err)
+				}
 
-			result, err := tool.RunSchema(jsonQuery)
+				result, err = tool.RunSchema(jsonQuery)
+			} else {
+				result, err = tool.Run(&query)
+			}
 			if err != nil {
 				return fmt.Errorf("failed to execute tool %s: %w", toolName, err)
 			}

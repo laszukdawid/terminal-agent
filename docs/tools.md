@@ -36,7 +36,7 @@ Input schema:
 }
 ```
 
-This tool returns search results with links and snippets.
+This tool returns search results with links and snippets. It is listed even when unconfigured, but requires `TAVILY_KEY` to execute searches.
 
 ## Using Tools Directly
 

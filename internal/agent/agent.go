@@ -30,7 +30,7 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 		panic("connector is nil")
 	}
 
-	allTools := toolProvider.GetAllTools()
+	allTools := filterAvailableTools(toolProvider.GetAllTools())
 
 	askUserTool := NewAskUserTool()
 	allTools[askUserTool.Name()] = askUserTool
@@ -49,6 +49,20 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 		config:           config,
 		maxTokens:        MaxTokens,
 	}
+}
+
+func filterAvailableTools(allTools map[string]tools.Tool) map[string]tools.Tool {
+	filtered := make(map[string]tools.Tool, len(allTools))
+	for name, tool := range allTools {
+		availabilityAwareTool, ok := tool.(tools.AvailabilityAwareTool)
+		if ok && !availabilityAwareTool.IsAvailable() {
+			continue
+		}
+
+		filtered[name] = tool
+	}
+
+	return filtered
 }
 
 func (a *Agent) SetDevice(device string) {

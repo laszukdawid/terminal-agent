@@ -27,6 +27,11 @@ func EffectiveTaskInputSchema(tool Tool) map[string]any {
 	return tool.InputSchema()
 }
 
+type AvailabilityAwareTool interface {
+	Tool
+	IsAvailable() bool
+}
+
 type ToolExecutionContext struct {
 	RootDir    string
 	CurrentDir string
