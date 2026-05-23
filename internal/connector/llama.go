@@ -3,11 +3,13 @@ package connector
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -31,10 +33,15 @@ const (
 )
 
 type LlamaConnector struct {
-	logger    zap.Logger
-	modelID   string
-	modelPath string
-	config    config.Config
+	logger          zap.Logger
+	modelID         string
+	modelPath       string
+	config          config.Config
+	loadedModel     llama.Model
+	loadedDevice    string
+	modelLoadOnce   sync.Once
+	modelLoadErr    error
+	modelLoadParams llama.ModelParams
 }
 
 var llamaRuntimeInit sync.Once
@@ -123,7 +130,7 @@ func (lc *LlamaConnector) Query(ctx context.Context, params *QueryParams) (strin
 		return lc.queryWithLlamaCLI(ctx, modelPath, params)
 	}
 
-	modelParams, err := buildLlamaModelParams(device)
+	model, modelParams, err := lc.requireLoadedModel(device)
 	if err != nil {
 		return "", err
 	}
@@ -132,15 +139,6 @@ func (lc *LlamaConnector) Query(ctx context.Context, params *QueryParams) (strin
 		zap.Int32("n_gpu_layers", modelParams.NGpuLayers),
 		zap.Bool("supports_gpu_offload", llama.SupportsGpuOffload()),
 	)
-
-	model, err := llama.ModelLoadFromFile(modelPath, modelParams)
-	if err != nil {
-		return "", fmt.Errorf("failed to load llama model %q from %q: %w", lc.modelID, modelPath, err)
-	}
-	if model == 0 {
-		return "", fmt.Errorf("failed to load llama model %q from %q", lc.modelID, modelPath)
-	}
-	defer llama.ModelFree(model)
 
 	ctxParams := llama.ContextDefaultParams()
 	ctxParams.NCtx = defaultLlamaNCtx
@@ -465,14 +463,6 @@ func streamLlamaChunk(params *QueryParams, mdRenderer *MarkdownStreamRenderer, c
 	return nil
 }
 
-func (lc *LlamaConnector) QueryWithTool(_ context.Context, _ *QueryParams, _ map[string]tools.Tool) (LlmResponseWithTools, error) {
-	if _, err := lc.requireModelPath(); err != nil {
-		return LlmResponseWithTools{}, err
-	}
-
-	return LlmResponseWithTools{}, fmt.Errorf("llama provider does not support tool calling yet")
-}
-
 func (lc *LlamaConnector) requireModelPath() (string, error) {
 	if lc.modelPath != "" {
 		return lc.modelPath, nil
@@ -485,6 +475,46 @@ func (lc *LlamaConnector) requireModelPath() (string, error) {
 
 	lc.modelPath = modelPath
 	return modelPath, nil
+}
+
+func (lc *LlamaConnector) requireLoadedModel(device string) (llama.Model, llama.ModelParams, error) {
+	modelPath, err := lc.requireModelPath()
+	if err != nil {
+		return 0, llama.ModelParams{}, err
+	}
+
+	modelParams, err := buildLlamaModelParams(device)
+	if err != nil {
+		return 0, llama.ModelParams{}, err
+	}
+
+	lc.modelLoadOnce.Do(func() {
+		lc.loadedDevice = device
+		lc.modelLoadParams = modelParams
+
+		model, loadErr := llama.ModelLoadFromFile(modelPath, modelParams)
+		if loadErr != nil {
+			lc.modelLoadErr = fmt.Errorf("failed to load llama model %q from %q: %w", lc.modelID, modelPath, loadErr)
+			return
+		}
+		if model == 0 {
+			lc.modelLoadErr = fmt.Errorf("failed to load llama model %q from %q", lc.modelID, modelPath)
+			return
+		}
+		lc.loadedModel = model
+	})
+
+	if lc.modelLoadErr != nil {
+		return 0, llama.ModelParams{}, lc.modelLoadErr
+	}
+	if lc.loadedModel == 0 {
+		return 0, llama.ModelParams{}, fmt.Errorf("failed to load llama model %q from %q", lc.modelID, modelPath)
+	}
+	if lc.loadedDevice != device {
+		return 0, llama.ModelParams{}, fmt.Errorf("llama connector model %q was loaded for device %q and cannot be reused with device %q", lc.modelID, lc.loadedDevice, device)
+	}
+
+	return lc.loadedModel, lc.modelLoadParams, nil
 }
 
 func resolveLlamaModelPath(modelID string, cfg config.Config) (string, error) {
@@ -822,4 +852,129 @@ func (lc *LlamaConnector) buildPrompt(model llama.Model, params *QueryParams) (s
 	prompt.WriteString("ASSISTANT: ")
 
 	return prompt.String(), nil
+}
+
+type llamaToolChoice struct {
+	Type     string         `json:"type"`
+	ToolName string         `json:"tool_name,omitempty"`
+	Input    map[string]any `json:"input,omitempty"`
+	Answer   string         `json:"answer,omitempty"`
+	Thought  string         `json:"thought,omitempty"`
+}
+
+func (lc *LlamaConnector) QueryWithTool(ctx context.Context, params *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
+	if _, err := lc.requireModelPath(); err != nil {
+		return LlmResponseWithTools{}, err
+	}
+	if params == nil {
+		return LlmResponseWithTools{}, fmt.Errorf("llama query params cannot be nil")
+	}
+
+	prompt := lc.buildToolPrompt(params, execTools)
+	toolParams := *params
+	toolParams.UserPrompt = &prompt
+	toolParams.Messages = nil
+	toolParams.Stream = false
+	toolParams.OnStream = nil
+
+	raw, err := lc.Query(ctx, &toolParams)
+	if err != nil {
+		return LlmResponseWithTools{}, err
+	}
+
+	choice, err := parseLlamaToolChoice(raw)
+	if err != nil {
+		return LlmResponseWithTools{}, err
+	}
+
+	response := LlmResponseWithTools{Response: strings.TrimSpace(choice.Thought)}
+	switch choice.Type {
+	case "final_answer":
+		response.ToolUse = true
+		response.ToolName = "final_answer"
+		response.ToolInput = map[string]any{"answer": strings.TrimSpace(choice.Answer)}
+		return response, nil
+	case "tool":
+		response.ToolUse = true
+		response.ToolName = strings.TrimSpace(choice.ToolName)
+		if response.ToolName == "" {
+			return LlmResponseWithTools{}, fmt.Errorf("llama tool response is missing tool_name")
+		}
+		if choice.Input == nil {
+			choice.Input = map[string]any{}
+		}
+		response.ToolInput = choice.Input
+		return response, nil
+	default:
+		return LlmResponseWithTools{}, fmt.Errorf("llama tool response has invalid type %q", choice.Type)
+	}
+}
+
+func (lc *LlamaConnector) buildToolPrompt(params *QueryParams, execTools map[string]tools.Tool) string {
+	var prompt strings.Builder
+	if params.SysPrompt != nil && strings.TrimSpace(*params.SysPrompt) != "" {
+		prompt.WriteString(*params.SysPrompt)
+		prompt.WriteString("\n\n")
+	}
+	prompt.WriteString("You must respond with exactly one JSON object and no surrounding markdown or prose.\n")
+	prompt.WriteString("Choose one of these response shapes:\n")
+	prompt.WriteString(`{"type":"tool","tool_name":"<tool>","input":{...},"thought":"brief reason"}`)
+	prompt.WriteString("\n")
+	prompt.WriteString(`{"type":"final_answer","answer":"<final answer>","thought":"brief reason"}`)
+	prompt.WriteString("\n\nAvailable tools:\n")
+	prompt.WriteString(formatLlamaTools(execTools))
+	prompt.WriteString("\n\nConversation:\n")
+	for _, msg := range params.Messages {
+		prompt.WriteString(strings.ToUpper(strings.TrimSpace(msg.Role)))
+		prompt.WriteString(": ")
+		prompt.WriteString(msg.Content)
+		prompt.WriteString("\n\n")
+	}
+	if params.UserPrompt != nil && *params.UserPrompt != "" {
+		prompt.WriteString("USER: ")
+		prompt.WriteString(*params.UserPrompt)
+		prompt.WriteString("\n\n")
+	}
+	prompt.WriteString("Return valid JSON only.")
+	return prompt.String()
+}
+
+func formatLlamaTools(execTools map[string]tools.Tool) string {
+	names := make([]string, 0, len(execTools))
+	for name := range execTools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var prompt strings.Builder
+	for _, name := range names {
+		tool := execTools[name]
+		prompt.WriteString("- ")
+		prompt.WriteString(tool.Name())
+		prompt.WriteString(": ")
+		prompt.WriteString(tool.Description())
+		prompt.WriteString("\n")
+		schema, err := json.Marshal(tool.InputSchema())
+		if err == nil {
+			prompt.WriteString("  input_schema: ")
+			prompt.Write(schema)
+			prompt.WriteString("\n")
+		}
+	}
+	return prompt.String()
+}
+
+func parseLlamaToolChoice(raw string) (llamaToolChoice, error) {
+	trimmed := strings.TrimSpace(raw)
+	start := strings.Index(trimmed, "{")
+	end := strings.LastIndex(trimmed, "}")
+	if start < 0 || end < start {
+		return llamaToolChoice{}, fmt.Errorf("llama tool response did not contain a JSON object: %q", trimmed)
+	}
+
+	var choice llamaToolChoice
+	if err := json.Unmarshal([]byte(trimmed[start:end+1]), &choice); err != nil {
+		return llamaToolChoice{}, fmt.Errorf("failed to parse llama tool response as JSON: %w", err)
+	}
+	return choice, nil
 }
