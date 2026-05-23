@@ -276,8 +276,8 @@ tasks:
   test:model:ask:
     vars:
       Q: '{{default "What command shows disk usage in human readable form?" .Q}}'
-      PROVIDER: '{{default "perplexity" .PROVIDER}}'
-      MODEL: '{{default "llama-3-8b-instruct" .MODEL}}'
+      PROVIDER: '{{default "openai" .PROVIDER}}'
+      MODEL: '{{default "gpt-4o-mini" .MODEL}}'
     silent: true
     cmds:
       - go run cmd/agent/main.go
@@ -288,11 +288,11 @@ tasks:
         --model {{.MODEL}}
         {{.Q}}
 
-  test:model:ask:perplexity:
+  test:model:ask:openai:
     vars:
       Q: "What command shows disk usage in human readable form?"
-      PROVIDER: "perplexity"
-      MODEL: "llama-3-8b-instruct"
+      PROVIDER: "openai"
+      MODEL: "gpt-4o-mini"
     cmds:
       - task: test:model:ask
         vars:
@@ -328,8 +328,8 @@ tasks:
   test:model:task:
     vars:
       Q: '{{default "What command shows disk usage in human readable form?" .Q}}'
-      PROVIDER: '{{default "perplexity" .PROVIDER}}'
-      MODEL: '{{default "llama-3-8b-instruct" .MODEL}}'
+      PROVIDER: '{{default "openai" .PROVIDER}}'
+      MODEL: '{{default "gpt-4o-mini" .MODEL}}'
     # desc: Run the agent with a question`
     silent: true
     cmds:
@@ -341,11 +341,11 @@ tasks:
         --model {{.MODEL}}
         {{.Q}}
 
-  test:model:task:perplexity:
+  test:model:task:openai:
     vars:
       Q: "List all files in home directory"
-      PROVIDER: "perplexity"
-      MODEL: "llama-3-8b-instruct"
+      PROVIDER: "openai"
+      MODEL: "gpt-4o-mini"
     cmds:
       - task: test:model:task
         vars:
