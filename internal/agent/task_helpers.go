@@ -125,7 +125,7 @@ func taskToolInputRequestsFinal(input map[string]any) bool {
 
 func isTaskDisplayOrientedTool(toolName string) bool {
 	switch toolName {
-	case tools.ToolNameUnix, tools.ToolNamePython, tools.ToolNameFileSearch:
+	case tools.ToolNameUnix, tools.ToolNamePython, tools.ToolNameFileSearch, tools.ToolNameRead:
 		return true
 	default:
 		return false

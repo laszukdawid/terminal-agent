@@ -93,3 +93,108 @@ func TestUnixToolRunSchemaWithContextUsesCurrentDir(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, currentDir, strings.TrimSpace(result))
 }
+
+func TestReadToolRunSchemaWithContextReadsFiles(t *testing.T) {
+	rootDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, "hello.txt"), []byte("line one\nline two\nline three\n"), 0o644))
+
+	tool := NewReadTool(rootDir)
+	result, err := tool.RunSchemaWithContext(map[string]any{"path": "hello.txt"}, ToolExecutionContext{
+		RootDir:    rootDir,
+		CurrentDir: rootDir,
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, result, "1: line one")
+	assert.Contains(t, result, "2: line two")
+	assert.Contains(t, result, "3: line three")
+}
+
+func TestReadToolSupportsOffsetAndLimit(t *testing.T) {
+	rootDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, "lines.txt"), []byte("a\nb\nc\nd\ne\n"), 0o644))
+
+	tool := NewReadTool(rootDir)
+	result, err := tool.RunSchemaWithContext(map[string]any{
+		"path":   "lines.txt",
+		"offset": 2,
+		"limit":  2,
+	}, ToolExecutionContext{RootDir: rootDir, CurrentDir: rootDir})
+
+	require.NoError(t, err)
+	assert.Contains(t, result, "2: b")
+	assert.Contains(t, result, "3: c")
+	assert.NotContains(t, result, "1: a")
+	assert.NotContains(t, result, "4: d")
+}
+
+func TestReadToolReturnsErrorForMissingFile(t *testing.T) {
+	rootDir := t.TempDir()
+	tool := NewReadTool(rootDir)
+	_, err := tool.RunSchemaWithContext(map[string]any{"path": "missing.txt"}, ToolExecutionContext{
+		RootDir:    rootDir,
+		CurrentDir: rootDir,
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "file not found")
+}
+
+func TestReadToolRejectsPathsOutsideRoot(t *testing.T) {
+	rootDir := t.TempDir()
+	currentDir := filepath.Join(rootDir, "nested")
+	require.NoError(t, os.MkdirAll(currentDir, 0o755))
+
+	tool := NewReadTool(rootDir)
+	_, err := tool.RunSchemaWithContext(map[string]any{"path": "../../etc/passwd"}, ToolExecutionContext{
+		RootDir:    rootDir,
+		CurrentDir: currentDir,
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "outside working directory")
+}
+
+func TestReadToolResolvesPathsRelativeToCurrentDir(t *testing.T) {
+	rootDir := t.TempDir()
+	currentDir := filepath.Join(rootDir, "nested")
+	require.NoError(t, os.MkdirAll(currentDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(currentDir, "local.txt"), []byte("nested content"), 0o644))
+
+	tool := NewReadTool(rootDir)
+	result, err := tool.RunSchemaWithContext(map[string]any{"path": "local.txt"}, ToolExecutionContext{
+		RootDir:    rootDir,
+		CurrentDir: currentDir,
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, result, "1: nested content")
+}
+
+func TestReadToolHandlesEmptyFile(t *testing.T) {
+	rootDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, "empty.txt"), []byte(""), 0o644))
+
+	tool := NewReadTool(rootDir)
+	result, err := tool.RunSchemaWithContext(map[string]any{"path": "empty.txt"}, ToolExecutionContext{
+		RootDir:    rootDir,
+		CurrentDir: rootDir,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "(empty file)", result)
+}
+
+func TestReadToolOffsetExceedsFileLength(t *testing.T) {
+	rootDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, "short.txt"), []byte("only one line\n"), 0o644))
+
+	tool := NewReadTool(rootDir)
+	result, err := tool.RunSchemaWithContext(map[string]any{"path": "short.txt", "offset": 5}, ToolExecutionContext{
+		RootDir:    rootDir,
+		CurrentDir: rootDir,
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, result, "offset 5 exceeds file length")
+}

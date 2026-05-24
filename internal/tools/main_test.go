@@ -9,7 +9,7 @@ import (
 func TestBuiltinToolsIncludeNativeTools(t *testing.T) {
 	tools := GetAllBuiltinTools(config.NewDefaultConfig())
 
-	for _, name := range []string{ToolNameFileEdit, ToolNameFileSearch, ToolNamePython} {
+	for _, name := range []string{ToolNameFileEdit, ToolNameFileSearch, ToolNamePython, ToolNameRead} {
 		if tools[name] == nil {
 			t.Fatalf("expected builtin tool %q to be registered", name)
 		}
