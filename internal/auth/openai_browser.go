@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -50,9 +51,12 @@ type OAuthResult struct {
 }
 
 type BrowserLoginConfig struct {
-	OpenBrowser bool
-	Originator  string
+	OpenBrowser      bool
+	Originator       string
+	ManualCodeReader io.Reader
 }
+
+var errOAuthCallbackTimeout = errors.New("OAuth login timed out; no callback received within 5 minutes")
 
 func DefaultBrowserLoginConfig() BrowserLoginConfig {
 	return BrowserLoginConfig{
@@ -62,7 +66,10 @@ func DefaultBrowserLoginConfig() BrowserLoginConfig {
 }
 
 func buildAuthorizeURL(redirectURI, codeChallenge, state, originator string) string {
-	u, _ := url.Parse(openAIAuthorizeURL)
+	u, err := url.Parse(openAIAuthorizeURL)
+	if err != nil {
+		return openAIAuthorizeURL
+	}
 	q := u.Query()
 	q.Set("response_type", "code")
 	q.Set("client_id", openAIClientID)
@@ -89,21 +96,28 @@ func (m *Manager) LoginOpenAIBrowser(cfg BrowserLoginConfig) (*OAuthResult, erro
 		return nil, fmt.Errorf("failed to generate state: %w", err)
 	}
 
-	callbackPort, err := bindCallbackServer()
+	listener, callbackPort, err := bindCallbackServer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to bind callback server: %w", err)
 	}
+	defer listener.Close()
 
 	redirectURI := fmt.Sprintf("http://localhost:%d%s", callbackPort, openAICallbackPath)
 	authURL := buildAuthorizeURL(redirectURI, pkce.CodeChallenge, state, cfg.Originator)
 
 	fmt.Fprintf(os.Stderr, "\nOpen this URL in your browser to authenticate:\n\n%s\n\n", authURL)
-	fmt.Fprintln(os.Stderr, "If the callback does not return automatically, paste the authorization code or full redirect URL here and press Enter.")
+	if cfg.ManualCodeReader != nil {
+		fmt.Fprintln(os.Stderr, "If the callback does not return automatically, you will be prompted to paste the authorization code or full redirect URL.")
+	}
 	if cfg.OpenBrowser {
 		openBrowser(authURL)
 	}
 
-	code, err := waitForAuthCode(callbackPort, state)
+	code, err := waitForAuthCode(listener, state)
+	if err != nil && errors.Is(err, errOAuthCallbackTimeout) && cfg.ManualCodeReader != nil {
+		fmt.Fprintln(os.Stderr, "Paste the authorization code or full redirect URL:")
+		code, err = promptManualAuthorizationInput(cfg.ManualCodeReader, state)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -135,19 +149,18 @@ func (m *Manager) LoginOpenAIBrowser(cfg BrowserLoginConfig) (*OAuthResult, erro
 	}, nil
 }
 
-func bindCallbackServer() (int, error) {
+func bindCallbackServer() (net.Listener, int, error) {
 	for _, port := range []int{openAICallbackPort, openAICallbackPortAlt} {
 		addr := fmt.Sprintf("%s:%d", openAICallbackHost, port)
 		listener, err := net.Listen("tcp", addr)
 		if err == nil {
-			listener.Close()
-			return port, nil
+			return listener, port, nil
 		}
 	}
-	return 0, fmt.Errorf("callback ports %d and %d are both unavailable", openAICallbackPort, openAICallbackPortAlt)
+	return nil, 0, fmt.Errorf("callback ports %d and %d are both unavailable", openAICallbackPort, openAICallbackPortAlt)
 }
 
-func waitForAuthCode(port int, expectedState string) (string, error) {
+func waitForAuthCode(listener net.Listener, expectedState string) (string, error) {
 	mux := http.NewServeMux()
 
 	type callbackResult struct {
@@ -155,7 +168,6 @@ func waitForAuthCode(port int, expectedState string) (string, error) {
 		err  error
 	}
 	resultCh := make(chan callbackResult, 1)
-	manualResultCh := make(chan callbackResult, 1)
 
 	mux.HandleFunc(openAICallbackPath, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -180,37 +192,10 @@ func waitForAuthCode(port int, expectedState string) (string, error) {
 		resultCh <- callbackResult{code: code}
 	})
 
-	addr := fmt.Sprintf("%s:%d", openAICallbackHost, port)
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := &http.Server{Handler: mux}
 
 	go func() {
-		_ = srv.ListenAndServe()
-	}()
-
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			input := strings.TrimSpace(scanner.Text())
-			if input == "" {
-				continue
-			}
-
-			code, state := ParseAuthorizationInput(input)
-			if state != "" && state != expectedState {
-				manualResultCh <- callbackResult{err: fmt.Errorf("OAuth manual input state mismatch")}
-				return
-			}
-			if code == "" {
-				manualResultCh <- callbackResult{err: fmt.Errorf("OAuth manual input missing authorization code")}
-				return
-			}
-
-			manualResultCh <- callbackResult{code: code}
-			return
-		}
-		if err := scanner.Err(); err != nil {
-			manualResultCh <- callbackResult{err: fmt.Errorf("failed to read manual OAuth input: %w", err)}
-		}
+		_ = srv.Serve(listener)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -220,11 +205,32 @@ func waitForAuthCode(port int, expectedState string) (string, error) {
 	select {
 	case result := <-resultCh:
 		return result.code, result.err
-	case result := <-manualResultCh:
-		return result.code, result.err
 	case <-ctx.Done():
-		return "", fmt.Errorf("OAuth login timed out; no callback received within 5 minutes")
+		return "", errOAuthCallbackTimeout
 	}
+}
+
+func promptManualAuthorizationInput(reader io.Reader, expectedState string) (string, error) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			continue
+		}
+
+		code, state := ParseAuthorizationInput(input)
+		if state != "" && state != expectedState {
+			return "", fmt.Errorf("OAuth manual input state mismatch")
+		}
+		if code == "" {
+			return "", fmt.Errorf("OAuth manual input missing authorization code")
+		}
+		return code, nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to read manual OAuth input: %w", err)
+	}
+	return "", fmt.Errorf("manual OAuth input ended before a code was provided")
 }
 
 type oauthTokenExchangeResult struct {

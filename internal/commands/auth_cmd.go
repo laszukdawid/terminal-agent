@@ -77,6 +77,7 @@ func authLoginCommand() *cobra.Command {
 			}
 
 			cfg := auth.DefaultBrowserLoginConfig()
+			cfg.ManualCodeReader = os.Stdin
 			cmd.PrintErrln("Starting browser login...")
 			result, err := manager.LoginOpenAIBrowser(cfg)
 			if err != nil {

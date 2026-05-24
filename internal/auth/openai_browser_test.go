@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -179,11 +180,29 @@ func TestExtractJWTAccountMetadata(t *testing.T) {
 }
 
 func TestBindCallbackServer_FindsAvailablePort(t *testing.T) {
-	port, err := bindCallbackServer()
+	listener, port, err := bindCallbackServer()
 	if err != nil {
 		t.Fatalf("bindCallbackServer() error = %v", err)
 	}
+	defer listener.Close()
 	if port != openAICallbackPort && port != openAICallbackPortAlt {
 		t.Fatalf("expected port %d or %d, got %d", openAICallbackPort, openAICallbackPortAlt, port)
+	}
+}
+
+func TestPromptManualAuthorizationInput(t *testing.T) {
+	code, err := promptManualAuthorizationInput(strings.NewReader("http://localhost:1455/auth/callback?code=abc123&state=mystate\n"), "mystate")
+	if err != nil {
+		t.Fatalf("promptManualAuthorizationInput() error = %v", err)
+	}
+	if code != "abc123" {
+		t.Fatalf("code = %q, want %q", code, "abc123")
+	}
+}
+
+func TestPromptManualAuthorizationInputRejectsStateMismatch(t *testing.T) {
+	_, err := promptManualAuthorizationInput(strings.NewReader("abc123#wrongstate\n"), "mystate")
+	if err == nil {
+		t.Fatal("expected state mismatch error")
 	}
 }
