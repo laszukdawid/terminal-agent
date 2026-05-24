@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/laszukdawid/terminal-agent/internal/auth"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	openai "github.com/openai/openai-go"
@@ -56,6 +57,7 @@ type OpenAIConnector struct {
 	logger  zap.Logger
 	modelID string
 	token   string
+	authErr error
 }
 
 func computePriceOpenai(modelId string, usage *openai.CompletionUsage) *LLMPrice {
@@ -97,7 +99,15 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		model := openai.ChatModelGPT4oMini
 		modelID = &model
 	}
-	token := os.Getenv("OPENAI_API_KEY")
+	manager := auth.NewManager()
+	resolvedAuth, err := manager.ResolveOpenAIAPIKeyAuth()
+	token := ""
+	var authErr error
+	if err != nil {
+		authErr = err
+	} else {
+		token = resolvedAuth.Token
+	}
 
 	// Build client options
 	clientOptions := []option.RequestOption{
@@ -117,6 +127,7 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		logger:  logger,
 		modelID: *modelID,
 		token:   token,
+		authErr: authErr,
 	}
 
 	return connector
@@ -178,6 +189,10 @@ func (oc *OpenAIConnector) streamQuery(ctx context.Context, qParams *QueryParams
 }
 
 func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+	if oc.authErr != nil {
+		return "", oc.authErr
+	}
+
 	messages := []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(*qParams.SysPrompt)}
 	for _, msg := range qParams.Messages {
 		switch msg.Role {
@@ -193,7 +208,7 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 
 	oParams := openai.ChatCompletionNewParams{
 		Messages: messages,
-		Model: oc.modelID,
+		Model:    oc.modelID,
 	}
 
 	if qParams.Stream {
@@ -223,6 +238,9 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	oc.logger.Sugar().Debugw("Query with tool", "model", oc.modelID)
 	response := LlmResponseWithTools{}
+	if oc.authErr != nil {
+		return response, oc.authErr
+	}
 
 	// Build client options with same configuration as NewOpenAIConnector
 	clientOptions := []option.RequestOption{

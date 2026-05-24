@@ -173,7 +173,19 @@ $ agent config set anthropic.claude-3-haiku-20240307-v1:0
 
 ### OpenAI
 
-To use `agent` with OpenAI, you need to set the `OPENAI_API_KEY` environment variable with your individual key, and then set the provider to `openai`.
+OpenAI supports two authentication methods:
+
+**Option 1: API key** (traditional)
+Set the key as an environment variable:
+```sh
+export OPENAI_API_KEY=your_api_key_here
+```
+
+**Option 2: Stored credentials** (recommended)
+Use the `agent auth` command to store your API key or authenticate with your ChatGPT account:
+```sh
+agent auth login openai --api-key
+```
 
 Setting `openai` provider with `gpt-4o-mini` model can be done with `task run:set:openai` or directly
 
@@ -181,6 +193,8 @@ Setting `openai` provider with `gpt-4o-mini` model can be done with `task run:se
 $ agent config set provider openai
 $ agent config set model gpt-4o-mini
 ```
+
+See `agent auth --help` for more authentication options.
 
 ### Ollama
 
