@@ -184,14 +184,24 @@ export OPENAI_API_KEY=your_api_key_here
 **Option 2: Stored credentials** (recommended)
 Use the `agent auth` command to store your API key or authenticate with your ChatGPT account:
 ```sh
-agent auth login openai --api-key
+agent auth login openai               # browser OAuth login
+agent auth login openai --device      # terminal-friendly device login
+agent auth login openai --api-key     # store an API key
 ```
+
+If the browser callback does not return automatically, the browser login flow also accepts a pasted authorization code or full redirect URL as a fallback.
 
 Setting `openai` provider with `gpt-4o-mini` model can be done with `task run:set:openai` or directly
 
 ```sh
 $ agent config set provider openai
 $ agent config set model gpt-4o-mini
+```
+
+Check the current auth state with:
+
+```sh
+agent auth status openai
 ```
 
 See `agent auth --help` for more authentication options.

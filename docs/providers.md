@@ -95,10 +95,14 @@ OpenAI supports two methods to set up authentication: an API key (traditional), 
 
 Store your API key or authenticate with your ChatGPT subscription:
 ```sh
+agent auth login openai               # browser OAuth login
+agent auth login openai --device      # terminal-friendly device login
 agent auth login openai --api-key     # store an API key
 ```
 
-Credentials are persisted in `~/.config/terminal-agent/auth.json`. They are used automatically for `ask`, `chat`, and `task` commands when no `OPENAI_API_KEY` environment variable is present.
+Credentials are persisted in `~/.config/terminal-agent/auth.json`. They are used automatically for `ask`, `chat`, and `task` commands when no `OPENAI_API_KEY` environment variable is present. Stored OAuth tokens refresh automatically while a valid refresh token is still available.
+
+If the browser callback does not complete automatically, `agent auth login openai` also accepts a pasted authorization code or full redirect URL as a fallback.
 
 Check your auth status at any time:
 ```sh

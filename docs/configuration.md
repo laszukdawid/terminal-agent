@@ -145,6 +145,13 @@ Example of storing an API key with the auth command:
 agent auth login openai --api-key
 ```
 
+Example of using OAuth-based login instead:
+
+```sh
+agent auth login openai          # browser OAuth login
+agent auth login openai --device # device-code login
+```
+
 **Auth resolution order for OpenAI:** `OPENAI_API_KEY` env var → stored API key in auth.json → stored OAuth credential → error.
 
 For the `llama` provider, example runtime setup is:

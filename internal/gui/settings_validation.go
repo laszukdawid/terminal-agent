@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/laszukdawid/terminal-agent/internal/auth"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 )
 
@@ -35,8 +36,12 @@ func validateProviderModel(provider, model string) error {
 func providerSetupHint(provider string) string {
 	switch provider {
 	case connector.OpenaiProvider:
+		status, err := auth.NewManager().Status(provider)
+		if err == nil && status.Configured {
+			return ""
+		}
 		if os.Getenv("OPENAI_API_KEY") == "" {
-			return "OpenAI requires OPENAI_API_KEY to be set."
+			return "OpenAI requires OPENAI_API_KEY or 'agent auth login openai'."
 		}
 	case connector.AnthropicProvider:
 		if os.Getenv("ANTHROPIC_API_KEY") == "" {
@@ -79,6 +84,10 @@ func explainRuntimeError(provider string, err error) string {
 	case strings.Contains(lower, "api key"), strings.Contains(lower, "authenticate"), strings.Contains(lower, "authentication"):
 		if hint != "" {
 			return hint
+		}
+	case strings.Contains(lower, "oauth login has expired"), strings.Contains(lower, "agent auth login openai' again"):
+		if provider == connector.OpenaiProvider {
+			return "Stored OpenAI login has expired. Run 'agent auth login openai' again or set OPENAI_API_KEY."
 		}
 	case strings.Contains(lower, "status code: 401"), strings.Contains(lower, "status code 401"):
 		if hint != "" {

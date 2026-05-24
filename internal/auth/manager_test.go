@@ -111,6 +111,53 @@ func TestResolveOpenAIAPIKeyAuthReturnsOAuthNotSupported(t *testing.T) {
 	}
 }
 
+func TestResolveOpenAIAuthReturnsStoredOAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+		Type:      CredentialTypeOAuth,
+		Access:    "access-token",
+		Refresh:   "refresh-token",
+		Expires:   time.Now().Add(time.Hour).UnixMilli(),
+		AccountID: "workspace-1",
+		PlanType:  "pro",
+	}); err != nil {
+		t.Fatalf("SaveProvider() error = %v", err)
+	}
+
+	resolved, err := mgr.ResolveOpenAIAuth()
+	if err != nil {
+		t.Fatalf("ResolveOpenAIAuth() error = %v", err)
+	}
+	if resolved.Type != CredentialTypeOAuth {
+		t.Fatalf("resolved.Type = %q, want %q", resolved.Type, CredentialTypeOAuth)
+	}
+	if resolved.AccountID != "workspace-1" {
+		t.Fatalf("resolved.AccountID = %q, want %q", resolved.AccountID, "workspace-1")
+	}
+}
+
+func TestResolveOpenAIAuthRejectsExpiredStoredOAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+		Type:      CredentialTypeOAuth,
+		Access:    "access-token",
+		Refresh:   "refresh-token",
+		Expires:   time.Now().Add(-time.Minute).UnixMilli(),
+		AccountID: "workspace-1",
+	}); err != nil {
+		t.Fatalf("SaveProvider() error = %v", err)
+	}
+
+	originalTokenEndpoint := openAITokenEndpoint
+	openAITokenEndpoint = "http://127.0.0.1:1"
+	defer func() { openAITokenEndpoint = originalTokenEndpoint }()
+
+	_, err := mgr.ResolveOpenAIAuth()
+	if err == nil {
+		t.Fatal("expected refresh failure for expired stored OAuth")
+	}
+}
+
 func TestDeleteProvider(t *testing.T) {
 	mgr := newTestManager(t)
 	if err := mgr.SaveAPIKey(ProviderOpenAI, "sk-stored"); err != nil {

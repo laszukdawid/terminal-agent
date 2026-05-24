@@ -48,25 +48,44 @@ func authLoginCommand() *cobra.Command {
 				return fmt.Errorf("use only one auth mode flag")
 			}
 
-			if device {
-				return fmt.Errorf("OpenAI device login is not implemented yet")
-			}
-
-			if !apiKeyMode {
-				cmd.PrintErrln("Browser OAuth login is not available yet; defaulting to API key mode.")
-			}
-
 			manager := auth.NewManager()
-			key, err := resolveAPIKeyInput(apiKey)
+
+			if device {
+				cfg := auth.DefaultBrowserLoginConfig()
+				cfg.OpenBrowser = false
+				cmd.PrintErrln("Starting device login...")
+				result, err := manager.LoginOpenAIDevice(cfg)
+				if err != nil {
+					return err
+				}
+				cmd.Printf("Successfully authenticated with OpenAI.\n")
+				cmd.Printf("Account ID: %s\n", result.AccountID)
+				cmd.Printf("Credentials stored in %s\n", manager.Path())
+				return nil
+			}
+
+			if apiKeyMode {
+				key, err := resolveAPIKeyInput(apiKey)
+				if err != nil {
+					return err
+				}
+				if err := manager.SaveAPIKey(provider, key); err != nil {
+					return err
+				}
+				cmd.Printf("Stored OpenAI API key in %s\n", manager.Path())
+				return nil
+			}
+
+			cfg := auth.DefaultBrowserLoginConfig()
+			cmd.PrintErrln("Starting browser login...")
+			result, err := manager.LoginOpenAIBrowser(cfg)
 			if err != nil {
 				return err
 			}
 
-			if err := manager.SaveAPIKey(provider, key); err != nil {
-				return err
-			}
-
-			cmd.Printf("Stored OpenAI API key in %s\n", manager.Path())
+			cmd.Printf("Successfully authenticated with OpenAI.\n")
+			cmd.Printf("Account ID: %s\n", result.AccountID)
+			cmd.Printf("Credentials stored in %s\n", manager.Path())
 			return nil
 		},
 	}

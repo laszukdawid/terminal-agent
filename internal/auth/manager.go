@@ -10,7 +10,8 @@ import (
 
 var (
 	ErrAuthNotConfigured     = errors.New("OpenAI authentication not configured. Set OPENAI_API_KEY or run 'agent auth login openai --api-key'.")
-	ErrOpenAIOAuthConfigured = errors.New("Stored OpenAI OAuth login is configured, but the OpenAI Codex runtime integration is not implemented yet.")
+	ErrOpenAIOAuthConfigured = errors.New("Stored OpenAI OAuth login is configured. This code path only supports API-key auth resolution.")
+	ErrOpenAIOAuthExpired    = errors.New("Stored OpenAI OAuth login could not be refreshed. Run 'agent auth login openai' again.")
 	ErrUnsupportedCredential = errors.New("unsupported stored auth credential")
 	ErrUnsupportedProvider   = errors.New("unsupported auth provider")
 )
@@ -75,6 +76,17 @@ func (m *Manager) Status(provider string) (Status, error) {
 }
 
 func (m *Manager) ResolveOpenAIAPIKeyAuth() (ResolvedAuth, error) {
+	credential, _, configured, err := m.lookupOpenAICredential()
+	if err != nil {
+		return ResolvedAuth{}, err
+	}
+	if configured && credential.Type == CredentialTypeOAuth {
+		return ResolvedAuth{}, ErrOpenAIOAuthConfigured
+	}
+	return m.ResolveOpenAIAuth()
+}
+
+func (m *Manager) ResolveOpenAIAuth() (ResolvedAuth, error) {
 	credential, source, configured, err := m.lookupOpenAICredential()
 	if err != nil {
 		return ResolvedAuth{}, err
@@ -95,7 +107,32 @@ func (m *Manager) ResolveOpenAIAPIKeyAuth() (ResolvedAuth, error) {
 			Token:    credential.Key,
 		}, nil
 	case CredentialTypeOAuth:
-		return ResolvedAuth{}, ErrOpenAIOAuthConfigured
+		refreshedCredential, _, err := m.refreshOpenAIOAuthIfNeeded()
+		if err != nil {
+			return ResolvedAuth{}, err
+		}
+		if strings.TrimSpace(refreshedCredential.Access) == "" {
+			return ResolvedAuth{}, ErrAuthNotConfigured
+		}
+		expiresAt := time.Time{}
+		expired := false
+		if refreshedCredential.Expires > 0 {
+			expiresAt = time.UnixMilli(refreshedCredential.Expires)
+			expired = openAIOAuthNeedsRefresh(refreshedCredential, time.Now())
+		}
+		if strings.TrimSpace(refreshedCredential.AccountID) == "" {
+			return ResolvedAuth{}, fmt.Errorf("stored OpenAI OAuth credential is missing account metadata; run 'agent auth login openai' again")
+		}
+		return ResolvedAuth{
+			Provider:  ProviderOpenAI,
+			Type:      CredentialTypeOAuth,
+			Source:    source,
+			Token:     refreshedCredential.Access,
+			AccountID: refreshedCredential.AccountID,
+			PlanType:  refreshedCredential.PlanType,
+			ExpiresAt: expiresAt,
+			Expired:   expired,
+		}, nil
 	default:
 		return ResolvedAuth{}, fmt.Errorf("%w: %s", ErrUnsupportedCredential, credential.Type)
 	}

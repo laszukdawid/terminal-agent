@@ -16,8 +16,20 @@ Authenticate with a provider:
 
 ```sh
 agent auth login openai
+agent auth login openai --device
 agent auth login openai --api-key
 ```
+
+- `agent auth login openai` starts the browser OAuth flow.
+- `agent auth login openai --device` starts the terminal-friendly device-code flow.
+- `agent auth login openai --api-key` stores an API key without using OAuth.
+
+Browser login supports a pasted-code fallback. If the localhost callback does not complete automatically, paste either:
+
+- the full redirect URL
+- the raw authorization code
+- `code#state`
+- a query string containing `code=` and optional `state=`
 
 When `--api-key` is used, the command reads the key from the `--key` flag, the `OPENAI_API_KEY` environment variable, an interactive terminal prompt, or stdin (in that order).
 
@@ -52,6 +64,8 @@ Source: stored
 
 If `OPENAI_API_KEY` is set in the environment, `Source` will show `environment` instead.
 
+For OAuth logins, status also shows `Account ID`, `Plan type`, `Expires`, and `Expired` when that metadata is available.
+
 ### logout
 
 Remove stored credentials for a provider:
@@ -71,6 +85,8 @@ Credentials are stored in:
 ```
 
 The file is created with `0600` permissions and uses atomic writes to avoid data corruption.
+
+For stored OAuth logins, Terminal Agent refreshes access tokens automatically while a valid refresh token is still present.
 
 ## Auth Resolution
 

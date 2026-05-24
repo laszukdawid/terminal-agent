@@ -56,7 +56,7 @@ type OpenAIConnector struct {
 	client  *openai.Client
 	logger  zap.Logger
 	modelID string
-	token   string
+	auth    auth.ResolvedAuth
 	authErr error
 }
 
@@ -100,24 +100,27 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		modelID = &model
 	}
 	manager := auth.NewManager()
-	resolvedAuth, err := manager.ResolveOpenAIAPIKeyAuth()
-	token := ""
+	resolvedAuth, err := manager.ResolveOpenAIAuth()
 	var authErr error
+	clientOptions := []option.RequestOption{}
 	if err != nil {
 		authErr = err
 	} else {
-		token = resolvedAuth.Token
-	}
-
-	// Build client options
-	clientOptions := []option.RequestOption{
-		option.WithAPIKey(token),
-	}
-
-	// Check for custom base URL
-	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
-		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
-		logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
+		clientOptions = append(clientOptions, option.WithAPIKey(resolvedAuth.Token))
+		switch resolvedAuth.Type {
+		case auth.CredentialTypeOAuth:
+			clientOptions = append(clientOptions,
+				option.WithBaseURL(auth.OpenAICodexBaseURL),
+				option.WithHeader("ChatGPT-Account-ID", resolvedAuth.AccountID),
+				option.WithHeader("originator", auth.OpenAIOriginator()),
+				option.WithHeader("OpenAI-Beta", auth.OpenAIResponsesBetaHeader),
+			)
+		default:
+			if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+				clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+				logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
+			}
+		}
 	}
 
 	client := openai.NewClient(clientOptions...)
@@ -126,7 +129,7 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		client:  &client,
 		logger:  logger,
 		modelID: *modelID,
-		token:   token,
+		auth:    resolvedAuth,
 		authErr: authErr,
 	}
 
@@ -192,6 +195,9 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	if oc.authErr != nil {
 		return "", oc.authErr
 	}
+	if oc.auth.Type == auth.CredentialTypeOAuth {
+		return oc.queryOAuth(ctx, qParams)
+	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(*qParams.SysPrompt)}
 	for _, msg := range qParams.Messages {
@@ -241,18 +247,9 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	if oc.authErr != nil {
 		return response, oc.authErr
 	}
-
-	// Build client options with same configuration as NewOpenAIConnector
-	clientOptions := []option.RequestOption{
-		option.WithAPIKey(oc.token),
+	if oc.auth.Type == auth.CredentialTypeOAuth {
+		return oc.queryWithToolOAuth(ctx, qParams, tools)
 	}
-
-	// Check for custom base URL
-	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
-		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
-	}
-
-	client := openai.NewClient(clientOptions...)
 
 	oParams := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
@@ -263,7 +260,7 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 		Model: oc.modelID,
 	}
 
-	completion, err := client.Chat.Completions.New(ctx, oParams)
+	completion, err := oc.client.Chat.Completions.New(ctx, oParams)
 	if err != nil {
 		return response, err
 	}
