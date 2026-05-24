@@ -93,6 +93,16 @@ func (r *Runtime) ResolveTaskPrompt(taskOverride string) (string, error) {
 		return "", fmt.Errorf("failed to resolve task prompt: %w", err)
 	}
 
+	if r.Config != nil && r.Config.GetProjectContext() {
+		contextContent, readErr := internalagent.ReadProjectContext(r.WorkingDir)
+		if readErr != nil {
+			return "", fmt.Errorf("failed to read project context: %w", readErr)
+		}
+		if contextContent != "" {
+			taskPrompt += contextContent
+		}
+	}
+
 	return taskPrompt, nil
 }
 

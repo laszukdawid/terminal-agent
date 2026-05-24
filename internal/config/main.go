@@ -32,6 +32,7 @@ type Config interface {
 	GetMemory() bool
 	SetMemory(bool) error
 	GetPermissions() Permissions
+	GetProjectContext() bool
 }
 
 type config struct {
@@ -44,6 +45,7 @@ type config struct {
 	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
 	Memory          bool              `json:"memory"`
+	ProjectContext  *bool             `json:"project_context,omitempty"`
 	Permissions     Permissions       `json:"permissions,omitempty"`
 }
 
@@ -240,6 +242,13 @@ func (config *config) SetMemory(enabled bool) error {
 
 func (config *config) GetPermissions() Permissions {
 	return config.Permissions
+}
+
+func (config *config) GetProjectContext() bool {
+	if config.ProjectContext == nil {
+		return true
+	}
+	return *config.ProjectContext
 }
 
 var SetProviderCmd = &cobra.Command{

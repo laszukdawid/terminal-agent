@@ -14,14 +14,15 @@ import (
 
 // SystemInfo contains information about the current system environment
 type SystemInfo struct {
-	Hostname     string
-	Username     string
-	CurrentTime  string
-	WorkingDir   string
-	OS           string
-	OSVersion    string
-	Architecture string
-	GoVersion    string
+	Hostname           string
+	Username           string
+	CurrentTime        string
+	WorkingDir         string
+	OS                 string
+	OSVersion          string
+	Architecture       string
+	GoVersion          string
+	ProjectContextPath string
 }
 
 // GetSystemInfo collects information about the current system.
@@ -59,6 +60,9 @@ func GetSystemInfo(workingDir string) SystemInfo {
 	// Get OS version
 	info.OSVersion = getOSVersion()
 
+	// Discover project context file path
+	info.ProjectContextPath = discoverProjectContextFile(info.WorkingDir)
+
 	return info
 }
 
@@ -71,7 +75,7 @@ func SystemPromptHeader(workingDir string) string {
 		osLine = fmt.Sprintf("%s/%s (%s)", info.OS, info.Architecture, info.OSVersion)
 	}
 
-	return fmt.Sprintf(`You are a Unix terminal helper.
+	header := fmt.Sprintf(`You are a Unix terminal helper.
 You are mainly called from Unix terminal, and asked about Unix terminal questions.
 You specialize in software development with access to a variety of tools and the ability to instruct and direct a coding agent and a code execution one.
 
@@ -82,6 +86,52 @@ Current system context:
 - Working Directory: %s
 - Operating System: %s
 `, info.Hostname, info.Username, info.CurrentTime, info.WorkingDir, osLine)
+
+	if info.ProjectContextPath != "" {
+		header += fmt.Sprintf("- Project Context: %s\n", info.ProjectContextPath)
+	}
+
+	return header
+}
+
+// projectContextFileNames lists files to check for project context, in priority order.
+var projectContextFileNames = []string{"AGENTS.md", "CLAUDE.md", ".agentrules"}
+
+// discoverProjectContextFile returns the path to the first found project context file
+// in the working directory, or an empty string if none exist.
+func discoverProjectContextFile(workingDir string) string {
+	if workingDir == "" {
+		return ""
+	}
+	for _, name := range projectContextFileNames {
+		path := filepath.Join(workingDir, name)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+// ReadProjectContext reads the project context file from the working directory.
+// Returns the content wrapped in <project_context> tags, or an empty string if no
+// context file exists.
+func ReadProjectContext(workingDir string) (string, error) {
+	path := discoverProjectContextFile(workingDir)
+	if path == "" {
+		return "", nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read project context file %s: %w", path, err)
+	}
+
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		return "", nil
+	}
+
+	return fmt.Sprintf("\n<project_context>\n%s\n</project_context>\n", content), nil
 }
 
 // getOSVersion returns a human-readable OS name and version.
