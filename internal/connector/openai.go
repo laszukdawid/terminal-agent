@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/laszukdawid/terminal-agent/internal/auth"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	openai "github.com/openai/openai-go"
@@ -55,7 +56,8 @@ type OpenAIConnector struct {
 	client  *openai.Client
 	logger  zap.Logger
 	modelID string
-	token   string
+	auth    auth.ResolvedAuth
+	authErr error
 }
 
 func computePriceOpenai(modelId string, usage *openai.CompletionUsage) *LLMPrice {
@@ -97,17 +99,28 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		model := openai.ChatModelGPT4oMini
 		modelID = &model
 	}
-	token := os.Getenv("OPENAI_API_KEY")
-
-	// Build client options
-	clientOptions := []option.RequestOption{
-		option.WithAPIKey(token),
-	}
-
-	// Check for custom base URL
-	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
-		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
-		logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
+	manager := auth.NewManager()
+	resolvedAuth, err := manager.ResolveOpenAIAuth()
+	var authErr error
+	clientOptions := []option.RequestOption{}
+	if err != nil {
+		authErr = err
+	} else {
+		clientOptions = append(clientOptions, option.WithAPIKey(resolvedAuth.Token))
+		switch resolvedAuth.Type {
+		case auth.CredentialTypeOAuth:
+			clientOptions = append(clientOptions,
+				option.WithBaseURL(auth.OpenAICodexBaseURL),
+				option.WithHeader("ChatGPT-Account-ID", resolvedAuth.AccountID),
+				option.WithHeader("originator", auth.OpenAIOriginator()),
+				option.WithHeader("OpenAI-Beta", auth.OpenAIResponsesBetaHeader),
+			)
+		default:
+			if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+				clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+				logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
+			}
+		}
 	}
 
 	client := openai.NewClient(clientOptions...)
@@ -116,7 +129,8 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		client:  &client,
 		logger:  logger,
 		modelID: *modelID,
-		token:   token,
+		auth:    resolvedAuth,
+		authErr: authErr,
 	}
 
 	return connector
@@ -178,6 +192,13 @@ func (oc *OpenAIConnector) streamQuery(ctx context.Context, qParams *QueryParams
 }
 
 func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+	if oc.authErr != nil {
+		return "", oc.authErr
+	}
+	if oc.auth.Type == auth.CredentialTypeOAuth {
+		return oc.queryOAuth(ctx, qParams)
+	}
+
 	messages := []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(*qParams.SysPrompt)}
 	for _, msg := range qParams.Messages {
 		switch msg.Role {
@@ -193,7 +214,7 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 
 	oParams := openai.ChatCompletionNewParams{
 		Messages: messages,
-		Model: oc.modelID,
+		Model:    oc.modelID,
 	}
 
 	if qParams.Stream {
@@ -223,18 +244,12 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	oc.logger.Sugar().Debugw("Query with tool", "model", oc.modelID)
 	response := LlmResponseWithTools{}
-
-	// Build client options with same configuration as NewOpenAIConnector
-	clientOptions := []option.RequestOption{
-		option.WithAPIKey(oc.token),
+	if oc.authErr != nil {
+		return response, oc.authErr
 	}
-
-	// Check for custom base URL
-	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
-		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+	if oc.auth.Type == auth.CredentialTypeOAuth {
+		return oc.queryWithToolOAuth(ctx, qParams, tools)
 	}
-
-	client := openai.NewClient(clientOptions...)
 
 	oParams := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
@@ -245,7 +260,7 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 		Model: oc.modelID,
 	}
 
-	completion, err := client.Chat.Completions.New(ctx, oParams)
+	completion, err := oc.client.Chat.Completions.New(ctx, oParams)
 	if err != nil {
 		return response, err
 	}

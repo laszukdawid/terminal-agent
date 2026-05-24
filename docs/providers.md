@@ -80,13 +80,39 @@ Example config:
 
 ### OpenAI
 
-**Setup:**
+OpenAI supports two methods to set up authentication: an API key (traditional), or stored credentials via `agent auth`.
+
+**Option 1: API key via environment variable**
+
 1. Create an account at [OpenAI](https://platform.openai.com/)
 2. Generate an API key
 3. Set the key as an environment variable:
    ```sh
    export OPENAI_API_KEY=your_api_key_here
    ```
+
+**Option 2: Stored credentials via agent auth**
+
+Store your API key or authenticate with your ChatGPT subscription:
+```sh
+agent auth login openai               # browser OAuth login
+agent auth login openai --device      # terminal-friendly device login
+agent auth login openai --api-key     # store an API key
+```
+
+Credentials are persisted in `~/.config/terminal-agent/auth.json`. They are used automatically for `ask`, `chat`, and `task` commands when no `OPENAI_API_KEY` environment variable is present. Stored OAuth tokens refresh automatically while a valid refresh token is still available.
+
+If the browser callback does not complete automatically, `agent auth login openai` also accepts a pasted authorization code or full redirect URL as a fallback.
+
+Check your auth status at any time:
+```sh
+agent auth status openai
+```
+
+Remove stored credentials:
+```sh
+agent auth logout openai
+```
 
 **Configuration:**
 ```sh
@@ -109,6 +135,8 @@ export OPENAI_BASE_URL=https://your-custom-endpoint.com/v1
 - Supports streaming output with the `--stream` flag
 - Tool usage capability for the `task` command
 - Compatible with OpenAI-compatible endpoints via `OPENAI_BASE_URL`
+
+**Auth resolution order:** When both a stored credential and `OPENAI_API_KEY` exist, the environment variable takes precedence.
 
 ### Anthropic
 

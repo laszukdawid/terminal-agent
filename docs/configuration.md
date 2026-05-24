@@ -118,22 +118,41 @@ When prompted to execute an action, you can respond with:
 
 ## Environment Variables
 
-Terminal Agent uses environment variables for API keys:
+Terminal Agent supports two credential sources:
 
-| Provider | Environment Variable | Description |
-|----------|---------------------|-------------|
-| OpenAI | `OPENAI_API_KEY` | API key for OpenAI services |
-| Anthropic | `ANTHROPIC_API_KEY` | API key for Anthropic Claude models |
-| Google | `GOOGLE_API_KEY` | API key for Google AI (Gemini) |
-| AWS Bedrock | AWS credentials | Standard AWS credential configuration |
-| Llama.cpp | `YZMA_LIB` | Path to the directory containing the local llama.cpp shared libraries used by the `llama` provider |
-| Ollama | `OLLAMA_HOST` | Host URL for Ollama server |
+**Environment variables** and **stored credentials** in `~/.config/terminal-agent/auth.json`.
+
+Stored credentials are managed with the `agent auth` command and take effect automatically when the corresponding environment variable is unset.
+
+| Provider | Environment Variable | Auth File | Description |
+|----------|---------------------|-----------|-------------|
+| OpenAI | `OPENAI_API_KEY` | supported | API key or stored credential for OpenAI services |
+| Anthropic | `ANTHROPIC_API_KEY` | — | API key for Anthropic Claude models |
+| Google | `GOOGLE_API_KEY` | — | API key for Google AI (Gemini) |
+| AWS Bedrock | AWS credentials | — | Standard AWS credential configuration |
+| Llama.cpp | `YZMA_LIB` | — | Path to the directory containing the local llama.cpp shared libraries used by the `llama` provider |
+| Ollama | `OLLAMA_HOST` | — | Host URL for Ollama server |
 
 Example of setting an environment variable:
 
 ```sh
 export OPENAI_API_KEY=your_api_key_here
 ```
+
+Example of storing an API key with the auth command:
+
+```sh
+agent auth login openai --api-key
+```
+
+Example of using OAuth-based login instead:
+
+```sh
+agent auth login openai          # browser OAuth login
+agent auth login openai --device # device-code login
+```
+
+**Auth resolution order for OpenAI:** `OPENAI_API_KEY` env var → stored API key in auth.json → stored OAuth credential → error.
 
 For the `llama` provider, example runtime setup is:
 
