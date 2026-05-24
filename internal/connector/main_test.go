@@ -21,3 +21,12 @@ func TestNewConnectorUsesProviderDefaultModelWhenModelIDEmpty(t *testing.T) {
 	require.NoError(t, err)
 	assert.IsType(t, &OpenAIConnector{}, conn)
 }
+
+func TestNewConnectorCreatesMistralConnector(t *testing.T) {
+	t.Setenv("MISTRAL_API_KEY", "test-key")
+
+	conn, err := NewConnector(MistralProvider, "mistral-large-latest", nil)
+
+	require.NoError(t, err)
+	assert.IsType(t, &MistralConnector{}, conn)
+}

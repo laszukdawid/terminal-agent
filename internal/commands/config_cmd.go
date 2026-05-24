@@ -15,6 +15,7 @@ var supportedProviders = []string{
 	connector.BedrockProvider,
 	connector.GoogleProvider,
 	connector.LlamaProvider,
+	connector.MistralProvider,
 	connector.OllamaProvider,
 	connector.OpenaiProvider,
 }

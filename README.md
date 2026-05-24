@@ -206,6 +206,30 @@ agent auth status openai
 
 See `agent auth --help` for more authentication options.
 
+### Mistral
+
+Mistral offers a range of models from the lightweight Ministral to the powerful Large model, all accessible through a straightforward API.
+
+To use directly:
+1. Create an account at [Mistral AI](https://console.mistral.ai/)
+2. Generate an API key from the [API Keys page](https://console.mistral.ai/api-keys/)
+3. Set the key as an environment variable:
+   ```sh
+   export MISTRAL_API_KEY=your_api_key_here
+   ```
+
+Setting `mistral` provider with `mistral-small-latest` model:
+
+```sh
+$ agent config set provider mistral
+$ agent config set model mistral-small-latest
+```
+
+For a custom or self-hosted endpoint, set `MISTRAL_BASE_URL`:
+```sh
+export MISTRAL_BASE_URL=https://your-endpoint.com
+```
+
 ### Ollama
 
 Ollama allows you to run large language models locally on your machine. This provides privacy, offline capability, and no API costs. To use Ollama with the terminal agent, you first need to install and run Ollama on your system.
