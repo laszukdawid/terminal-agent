@@ -129,6 +129,7 @@ Stored credentials are managed with the `agent auth` command and take effect aut
 | OpenAI | `OPENAI_API_KEY` | supported | API key or stored credential for OpenAI services |
 | Anthropic | `ANTHROPIC_API_KEY` | — | API key for Anthropic Claude models |
 | Google | `GOOGLE_API_KEY` | — | API key for Google AI (Gemini) |
+| Mistral | `MISTRAL_API_KEY` | — | API key for Mistral AI models |
 | AWS Bedrock | AWS credentials | — | Standard AWS credential configuration |
 | Llama.cpp | `YZMA_LIB` | — | Path to the directory containing the local llama.cpp shared libraries used by the `llama` provider |
 | Ollama | `OLLAMA_HOST` | — | Host URL for Ollama server |

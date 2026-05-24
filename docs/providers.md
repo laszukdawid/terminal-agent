@@ -240,11 +240,45 @@ agent config set model anthropic.claude-3-haiku-20240307-v1:0
 - Tool usage capability for the `task` command
 - Supports streaming output with the `--stream` flag
 
+### Mistral
+
+**Setup:**
+1. Create an account at [Mistral AI](https://console.mistral.ai/)
+2. Generate an API key from the [Console](https://console.mistral.ai/api-keys/)
+3. Set the key as an environment variable:
+   ```sh
+   export MISTRAL_API_KEY=your_api_key_here
+   ```
+
+**Configuration:**
+```sh
+agent config set provider mistral
+agent config set model mistral-small-latest
+```
+
+**Custom API Endpoints:**
+If you're using a Mistral-compatible API endpoint, you can set a custom base URL:
+```sh
+export MISTRAL_BASE_URL=https://your-custom-endpoint.com
+```
+
+**Recommended Models:**
+- `mistral-small-latest` - Good balance of capability and cost
+- `mistral-large-latest` - Higher capability, higher cost
+- `mistral-medium-latest` - Medium capability
+- `codestral-latest` - Optimized for code generation
+- `ministral-8b-latest` - Smaller, faster model
+
+**Special Features:**
+- Tool usage capability for the `task` command
+- Supports streaming output with the `--stream` flag
+- Compatible with Mistral-compatible endpoints via `MISTRAL_BASE_URL`
+
 ## Performance Considerations
 
 Different providers excel at different tasks:
 
 - **Complex reasoning**: Anthropic Claude models (direct or via Bedrock)
-- **Speed and cost-efficiency**: OpenAI's GPT-3.5, Google's Gemini Flash models
-- **Creative tasks**: OpenAI's GPT-4 series, Anthropic Claude Opus
+- **Speed and cost-efficiency**: OpenAI's GPT-3.5, Google's Gemini Flash models, Mistral Small models
+- **Creative tasks**: OpenAI's GPT-4 series, Anthropic Claude Opus, Mistral Large models
 - **Open-source options**: Llama models via the local `llama` provider, Ollama, or Bedrock-hosted Llama models

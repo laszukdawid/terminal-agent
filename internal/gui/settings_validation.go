@@ -16,6 +16,7 @@ var supportedProviders = []string{
 	connector.BedrockProvider,
 	connector.GoogleProvider,
 	connector.LlamaProvider,
+	connector.MistralProvider,
 	connector.OllamaProvider,
 	connector.OpenaiProvider,
 }
@@ -50,6 +51,10 @@ func providerSetupHint(provider string) string {
 	case connector.GoogleProvider:
 		if os.Getenv("GOOGLE_API_KEY") == "" {
 			return "Google requires GOOGLE_API_KEY to be set."
+		}
+	case connector.MistralProvider:
+		if os.Getenv("MISTRAL_API_KEY") == "" {
+			return "Mistral requires MISTRAL_API_KEY to be set."
 		}
 	case connector.LlamaProvider:
 		return "Llama uses local GGUF model aliases from config.json under llama_models."
