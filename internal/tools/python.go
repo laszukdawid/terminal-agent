@@ -15,45 +15,53 @@ type PythonTool struct {
 	name        string
 	description string
 	inputSchema map[string]any
+	taskSchema  map[string]any
 	helpText    string
 	workDir     string
 }
 
 func NewPythonTool(workDir string) *PythonTool {
-	inputSchema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"path": map[string]string{
-				"type":        "string",
-				"description": "Python script path to execute",
-			},
-			"code": map[string]string{
-				"type":        "string",
-				"description": "Inline Python code to execute",
-			},
-			"runner": map[string]any{
-				"type":        "string",
-				"enum":        []string{"auto", "python3", "python", "uv"},
-				"description": "Runner selection: auto, python3, python, or uv",
-			},
-			"uv_mode": map[string]any{
-				"type":        "string",
-				"enum":        []string{"python", "script"},
-				"description": "uv mode: python (default) or script",
-			},
-			"args": map[string]any{
-				"type": "array",
-				"items": map[string]any{
-					"type":        "string",
-					"description": "Single argument value",
-				},
-				"description": "Arguments to pass to the Python command",
-			},
-			"final": map[string]string{
-				"type":        "boolean",
-				"description": "Set to true only when the script output itself fully answers the user's request and should be returned directly without another model summary round.",
-			},
+	properties := map[string]any{
+		"path": map[string]string{
+			"type":        "string",
+			"description": "Python script path to execute",
 		},
+		"code": map[string]string{
+			"type":        "string",
+			"description": "Inline Python code to execute",
+		},
+		"runner": map[string]any{
+			"type":        "string",
+			"enum":        []string{"auto", "python3", "python", "uv"},
+			"description": "Runner selection: auto, python3, python, or uv",
+		},
+		"uv_mode": map[string]any{
+			"type":        "string",
+			"enum":        []string{"python", "script"},
+			"description": "uv mode: python (default) or script",
+		},
+		"args": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type":        "string",
+				"description": "Single argument value",
+			},
+			"description": "Arguments to pass to the Python command",
+		},
+		"final": map[string]string{
+			"type":        "boolean",
+			"description": "Set to true only when the script output itself fully answers the user's request and should be returned directly without another model summary round.",
+		},
+	}
+
+	inputSchema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+
+	taskSchema := map[string]any{
+		"type":       "object",
+		"properties": properties,
 		"oneOf": []any{
 			map[string]any{"required": []string{"path"}},
 			map[string]any{"required": []string{"code"}},
@@ -64,6 +72,7 @@ func NewPythonTool(workDir string) *PythonTool {
 		name:        ToolNamePython,
 		description: pythonToolDescription,
 		inputSchema: inputSchema,
+		taskSchema:  taskSchema,
 		helpText:    "Execute Python scripts with python, python3, or uv run python.",
 		workDir:     workDir,
 	}
@@ -79,6 +88,10 @@ func (t *PythonTool) Description() string {
 
 func (t *PythonTool) InputSchema() map[string]any {
 	return t.inputSchema
+}
+
+func (t *PythonTool) TaskInputSchema() map[string]any {
+	return t.taskSchema
 }
 
 func (t *PythonTool) HelpText() string {

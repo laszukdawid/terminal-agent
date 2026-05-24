@@ -16,6 +16,17 @@ type Tool interface {
 	HelpText() string
 }
 
+type TaskSchemaProvider interface {
+	TaskInputSchema() map[string]any
+}
+
+func EffectiveTaskInputSchema(tool Tool) map[string]any {
+	if provider, ok := tool.(TaskSchemaProvider); ok {
+		return provider.TaskInputSchema()
+	}
+	return tool.InputSchema()
+}
+
 type ToolExecutionContext struct {
 	RootDir    string
 	CurrentDir string

@@ -18,35 +18,43 @@ type FileSearchTool struct {
 	name        string
 	description string
 	inputSchema map[string]any
+	taskSchema  map[string]any
 	helpText    string
 	workDir     string
 }
 
 func NewFileSearchTool(workDir string) *FileSearchTool {
-	inputSchema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"root": map[string]string{
-				"type":        "string",
-				"description": "Root directory for the search (defaults to working directory)",
-			},
-			"name_pattern": map[string]string{
-				"type":        "string",
-				"description": "Glob-like pattern to match file paths or names",
-			},
-			"contains": map[string]string{
-				"type":        "string",
-				"description": "Text to search for inside files",
-			},
-			"max_results": map[string]string{
-				"type":        "integer",
-				"description": "Maximum number of results to return",
-			},
-			"final": map[string]string{
-				"type":        "boolean",
-				"description": "Set to true only when the search results themselves fully answer the user's request and should be returned directly without another model summary round.",
-			},
+	properties := map[string]any{
+		"root": map[string]string{
+			"type":        "string",
+			"description": "Root directory for the search (defaults to working directory)",
 		},
+		"name_pattern": map[string]string{
+			"type":        "string",
+			"description": "Glob-like pattern to match file paths or names",
+		},
+		"contains": map[string]string{
+			"type":        "string",
+			"description": "Text to search for inside files",
+		},
+		"max_results": map[string]string{
+			"type":        "integer",
+			"description": "Maximum number of results to return",
+		},
+		"final": map[string]string{
+			"type":        "boolean",
+			"description": "Set to true only when the search results themselves fully answer the user's request and should be returned directly without another model summary round.",
+		},
+	}
+
+	inputSchema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+
+	taskSchema := map[string]any{
+		"type":       "object",
+		"properties": properties,
 		"anyOf": []any{
 			map[string]any{"required": []string{"name_pattern"}},
 			map[string]any{"required": []string{"contains"}},
@@ -57,6 +65,7 @@ func NewFileSearchTool(workDir string) *FileSearchTool {
 		name:        ToolNameFileSearch,
 		description: fileSearchToolDescription,
 		inputSchema: inputSchema,
+		taskSchema:  taskSchema,
 		helpText:    "Search for files and content using native Go operations.",
 		workDir:     workDir,
 	}
@@ -72,6 +81,10 @@ func (t *FileSearchTool) Description() string {
 
 func (t *FileSearchTool) InputSchema() map[string]any {
 	return t.inputSchema
+}
+
+func (t *FileSearchTool) TaskInputSchema() map[string]any {
+	return t.taskSchema
 }
 
 func (t *FileSearchTool) HelpText() string {
