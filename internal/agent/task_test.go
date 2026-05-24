@@ -212,7 +212,9 @@ func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {
 	prompt := buildTaskPrompt(&TaskState{
 		OriginalQuery: "trace repeated tool calls",
 		Iterations:    3,
-		MaxIterations: MaxIterations,
+		ToolCalls:     2,
+		MaxIterations: MaxToolCalls,
+		MaxTurns:      MaxTurns,
 		Phase:         TaskPhaseRunning,
 		Dirs:          TaskDirs{RootDir: "/repo", CurrentDir: "/repo/internal"},
 		Steps: []TaskStep{
@@ -632,7 +634,7 @@ func TestTaskWithOptionsResultUsesSummaryFallbackAtMaxIterations(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "summary output", result.Response)
-	assert.Equal(t, MaxIterations, conn.queryToolCalls)
+	assert.Equal(t, MaxTurns, conn.queryToolCalls)
 	assert.Equal(t, 1, conn.queryCalls)
 }
 
@@ -652,7 +654,7 @@ func TestTaskWithOptionsResultReturnsErrorWhenSummaryFallbackFails(t *testing.T)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "summary failed")
-	assert.Equal(t, MaxIterations, conn.queryToolCalls)
+	assert.Equal(t, MaxTurns, conn.queryToolCalls)
 	assert.Equal(t, 1, conn.queryCalls)
 }
 

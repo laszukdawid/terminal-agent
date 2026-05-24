@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	MaxIterations             = 10
+	MaxToolCalls              = 10
+	MaxTurns                  = 50
 	maxTaskActionFallbackRuns = 2
 	UserClarificationToolName = "user_clarification"
 	ToolNameChangeDirectory   = "change_directory"
@@ -60,7 +61,9 @@ type taskToolOutput struct {
 type TaskState struct {
 	OriginalQuery string
 	Iterations    int
+	ToolCalls     int
 	MaxIterations int
+	MaxTurns      int
 	Phase         TaskPhase
 	Dirs          TaskDirs
 	Steps         []TaskStep
@@ -102,7 +105,7 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 		return TaskRunResult{}, err
 	}
 
-	for run.state.Phase == TaskPhaseRunning && run.state.Iterations < run.state.MaxIterations {
+	for run.state.Phase == TaskPhaseRunning && run.state.Iterations < run.state.MaxTurns && run.state.ToolCalls < run.state.MaxIterations {
 		run.state.Iterations++
 
 		result, done, err := a.runTaskIteration(ctx, logger, run)
@@ -135,10 +138,11 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 	return &taskExecutionState{
 		state: &TaskState{
 			OriginalQuery: query,
-			MaxIterations: MaxIterations,
+			MaxIterations: MaxToolCalls,
+			MaxTurns:      MaxTurns,
 			Phase:         TaskPhaseRunning,
 			Dirs:          taskDirs,
-			Steps:         make([]TaskStep, 0, MaxIterations),
+			Steps:         make([]TaskStep, 0, MaxTurns),
 		},
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
@@ -188,6 +192,7 @@ func (a *Agent) handleTaskToolResponse(logger *zap.SugaredLogger, run *taskExecu
 
 	if response.ToolName == ToolNameChangeDirectory {
 		run.handleDirectoryChange(response, logger)
+		run.state.ToolCalls++
 		return TaskRunResult{}, false, nil
 	}
 
@@ -212,6 +217,7 @@ func (a *Agent) executeTaskTool(logger *zap.SugaredLogger, run *taskExecutionSta
 		return TaskRunResult{}, false, nil
 	}
 
+	run.state.ToolCalls++
 	run.recordSuccess(response, toolResult)
 	if response.ToolName == ToolNameFinalAnswer {
 		run.state.Phase = TaskPhaseCompleted
@@ -232,7 +238,7 @@ func (a *Agent) executeTaskTool(logger *zap.SugaredLogger, run *taskExecutionSta
 }
 
 func (a *Agent) finalizeTaskRun(ctx context.Context, run *taskExecutionState) (TaskRunResult, error) {
-	if run.state.Phase != TaskPhaseRunning || run.state.Iterations < run.state.MaxIterations {
+	if run.state.Phase != TaskPhaseRunning {
 		return TaskRunResult{}, fmt.Errorf("task ended without an explicit completion path")
 	}
 
@@ -698,7 +704,8 @@ func buildTaskPrompt(state *TaskState) string {
 	var prompt strings.Builder
 	fmt.Fprintf(&prompt, "Original task: %s\n\n", state.OriginalQuery)
 	fmt.Fprintf(&prompt, "Current phase: %s\n", state.Phase)
-	fmt.Fprintf(&prompt, "Iteration: %d of %d\n", state.Iterations, state.MaxIterations)
+	fmt.Fprintf(&prompt, "Turn: %d of %d\n", state.Iterations, state.MaxTurns)
+	fmt.Fprintf(&prompt, "Tool calls: %d of %d\n", state.ToolCalls, state.MaxIterations)
 	fmt.Fprintf(&prompt, "Task root directory: %s\n", state.Dirs.RootDir)
 	fmt.Fprintf(&prompt, "Current working directory: %s", state.Dirs.CurrentDir)
 
@@ -732,7 +739,7 @@ func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, 
 		summary.WriteString(history)
 	}
 
-	summary.WriteString("\n\nI've reached the maximum number of iterations. Based on the above, provide a comprehensive final answer.")
+	summary.WriteString("\n\nI've reached the task budget limit. Based on the above, provide a comprehensive final answer.")
 
 	qParams := connector.QueryParams{
 		UserPrompt: StringPtr(summary.String()),
