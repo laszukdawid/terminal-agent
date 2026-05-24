@@ -15,6 +15,10 @@ on:
           - minor
           - major
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -116,6 +120,12 @@ jobs:
       run: |
         NEW_VERSION="${{ steps.calculate_version.outputs.new_version }}"
         
+        # Skip if tag already exists on remote (e.g. manual push or race condition)
+        if git ls-remote --tags origin "refs/tags/$NEW_VERSION" | grep -q "refs/tags/$NEW_VERSION"; then
+          echo "Tag $NEW_VERSION already exists on remote, skipping."
+          exit 0
+        fi
+
         # Configure git
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
