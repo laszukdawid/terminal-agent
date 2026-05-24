@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -45,16 +46,36 @@ func buildResponsesParams(modelID string, qParams *QueryParams) responses.Respon
 		},
 		Model:        shared.ResponsesModel(modelID),
 		Instructions: openai.String(*qParams.SysPrompt),
-	}
-	if qParams.MaxTokens > 0 {
-		params.MaxOutputTokens = openai.Int(int64(qParams.MaxTokens))
+		Store:        openai.Bool(false),
 	}
 	return params
 }
 
-func (oc *OpenAIConnector) streamOAuthQuery(ctx context.Context, qParams *QueryParams, params responses.ResponseNewParams) (*string, error) {
+func wrapOpenAIAPIError(err error) error {
+	var apiErr *openai.Error
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	if apiErr.Message != "" {
+		return err
+	}
+
+	raw := strings.TrimSpace(apiErr.RawJSON())
+	if raw != "" {
+		return fmt.Errorf("%w: %s", err, raw)
+	}
+
+	responseDump := strings.TrimSpace(string(apiErr.DumpResponse(true)))
+	if responseDump != "" {
+		return fmt.Errorf("%w: %s", err, responseDump)
+	}
+
+	return err
+}
+
+func (oc *OpenAIConnector) streamOAuthResponse(ctx context.Context, qParams *QueryParams, params responses.ResponseNewParams) (*responses.Response, *string, error) {
 	var mdRenderer *MarkdownStreamRenderer
-	if qParams.OnStream == nil {
+	if qParams.Stream && qParams.OnStream == nil {
 		renderer, err := NewMarkdownStreamRenderer()
 		if err != nil {
 			oc.logger.Warn("Failed to create markdown renderer, falling back to plain text", zap.Error(err))
@@ -65,7 +86,7 @@ func (oc *OpenAIConnector) streamOAuthQuery(ctx context.Context, qParams *QueryP
 
 	stream := oc.client.Responses.NewStreaming(ctx, params)
 	var streamedText strings.Builder
-	var completedText string
+	var completedResponse *responses.Response
 
 	for stream.Next() {
 		event := stream.Current()
@@ -73,9 +94,12 @@ func (oc *OpenAIConnector) streamOAuthQuery(ctx context.Context, qParams *QueryP
 		case "response.output_text.delta":
 			delta := event.AsResponseOutputTextDelta().Delta
 			streamedText.WriteString(delta)
+			if !qParams.Stream {
+				continue
+			}
 			if qParams.OnStream != nil {
 				if err := qParams.OnStream(delta); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			} else if mdRenderer != nil {
 				mdRenderer.ProcessChunk(delta)
@@ -83,45 +107,38 @@ func (oc *OpenAIConnector) streamOAuthQuery(ctx context.Context, qParams *QueryP
 				print(delta)
 			}
 		case "response.completed":
-			completedText = event.AsResponseCompleted().Response.OutputText()
+			response := event.AsResponseCompleted().Response
+			completedResponse = &response
 		}
 	}
 
 	if err := stream.Err(); err != nil {
-		return nil, err
+		return nil, nil, wrapOpenAIAPIError(err)
 	}
 
 	if mdRenderer != nil {
 		mdRenderer.Flush()
 	}
 
-	if completedText != "" {
-		return &completedText, nil
+	if completedResponse != nil {
+		text := completedResponse.OutputText()
+		return completedResponse, &text, nil
 	}
 
 	text := streamedText.String()
-	return &text, nil
+	return nil, &text, nil
 }
 
 func (oc *OpenAIConnector) queryOAuth(ctx context.Context, qParams *QueryParams) (string, error) {
 	params := buildResponsesParams(oc.modelID, qParams)
-	if qParams.Stream {
-		result, err := oc.streamOAuthQuery(ctx, qParams, params)
-		if err != nil {
-			return "", err
-		}
-		if result == nil {
-			return "", nil
-		}
-		return *result, nil
-	}
-
-	response, err := oc.client.Responses.New(ctx, params)
+	_, result, err := oc.streamOAuthResponse(ctx, qParams, params)
 	if err != nil {
 		return "", err
 	}
-
-	return response.OutputText(), nil
+	if result == nil {
+		return "", nil
+	}
+	return *result, nil
 }
 
 func (oc *OpenAIConnector) queryWithToolOAuth(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error) {
@@ -133,9 +150,16 @@ func (oc *OpenAIConnector) queryWithToolOAuth(ctx context.Context, qParams *Quer
 	}
 	params.ParallelToolCalls = openai.Bool(true)
 
-	result, err := oc.client.Responses.New(ctx, params)
+	nonStreamingParams := *qParams
+	nonStreamingParams.Stream = false
+	nonStreamingParams.OnStream = nil
+
+	result, _, err := oc.streamOAuthResponse(ctx, &nonStreamingParams, params)
 	if err != nil {
 		return response, err
+	}
+	if result == nil {
+		return response, fmt.Errorf("no response received from OAuth responses stream")
 	}
 
 	response.Response = result.OutputText()
