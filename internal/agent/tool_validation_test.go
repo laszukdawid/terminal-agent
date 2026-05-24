@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/tools"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestValidateToolInputFileSearchAnyOf(t *testing.T) {
-	schema := tools.NewFileSearchTool("").InputSchema()
+	schema := tools.EffectiveTaskInputSchema(tools.NewFileSearchTool(""))
 
 	err := validateToolInput(schema, map[string]any{})
 	require.Error(t, err)
@@ -21,7 +22,7 @@ func TestValidateToolInputFileSearchAnyOf(t *testing.T) {
 }
 
 func TestValidateToolInputPythonOneOf(t *testing.T) {
-	schema := tools.NewPythonTool("").InputSchema()
+	schema := tools.EffectiveTaskInputSchema(tools.NewPythonTool(""))
 
 	err := validateToolInput(schema, map[string]any{})
 	require.Error(t, err)
@@ -33,4 +34,16 @@ func TestValidateToolInputPythonOneOf(t *testing.T) {
 
 	assert.NoError(t, validateToolInput(schema, map[string]any{"path": "main.py"}))
 	assert.NoError(t, validateToolInput(schema, map[string]any{"code": "print('hi')"}))
+}
+
+func TestValidateToolInputNormalizesIntegerFields(t *testing.T) {
+	schema := tools.EffectiveTaskInputSchema(tools.NewFileSearchTool(""))
+	input := map[string]any{
+		"contains":    "task",
+		"max_results": json.Number("5"),
+	}
+
+	require.NoError(t, validateToolInput(schema, input))
+	normalizeToolInput(schema, input)
+	assert.Equal(t, 5, input["max_results"])
 }

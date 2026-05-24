@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 
@@ -19,9 +21,11 @@ func resolveTaskToolCall(toolName string, input map[string]any, available map[st
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 
-	if err := validateToolInput(tool.InputSchema(), input); err != nil {
+	schema := tools.EffectiveTaskInputSchema(tool)
+	if err := validateToolInput(schema, input); err != nil {
 		return nil, fmt.Errorf("invalid tool input: %w", err)
 	}
+	normalizeToolInput(schema, input)
 
 	return tool, nil
 }
@@ -65,6 +69,25 @@ func validateToolInput(schema map[string]any, input map[string]any) error {
 	}
 
 	return nil
+}
+
+func normalizeToolInput(schema map[string]any, input map[string]any) {
+	if len(schema) == 0 || input == nil {
+		return
+	}
+
+	properties, ok := normalizeSchemaMap(schema["properties"])
+	if !ok {
+		return
+	}
+
+	for key, value := range input {
+		propertySchema, ok := properties[key]
+		if !ok {
+			continue
+		}
+		input[key] = normalizeSchemaValue(propertySchema, value)
+	}
 }
 
 func validateCombinators(schema map[string]any, input map[string]any) error {
@@ -143,18 +166,22 @@ func validateSchemaValue(field string, rawSchema any, value any) error {
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("field %q must be a string", field)
 		}
+		return nil
 	case "boolean":
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("field %q must be a boolean", field)
 		}
+		return nil
 	case "integer":
 		if !isIntegerValue(value) {
 			return fmt.Errorf("field %q must be an integer", field)
 		}
+		return nil
 	case "number":
 		if !isNumberValue(value) {
 			return fmt.Errorf("field %q must be a number", field)
 		}
+		return nil
 	case "array":
 		items := reflect.ValueOf(value)
 		if items.Kind() != reflect.Slice && items.Kind() != reflect.Array {
@@ -169,9 +196,48 @@ func validateSchemaValue(field string, rawSchema any, value any) error {
 				return err
 			}
 		}
+		return nil
 	}
 
 	return nil
+}
+
+func normalizeSchemaValue(rawSchema any, value any) any {
+	schema, ok := normalizeSchemaDefinition(rawSchema)
+	if !ok {
+		return value
+	}
+
+	switch schema["type"] {
+	case "integer":
+		normalizedValue, ok := normalizeIntegerValue(value)
+		if !ok {
+			return value
+		}
+		return normalizedValue
+	case "number":
+		normalizedValue, ok := normalizeNumberValue(value)
+		if !ok {
+			return value
+		}
+		return normalizedValue
+	case "array":
+		items, ok := value.([]any)
+		if !ok {
+			return value
+		}
+		itemSchema, hasItemSchema := schema["items"]
+		if !hasItemSchema {
+			return value
+		}
+		normalizedItems := make([]any, len(items))
+		for i, item := range items {
+			normalizedItems[i] = normalizeSchemaValue(itemSchema, item)
+		}
+		return normalizedItems
+	default:
+		return value
+	}
 }
 
 func validateEnum(field string, schema map[string]any, value any) error {
@@ -248,23 +314,58 @@ func schemaAnySlice(raw any) []any {
 }
 
 func isIntegerValue(value any) bool {
+	_, ok := normalizeIntegerValue(value)
+	return ok
+}
+
+func normalizeIntegerValue(value any) (int, bool) {
 	switch typed := value.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return true
-	case float32:
-		return typed == float32(int64(typed))
+	case int:
+		return typed, true
+	case int64:
+		normalized := int(typed)
+		return normalized, int64(normalized) == typed
 	case float64:
-		return typed == float64(int64(typed))
+		if math.Trunc(typed) != typed {
+			return 0, false
+		}
+		return int(typed), true
+	case json.Number:
+		intValue, err := typed.Int64()
+		if err == nil {
+			normalized := int(intValue)
+			return normalized, int64(normalized) == intValue
+		}
+		floatValue, err := typed.Float64()
+		if err != nil || math.Trunc(floatValue) != floatValue {
+			return 0, false
+		}
+		return int(floatValue), true
 	default:
-		return false
+		return 0, false
 	}
 }
 
 func isNumberValue(value any) bool {
-	switch value.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		return true
+	_, ok := normalizeNumberValue(value)
+	return ok
+}
+
+func normalizeNumberValue(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	case json.Number:
+		parsed, err := typed.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
 	default:
-		return false
+		return 0, false
 	}
 }
