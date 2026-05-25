@@ -110,8 +110,8 @@ When `yes!` or `no!` writes a remembered decision, it writes to the closest disc
 {
   "permissions": {
     "allow": ["unix(\"aws sso login\")"],
-    "deny": ["unix(\"rm -rf .*\")"],
-    "ask": ["unix(\"aws .*\")"]
+    "deny": ["unix(\"rm -rf *\")"],
+    "ask": ["unix(\"aws *\")"]
   }
 }
 ```
@@ -129,7 +129,24 @@ Permissions use an action expression syntax that mirrors how tool calls appear i
 tool_name("positional value", key1="value1", key2="value2")
 ```
 
-The first positional argument (typically the command string for `unix` tools) is matched as a regex. Named arguments (`key=value`) are matched against the corresponding tool input fields. Values in patterns are treated as regex anchored to the full string (`^(?:your value)$`).
+The first positional argument (typically the command string for `unix` tools) and named arguments (`key=value`) use glob matching against the full value.
+
+Supported glob syntax:
+
+- `*` matches any sequence of characters, including spaces and `/`
+- `?` matches exactly one character
+- `[abc]` matches one character from a set
+- `[a-z]` matches one character from a range
+- `[!abc]` negates a set
+- `\` escapes the next character so you can match a literal `*`, `?`, `[` or `]`
+
+Examples:
+
+- `unix("aws *")` matches `unix("aws sso login")`
+- `unix("ls -d ~/*/")` matches `unix("ls -d ~/Desktop/*/")`
+- `unix("ls -d \\*/")` matches the literal command `ls -d */`
+- `unix("aws login", region="us-*")` matches `region="us-west-2"`
+- `unix("aws login", allowKeys=["region", "profile", "read*"])` allows only matching key names
 
 The `final` field that certain tools support (`unix`, `python`, `file_search`) is ignored during permission matching. This means `unix("ls -la", final=true)` is treated identically to `unix("ls -la")` for allow/deny/ask purposes.
 

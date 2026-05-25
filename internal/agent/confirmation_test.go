@@ -14,10 +14,10 @@ func TestBuildActionString(t *testing.T) {
 	}
 }
 
-func TestConfirmationAllowsExactAndPrefix(t *testing.T) {
+func TestConfirmationAllowsExactAndGlob(t *testing.T) {
 	manager := NewConfirmationManager([]string{
 		"unix(\"aws login\")",
-		"unix(\"cat .*\")",
+		"unix(\"cat *\")",
 	}, nil, nil, nil)
 
 	allowed, err := manager.Confirm("unix(\"aws login\")")
@@ -33,14 +33,14 @@ func TestConfirmationAllowsExactAndPrefix(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !allowed {
-		t.Fatalf("expected prefix allow to pass")
+		t.Fatalf("expected glob allow to pass")
 	}
 }
 
-func TestAllowKeysRegex(t *testing.T) {
+func TestAllowKeysGlob(t *testing.T) {
 	manager := NewConfirmationManager([]string{
-		"unix(\"aws login\", allowKeys=[\"region\", \"profile\", \"read.*\"])",
-		"unix(\"aws login\", region=\"us-.*\")",
+		"unix(\"aws login\", allowKeys=[\"region\", \"profile\", \"read*\"])",
+		"unix(\"aws login\", region=\"us-*\")",
 	}, nil, nil, nil)
 
 	allowed, err := manager.Confirm("unix(\"aws login\")")
@@ -67,5 +67,61 @@ func TestAllowKeysRegex(t *testing.T) {
 	allowed, matched := manager.resolveAllowDeny("unix(\"aws login\", write=\"foo\")")
 	if matched || allowed {
 		t.Fatalf("expected allowKeys to reject unknown key")
+	}
+}
+
+func TestRememberedPermissionMatchesExactAction(t *testing.T) {
+	manager := NewConfirmationManager([]string{
+		"unix(\"ls -d */\", path=\"./plans/[draft].md\")",
+	}, nil, nil, nil)
+
+	allowed, err := manager.Confirm("unix(\"ls -d */\", path=\"./plans/[draft].md\")")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected remembered literal permission to pass")
+	}
+}
+
+func TestGlobEscapesLiteralCharacters(t *testing.T) {
+	manager := NewConfirmationManager([]string{
+		"unix(\"ls -d \\\\*/\", path=\"./plans/\\\\[draft\\\\].md\")",
+	}, nil, nil, nil)
+
+	allowed, err := manager.Confirm("unix(\"ls -d */\", path=\"./plans/[draft].md\")")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected escaped glob metacharacters to match literally")
+	}
+}
+
+func TestWildcardPermissionMatchesBroaderUnixCommand(t *testing.T) {
+	manager := NewConfirmationManager([]string{
+		"unix(\"ls -d */\")",
+	}, nil, nil, nil)
+
+	allowed, err := manager.Confirm("unix(\"ls -d ~/Desktop/*/\")")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected wildcard unix permission to cover nested directory listing")
+	}
+}
+
+func TestWildcardPermissionMatchesMoreSpecificUnixPath(t *testing.T) {
+	manager := NewConfirmationManager([]string{
+		"unix(\"ls -d ~/*/\")",
+	}, nil, nil, nil)
+
+	allowed, err := manager.Confirm("unix(\"ls -d ~/Desktop/*/\")")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected broader unix wildcard permission to cover specific home path")
 	}
 }

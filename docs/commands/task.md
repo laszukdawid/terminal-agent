@@ -66,9 +66,9 @@ You will be asked to confirm each execution step, and the agent may also ask fol
 | `--print` | `-x` | `true` | Whether to print the response to stdout |
 | `--log` | `-l` | `false` | Whether to log the input and output to a file |
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
-| `--allow` |  | `[]` | Allow actions without confirmation (repeatable, regex-based) |
+| `--allow` |  | `[]` | Allow actions without confirmation (repeatable, glob-based) |
 
-Action strings use a function-style format, e.g. `unix("aws login sso")` or `file_edit("README.md", operation="write")`. All strings are treated as regex and must match the full value. To constrain keys, use `allowKeys=["region", "profile"]` (regex allowed), and key values can be regex too, e.g. `region="us-.*"`.
+Action strings use a function-style format, e.g. `unix("aws login sso")` or `file_edit("README.md", operation="write")`. String values use glob matching against the full value: `*` matches any sequence, `?` matches a single character, and character classes like `[ab]` or `[a-z]` are supported. Escape glob metacharacters with `\` when you want a literal match, for example `unix("ls -d \\*/")`. To constrain keys, use `allowKeys=["region", "profile", "read*"]`, and key values can use the same glob syntax, e.g. `region="us-*"`.
 
 ## Safety Features
 

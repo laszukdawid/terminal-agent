@@ -34,6 +34,7 @@ const (
 )
 
 type rulePattern struct {
+	raw      string
 	pattern  allowPattern
 	priority int
 }
@@ -101,6 +102,7 @@ func (cm *ConfirmationManager) appendPatterns(values []string, rule ruleType, pr
 			continue
 		}
 		rulePattern := rulePattern{
+			raw:      entry,
 			pattern:  pattern,
 			priority: priority,
 		}
@@ -167,10 +169,17 @@ func (cm *ConfirmationManager) matchWithPriority(action string, patterns []ruleP
 	matched := false
 	priority := 0
 	for _, pattern := range patterns {
+		if pattern.raw == action {
+			if !matched || pattern.priority > priority {
+				matched = true
+				priority = pattern.priority
+			}
+			continue
+		}
 		if pattern.pattern.tool != call.tool {
 			continue
 		}
-		if pattern.pattern.command != nil && !pattern.pattern.command.MatchString(call.command) {
+		if !pattern.pattern.matchCommand(call.command) {
 			continue
 		}
 		if !pattern.pattern.matchArgs(call.args) {
@@ -192,10 +201,13 @@ func (cm *ConfirmationManager) matchesPatterns(action string, patterns []rulePat
 	}
 
 	for _, pattern := range patterns {
+		if pattern.raw == action {
+			return true
+		}
 		if pattern.pattern.tool != call.tool {
 			continue
 		}
-		if pattern.pattern.command != nil && !pattern.pattern.command.MatchString(call.command) {
+		if !pattern.pattern.matchCommand(call.command) {
 			continue
 		}
 		if !pattern.pattern.matchArgs(call.args) {
@@ -314,7 +326,7 @@ func (pattern allowPattern) matchArgs(args map[string]string) bool {
 	}
 
 	for key := range args {
-		if !matchesAnyRegex(key, pattern.allowKeys) {
+		if !matchesAnyPattern(key, pattern.allowKeys) {
 			return false
 		}
 	}
@@ -322,13 +334,20 @@ func (pattern allowPattern) matchArgs(args map[string]string) bool {
 	return true
 }
 
-func matchesAnyRegex(value string, patterns []*regexp.Regexp) bool {
+func matchesAnyPattern(value string, patterns []*regexp.Regexp) bool {
 	for _, pattern := range patterns {
 		if pattern.MatchString(value) {
 			return true
 		}
 	}
 	return false
+}
+
+func (pattern allowPattern) matchCommand(value string) bool {
+	if pattern.command == nil {
+		return true
+	}
+	return pattern.command.MatchString(value)
 }
 
 func parseAllowPattern(input string) (allowPattern, error) {
@@ -343,7 +362,7 @@ func parseAllowPattern(input string) (allowPattern, error) {
 	}
 
 	if command != "" {
-		regex, err := compileRegex(command)
+		regex, err := compileGlob(command)
 		if err != nil {
 			return allowPattern{}, err
 		}
@@ -351,7 +370,7 @@ func parseAllowPattern(input string) (allowPattern, error) {
 	}
 
 	for key, value := range args {
-		regex, err := compileRegex(value)
+		regex, err := compileGlob(value)
 		if err != nil {
 			return allowPattern{}, err
 		}
@@ -359,7 +378,7 @@ func parseAllowPattern(input string) (allowPattern, error) {
 	}
 
 	for _, keyPattern := range allowKeys {
-		regex, err := compileRegex(keyPattern)
+		regex, err := compileGlob(keyPattern)
 		if err != nil {
 			return allowPattern{}, err
 		}
@@ -580,9 +599,87 @@ func unquoteString(input string) (string, error) {
 	return value, nil
 }
 
-func compileRegex(pattern string) (*regexp.Regexp, error) {
-	if pattern == "" {
-		return nil, fmt.Errorf("empty regex")
+func compileGlob(pattern string) (*regexp.Regexp, error) {
+	var builder strings.Builder
+	builder.WriteString("^(?:")
+
+	escaped := false
+	for i := 0; i < len(pattern); i++ {
+		ch := pattern[i]
+		switch {
+		case escaped:
+			builder.WriteString(regexp.QuoteMeta(string(ch)))
+			escaped = false
+		case ch == '\\':
+			escaped = true
+		case ch == '*':
+			builder.WriteString(".*")
+		case ch == '?':
+			builder.WriteString(".")
+		case ch == '[':
+			class, next, ok := parseGlobCharClass(pattern, i)
+			if !ok {
+				builder.WriteString(regexp.QuoteMeta(string(ch)))
+				continue
+			}
+			builder.WriteString(class)
+			i = next
+		default:
+			builder.WriteString(regexp.QuoteMeta(string(ch)))
+		}
 	}
-	return regexp.Compile(fmt.Sprintf("^(?:%s)$", pattern))
+
+	if escaped {
+		builder.WriteString(regexp.QuoteMeta("\\"))
+	}
+
+	builder.WriteString(")$")
+	return regexp.Compile(builder.String())
+}
+
+func parseGlobCharClass(pattern string, start int) (string, int, bool) {
+	if start+1 >= len(pattern) {
+		return "", start, false
+	}
+
+	var builder strings.Builder
+	builder.WriteByte('[')
+	i := start + 1
+	if pattern[i] == '!' || pattern[i] == '^' {
+		builder.WriteByte('^')
+		i++
+	}
+
+	if i < len(pattern) && pattern[i] == ']' {
+		builder.WriteString("\\]")
+		i++
+	}
+
+	hasContent := false
+	for ; i < len(pattern); i++ {
+		ch := pattern[i]
+		if ch == ']' {
+			if !hasContent {
+				return "", start, false
+			}
+			builder.WriteByte(']')
+			return builder.String(), i, true
+		}
+		if ch == '\\' {
+			if i+1 >= len(pattern) {
+				return "", start, false
+			}
+			i++
+			builder.WriteString(regexp.QuoteMeta(string(pattern[i])))
+			hasContent = true
+			continue
+		}
+		if ch == '[' || ch == ']' {
+			builder.WriteByte('\\')
+		}
+		builder.WriteByte(ch)
+		hasContent = true
+	}
+
+	return "", start, false
 }
