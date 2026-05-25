@@ -1,11 +1,9 @@
 package agent
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -27,8 +25,9 @@ const (
 )
 
 type TaskOptions struct {
-	Allow []string
-	Dirs  TaskDirs
+	Allow       []string
+	Dirs        TaskDirs
+	Interaction TaskInteraction
 }
 
 type TaskRunResult struct {
@@ -71,8 +70,34 @@ type TaskState struct {
 
 type taskExecutionState struct {
 	state             *TaskState
+	tools             map[string]tools.Tool
 	confirmations     *ConfirmationManager
 	successfulOutputs []taskToolOutput
+}
+
+type taskUserConfirmationRequester struct {
+	interaction TaskInteraction
+}
+
+func (r taskUserConfirmationRequester) RequestUserConfirmation(action string) (confirmationDecision, error) {
+	if r.interaction == nil {
+		return confirmationDecision{}, ErrTaskInteractionRequired
+	}
+
+	decision, err := r.interaction.Confirm(TaskConfirmationRequest{Action: action})
+	if err != nil {
+		return confirmationDecision{}, err
+	}
+
+	return confirmationDecision{allowed: decision.Allowed, remember: decision.Remember}, nil
+}
+
+type taskPermissionRememberer struct {
+	store config.PermissionStore
+}
+
+func (r taskPermissionRememberer) Remember(action string, allow bool) error {
+	return config.RememberPermission(r.store, action, allow)
 }
 
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {
@@ -131,9 +156,10 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		return nil, fmt.Errorf("failed to load permissions: %w", err)
 	}
 
-	confirmations := NewConfirmationManager(options.Allow, ruleSets, func(action string, allow bool) error {
-		return config.RememberPermission(store, action, allow)
-	})
+	interaction := options.Interaction
+	confirmationRequester := taskUserConfirmationRequester{interaction: interaction}
+	rememberer := taskPermissionRememberer{store: store}
+	confirmations := NewConfirmationManager(options.Allow, ruleSets, confirmationRequester.RequestUserConfirmation, rememberer.Remember)
 
 	return &taskExecutionState{
 		state: &TaskState{
@@ -144,13 +170,14 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 			Dirs:          taskDirs,
 			Steps:         make([]TaskStep, 0, MaxTurns),
 		},
+		tools:             a.buildTaskTools(interaction),
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
 	}, nil
 }
 
 func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState) (TaskRunResult, bool, error) {
-	response, err := a.queryTaskResponse(ctx, run.state)
+	response, err := a.queryTaskResponse(ctx, run)
 	if err != nil {
 		logger.Debugw("Error querying model", "iteration", run.state.Iterations, "error", err)
 		return TaskRunResult{}, false, fmt.Errorf("error during task processing: %w", err)
@@ -165,8 +192,8 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 	return a.handleTaskToolResponse(logger, run, response)
 }
 
-func (a *Agent) queryTaskResponse(ctx context.Context, state *TaskState) (connector.LlmResponseWithTools, error) {
-	promptWithState := buildTaskPrompt(state)
+func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) (connector.LlmResponseWithTools, error) {
+	promptWithState := buildTaskPrompt(run.state)
 	qParams := connector.QueryParams{
 		UserPrompt: &promptWithState,
 		SysPrompt:  a.systemPromptTask,
@@ -174,7 +201,7 @@ func (a *Agent) queryTaskResponse(ctx context.Context, state *TaskState) (connec
 		Device:     a.device,
 	}
 
-	response, err := a.nextTaskResponse(ctx, &qParams)
+	response, err := a.nextTaskResponse(ctx, &qParams, run.tools)
 	if err != nil {
 		return connector.LlmResponseWithTools{}, err
 	}
@@ -183,7 +210,7 @@ func (a *Agent) queryTaskResponse(ctx context.Context, state *TaskState) (connec
 }
 
 func (a *Agent) handleTaskToolResponse(logger *zap.SugaredLogger, run *taskExecutionState, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
-	tool, err := resolveTaskToolCall(response.ToolName, response.ToolInput, a.Tools)
+	tool, err := resolveTaskToolCall(response.ToolName, response.ToolInput, run.tools)
 	if err != nil {
 		logger.Errorw("Tool validation failed", "tool", response.ToolName, "error", err)
 		run.recordFailure(response, err)
@@ -319,11 +346,29 @@ func (r *taskExecutionState) finalAnswerResult(answer string) TaskRunResult {
 	return TaskRunResult{Response: answer, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}
 }
 
-func (a *Agent) nextTaskResponse(ctx context.Context, params *connector.QueryParams) (connector.LlmResponseWithTools, error) {
-	if toolConnector, ok := a.Connector.(connector.ToolCallingConnector); ok && toolConnector.SupportsNativeToolCalling() {
-		return toolConnector.QueryWithTool(ctx, params, a.Tools)
+func (a *Agent) buildTaskTools(interaction TaskInteraction) map[string]tools.Tool {
+	taskTools := make(map[string]tools.Tool, len(a.Tools))
+	for name, tool := range a.Tools {
+		taskTools[name] = tool
 	}
-	return a.queryTaskActionFallback(ctx, params)
+
+	askUserTool := NewAskUserTool(interaction)
+	taskTools[askUserTool.Name()] = askUserTool
+
+	finalAnswerTool := NewFinalAnswerTool()
+	taskTools[finalAnswerTool.Name()] = finalAnswerTool
+
+	changeDirectoryTool := NewChangeDirectoryTool()
+	taskTools[changeDirectoryTool.Name()] = changeDirectoryTool
+
+	return taskTools
+}
+
+func (a *Agent) nextTaskResponse(ctx context.Context, params *connector.QueryParams, taskTools map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
+	if toolConnector, ok := a.Connector.(connector.ToolCallingConnector); ok && toolConnector.SupportsNativeToolCalling() {
+		return toolConnector.QueryWithTool(ctx, params, taskTools)
+	}
+	return a.queryTaskActionFallback(ctx, params, taskTools)
 }
 
 type taskActionFallbackResponse struct {
@@ -385,7 +430,7 @@ Task context:
 
 Return valid JSON only.`
 
-func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.QueryParams) (connector.LlmResponseWithTools, error) {
+func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.QueryParams, taskTools map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
 	fallbackParams := *params
 	fallbackParams.Messages = nil
 	fallbackParams.Stream = false
@@ -396,7 +441,7 @@ func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.Q
 	var lastRaw string
 	var lastErr error
 	for attempt := 0; attempt < maxTaskActionFallbackRuns; attempt++ {
-		prompt := a.buildTaskActionPrompt(params, lastRaw, lastErr)
+		prompt := a.buildTaskActionPrompt(params, taskTools, lastRaw, lastErr)
 		fallbackParams.UserPrompt = &prompt
 
 		raw, err := a.Connector.Query(ctx, &fallbackParams)
@@ -458,8 +503,8 @@ func buildTaskActionResponse(parsed taskActionFallbackResponse) (connector.LlmRe
 	return response, nil
 }
 
-func (a *Agent) buildTaskActionPrompt(params *connector.QueryParams, previousRaw string, previousErr error) string {
-	toolsText := formatTaskActionTools(a.Tools)
+func (a *Agent) buildTaskActionPrompt(params *connector.QueryParams, taskTools map[string]tools.Tool, previousRaw string, previousErr error) string {
+	toolsText := formatTaskActionTools(taskTools)
 	contextText := formatTaskActionContext(params)
 	if previousErr == nil {
 		return fmt.Sprintf(taskActionPromptTemplate, toolsText, contextText)
@@ -718,16 +763,6 @@ func buildTaskPrompt(state *TaskState) string {
 	return strings.TrimSpace(prompt.String())
 }
 
-func getUserInput() (string, error) {
-	fmt.Print("> ")
-	var input string
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		input = scanner.Text()
-	}
-	return input, scanner.Err()
-}
-
 func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, error) {
 	var summary strings.Builder
 	fmt.Fprintf(&summary, "I've been working on this task: %s\n\n", state.OriginalQuery)
@@ -783,12 +818,14 @@ type askUserTool struct {
 	name        string
 	description string
 	inputSchema map[string]any
+	interaction TaskInteraction
 }
 
-func NewAskUserTool() *askUserTool {
+func NewAskUserTool(interaction TaskInteraction) *askUserTool {
 	return &askUserTool{
 		name:        UserClarificationToolName,
 		description: "Ask the user for clarification or additional information. This tool is used when the model needs more context to proceed with the task.",
+		interaction: interaction,
 		inputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -824,8 +861,11 @@ func (t *askUserTool) RunSchema(input map[string]any) (string, error) {
 		return "", fmt.Errorf("failed to extract question from tool input")
 	}
 
-	fmt.Println("\nNeed clarification:", question)
-	userInput, err := getUserInput()
+	if t.interaction == nil {
+		return "", ErrTaskInteractionRequired
+	}
+
+	userInput, err := t.interaction.Clarify(TaskClarificationRequest{Question: question})
 	if err != nil {
 		return "", fmt.Errorf("user input error: %w", err)
 	}

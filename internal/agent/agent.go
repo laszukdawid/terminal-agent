@@ -32,15 +32,6 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 
 	allTools := filterAvailableTools(toolProvider.GetAllTools())
 
-	askUserTool := NewAskUserTool()
-	allTools[askUserTool.Name()] = askUserTool
-
-	finalAnswerTool := NewFinalAnswerTool()
-	allTools[finalAnswerTool.Name()] = finalAnswerTool
-
-	changeDirectoryTool := NewChangeDirectoryTool()
-	allTools[changeDirectoryTool.Name()] = changeDirectoryTool
-
 	return &Agent{
 		Connector:        connector,
 		Tools:            allTools,

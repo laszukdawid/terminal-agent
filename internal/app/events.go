@@ -1,6 +1,9 @@
 package app
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 func newEvent(kind RunKind, eventType EventType) Event {
 	return Event{
@@ -10,7 +13,11 @@ func newEvent(kind RunKind, eventType EventType) Event {
 	}
 }
 
-func emitEvent(ch chan<- Event, event Event) error {
-	ch <- event
-	return nil
+func emitEvent(ctx context.Context, ch chan<- Event, event Event) error {
+	select {
+	case ch <- event:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

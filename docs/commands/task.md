@@ -14,6 +14,8 @@ The agent will:
 3. Ask for your permission before executing any commands
 4. Provide the results
 
+The `task` command runs through an event-driven task execution path. The agent core decides what to do next, while the CLI owns terminal interaction for confirmations and clarification questions.
+
 When the selected provider does not expose dependable native tool calling, Terminal Agent can fall back to a structured JSON action protocol. The direct local `llama` provider uses this path today, so `task` works there as well, although providers with native tool APIs are generally more reliable for complex workflows.
 
 ## Examples
@@ -53,7 +55,7 @@ agent task "Create hello.py that prints Hello, run it with uv run python"
 
 If you need PEP 723 script mode, ask for `uv run --script` explicitly.
 
-You will be asked to confirm each execution step. File creation and edits are performed by the agent’s native tools.
+You will be asked to confirm each execution step, and the agent may also ask follow-up clarification questions when it needs more context. File creation and edits are performed by the agent’s native tools.
 
 ## Flags
 

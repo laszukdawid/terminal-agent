@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/history"
 	"github.com/spf13/cobra"
 )
+
+var newService = app.NewService
 
 func NewTaskCommand(config config.Config) *cobra.Command {
 	var provider *string
@@ -27,7 +30,8 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			flags := cmd.Flags()
-			service := app.NewService()
+			service := newService()
+			inputReader := bufio.NewReader(cmd.InOrStdin())
 			device, err := resolveDevice(flags, config)
 			if err != nil {
 				return err
@@ -45,7 +49,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				allow = *allowList
 			}
 
-			result, err := service.Task(ctx, app.TaskRequest{
+			events, err := service.TaskEvents(ctx, app.TaskRequest{
 				Message:        userRequest,
 				Provider:       *provider,
 				Model:          *modelID,
@@ -57,6 +61,35 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			})
 			if err != nil {
 				return fmt.Errorf("failed to request a task: %w", err)
+			}
+
+			result := app.TaskResult{Request: userRequest}
+			for event := range events {
+				switch event.Type {
+				case app.EventConfirmationNeeded:
+					decision, promptErr := promptTaskConfirmation(cmd, inputReader, event.Confirmation)
+					if promptErr != nil {
+						return promptErr
+					}
+					if replyErr := event.Confirmation.Reply(decision); replyErr != nil {
+						return replyErr
+					}
+				case app.EventClarificationNeeded:
+					answer, promptErr := promptTaskClarification(cmd, inputReader, event.Clarification)
+					if promptErr != nil {
+						return promptErr
+					}
+					if replyErr := event.Clarification.Reply(answer); replyErr != nil {
+						return replyErr
+					}
+				case app.EventCompleted:
+					result.Response = event.FinalOutput
+					result.RawOutput = event.RawOutput
+					result.RawOutputTool = event.RawOutputTool
+					result.DirectRawOutput = event.DirectRawOutput
+				case app.EventFailed:
+					return fmt.Errorf("failed to request a task: %w", event.Err)
+				}
 			}
 
 			response := result.Response
@@ -134,4 +167,47 @@ func formatTaskOutput(result app.TaskResult, plain bool) string {
 	}
 
 	return output.String()
+}
+
+func promptTaskConfirmation(cmd *cobra.Command, reader *bufio.Reader, confirmation *app.TaskConfirmationEvent) (app.TaskConfirmationResponse, error) {
+	if confirmation == nil {
+		return app.TaskConfirmationResponse{}, fmt.Errorf("missing confirmation request")
+	}
+
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Execute the following action?\n > %s [y/N/yes!/no!]: ", confirmation.Action); err != nil {
+		return app.TaskConfirmationResponse{}, err
+	}
+
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return app.TaskConfirmationResponse{}, err
+	}
+
+	switch strings.TrimSpace(strings.ToLower(response)) {
+	case "y", "yes":
+		return app.TaskConfirmationResponse{Allowed: true}, nil
+	case "y!", "yes!":
+		return app.TaskConfirmationResponse{Allowed: true, Remember: true}, nil
+	case "n!", "no!":
+		return app.TaskConfirmationResponse{Remember: true}, nil
+	default:
+		return app.TaskConfirmationResponse{}, nil
+	}
+}
+
+func promptTaskClarification(cmd *cobra.Command, reader *bufio.Reader, clarification *app.TaskClarificationEvent) (string, error) {
+	if clarification == nil {
+		return "", fmt.Errorf("missing clarification request")
+	}
+
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "\nNeed clarification: %s\n> ", clarification.Question); err != nil {
+		return "", err
+	}
+
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimRight(response, "\r\n"), nil
 }

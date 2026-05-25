@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,14 +13,17 @@ import (
 )
 
 type ConfirmationManager struct {
-	allowPatterns []rulePattern
-	denyPatterns  []rulePattern
-	askPatterns   []rulePattern
-	decisions     map[string]bool
-	rememberFunc  RememberDecisionFunc
+	allowPatterns   []rulePattern
+	denyPatterns    []rulePattern
+	askPatterns     []rulePattern
+	decisions       map[string]bool
+	confirmWithUser UserConfirmationFunc
+	rememberFunc    RememberDecisionFunc
 }
 
 type RememberDecisionFunc func(action string, allow bool) error
+
+type UserConfirmationFunc func(action string) (confirmationDecision, error)
 
 type ruleType int
 
@@ -49,10 +51,11 @@ type actionCall struct {
 	args    map[string]string
 }
 
-func NewConfirmationManager(allow []string, ruleSets []config.PermissionRuleSet, remember RememberDecisionFunc) *ConfirmationManager {
+func NewConfirmationManager(allow []string, ruleSets []config.PermissionRuleSet, confirmWithUser UserConfirmationFunc, remember RememberDecisionFunc) *ConfirmationManager {
 	manager := &ConfirmationManager{
-		decisions:    make(map[string]bool),
-		rememberFunc: remember,
+		decisions:       make(map[string]bool),
+		confirmWithUser: confirmWithUser,
+		rememberFunc:    remember,
 	}
 
 	maxPriority := 0
@@ -80,7 +83,7 @@ func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
 	}
 
 	if cm.shouldAsk(action) {
-		return cm.promptAndRemember(action)
+		return cm.confirmAndRemember(action)
 	}
 
 	if allowed, matched := cm.resolveAllowDeny(action); matched {
@@ -88,7 +91,7 @@ func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
 		return allowed, nil
 	}
 
-	return cm.promptAndRemember(action)
+	return cm.confirmAndRemember(action)
 }
 
 func (cm *ConfirmationManager) appendPatterns(values []string, rule ruleType, priority int) {
@@ -135,8 +138,12 @@ func (cm *ConfirmationManager) resolveAllowDeny(action string) (bool, bool) {
 	return true, true
 }
 
-func (cm *ConfirmationManager) promptAndRemember(action string) (bool, error) {
-	decision, err := promptConfirmation(action)
+func (cm *ConfirmationManager) confirmAndRemember(action string) (bool, error) {
+	if cm.confirmWithUser == nil {
+		return false, ErrTaskInteractionRequired
+	}
+
+	decision, err := cm.confirmWithUser(action)
 	if err != nil {
 		return false, err
 	}
@@ -214,27 +221,6 @@ func normalizeList(values []string) []string {
 type confirmationDecision struct {
 	allowed  bool
 	remember bool
-}
-
-func promptConfirmation(action string) (confirmationDecision, error) {
-	fmt.Printf("Execute the following action?\n > %s [y/N/yes!/no!]: ", action)
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return confirmationDecision{}, err
-	}
-	response = strings.TrimSpace(strings.ToLower(response))
-
-	switch response {
-	case "y", "yes":
-		return confirmationDecision{allowed: true}, nil
-	case "yes!":
-		return confirmationDecision{allowed: true, remember: true}, nil
-	case "no!":
-		return confirmationDecision{allowed: false, remember: true}, nil
-	default:
-		return confirmationDecision{allowed: false}, nil
-	}
 }
 
 func BuildActionString(toolName string, input map[string]any) string {

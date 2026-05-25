@@ -68,7 +68,9 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 		defer close(events)
 		defer sessionStore.Close()
 
-		_ = emitEvent(events, newEvent(RunKindChat, EventStarted))
+		if err := emitEvent(ctx, events, newEvent(RunKindChat, EventStarted)); err != nil {
+			return
+		}
 
 		qParams := connector.QueryParams{
 			UserPrompt: &userMessage,
@@ -83,7 +85,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 			qParams.OnStream = func(chunk string) error {
 				event := newEvent(RunKindChat, EventOutputDelta)
 				event.Text = chunk
-				return emitEvent(events, event)
+				return emitEvent(ctx, events, event)
 			}
 		}
 
@@ -91,21 +93,21 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 		if err != nil {
 			failed := newEvent(RunKindChat, EventFailed)
 			failed.Err = err
-			_ = emitEvent(events, failed)
+			_ = emitEvent(ctx, events, failed)
 			return
 		}
 
 		if err := sessionStore.AddMessage("assistant", response); err != nil {
 			failed := newEvent(RunKindChat, EventFailed)
 			failed.Err = fmt.Errorf("failed to save assistant response: %w", err)
-			_ = emitEvent(events, failed)
+			_ = emitEvent(ctx, events, failed)
 			return
 		}
 
 		completed := newEvent(RunKindChat, EventCompleted)
 		completed.Status = strings.TrimSpace(userMessage)
 		completed.FinalOutput = response
-		_ = emitEvent(events, completed)
+		_ = emitEvent(ctx, events, completed)
 	}()
 
 	return events, nil
