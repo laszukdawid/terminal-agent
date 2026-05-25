@@ -87,7 +87,10 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 				"description": "The Unix command to execute. " +
 					"Please provide the command in a single line without any new lines.",
 			},
-			"final": NewFinalOutputField("Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round."),
+			"final": map[string]string{
+				"type":        "boolean",
+				"description": "Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round.",
+			},
 		},
 		"required": []string{"command"},
 	}
