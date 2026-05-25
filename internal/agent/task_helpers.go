@@ -123,6 +123,27 @@ func taskToolInputRequestsFinal(input map[string]any) bool {
 	return ok && requested
 }
 
+const finalDirectOutputDescriptionMarker = "returned directly without another"
+
+func toolSupportsFinal(tool tools.Tool) bool {
+	schema := tools.EffectiveTaskInputSchema(tool)
+	propertiesRaw, _ := schema["properties"]
+	properties, ok := normalizeSchemaMap(propertiesRaw)
+	if !ok {
+		return false
+	}
+	finalSchema, ok := normalizeSchemaDefinition(properties["final"])
+	if !ok {
+		return false
+	}
+	typeName, _ := finalSchema["type"].(string)
+	if typeName != "boolean" {
+		return false
+	}
+	desc, _ := finalSchema["description"].(string)
+	return strings.Contains(desc, finalDirectOutputDescriptionMarker)
+}
+
 func isTaskDisplayOrientedTool(toolName string) bool {
 	switch toolName {
 	case tools.ToolNameUnix, tools.ToolNamePython, tools.ToolNameFileSearch, tools.ToolNameRead:
