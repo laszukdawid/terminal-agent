@@ -68,7 +68,9 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 	go func() {
 		defer close(events)
 
-		_ = emitEvent(events, newEvent(RunKindAsk, EventStarted))
+		if err := emitEvent(ctx, events, newEvent(RunKindAsk, EventStarted)); err != nil {
+			return
+		}
 
 		qParams := connector.QueryParams{
 			UserPrompt: &userQuestion,
@@ -82,7 +84,7 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 			qParams.OnStream = func(chunk string) error {
 				event := newEvent(RunKindAsk, EventOutputDelta)
 				event.Text = chunk
-				return emitEvent(events, event)
+				return emitEvent(ctx, events, event)
 			}
 		}
 
@@ -90,14 +92,14 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 		if err != nil {
 			failed := newEvent(RunKindAsk, EventFailed)
 			failed.Err = err
-			_ = emitEvent(events, failed)
+			_ = emitEvent(ctx, events, failed)
 			return
 		}
 
 		completed := newEvent(RunKindAsk, EventCompleted)
 		completed.Status = userQuestion
 		completed.FinalOutput = response
-		_ = emitEvent(events, completed)
+		_ = emitEvent(ctx, events, completed)
 	}()
 
 	return events, nil

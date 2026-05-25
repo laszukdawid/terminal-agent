@@ -18,7 +18,7 @@ func TestConfirmationAllowsExactAndPrefix(t *testing.T) {
 	manager := NewConfirmationManager([]string{
 		"unix(\"aws login\")",
 		"unix(\"cat .*\")",
-	}, nil, nil)
+	}, nil, nil, nil)
 
 	allowed, err := manager.Confirm("unix(\"aws login\")")
 	if err != nil {
@@ -41,7 +41,7 @@ func TestAllowKeysRegex(t *testing.T) {
 	manager := NewConfirmationManager([]string{
 		"unix(\"aws login\", allowKeys=[\"region\", \"profile\", \"read.*\"])",
 		"unix(\"aws login\", region=\"us-.*\")",
-	}, nil, nil)
+	}, nil, nil, nil)
 
 	allowed, err := manager.Confirm("unix(\"aws login\")")
 	if err != nil {

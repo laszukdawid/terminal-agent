@@ -16,6 +16,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type fixedOutputTool struct {
@@ -189,6 +190,23 @@ func TestNewAgentFiltersUnavailableTools(t *testing.T) {
 	})
 }
 
+type fakeTaskInteraction struct {
+	confirmations  []TaskConfirmationRequest
+	clarifications []TaskClarificationRequest
+	decision       TaskConfirmationDecision
+	answer         string
+}
+
+func (i *fakeTaskInteraction) Confirm(req TaskConfirmationRequest) (TaskConfirmationDecision, error) {
+	i.confirmations = append(i.confirmations, req)
+	return i.decision, nil
+}
+
+func (i *fakeTaskInteraction) Clarify(req TaskClarificationRequest) (string, error) {
+	i.clarifications = append(i.clarifications, req)
+	return i.answer, nil
+}
+
 func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
 	conn := &summaryCaptureConnector{}
 	sysPrompt := "task system prompt"
@@ -228,6 +246,96 @@ func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
 	assert.Contains(t, conn.userPrompt, "internal/app/task.go")
 	assert.Contains(t, conn.userPrompt, "task prompt resolution is coupled to ask prompt resolution")
 	assert.Equal(t, MaxTokens*2, conn.maxTokens)
+}
+
+func TestTaskUsesInjectedClarificationInteraction(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	interaction := &fakeTaskInteraction{answer: "Use the internal directory."}
+	conn := &scriptedToolConnector{responses: []connector.LlmResponseWithTools{
+		{
+			ToolUse:  true,
+			ToolName: UserClarificationToolName,
+			ToolInput: map[string]any{
+				"question": "Which directory should I inspect?",
+			},
+		},
+		{
+			ToolUse:  true,
+			ToolName: ToolNameFinalAnswer,
+			ToolInput: map[string]any{
+				"answer": "done",
+			},
+		},
+	}}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "inspect the repo", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.clarifications, 1)
+	assert.Equal(t, "Which directory should I inspect?", interaction.clarifications[0].Question)
+}
+
+func TestTaskUsesInjectedConfirmationInteraction(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true, Remember: true}}
+	unixTool := &schemaOutputTool{
+		name:   tools.ToolNameUnix,
+		output: "status output",
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{"type": "string"},
+			},
+		},
+	}
+	conn := &scriptedToolConnector{responses: []connector.LlmResponseWithTools{
+		{
+			ToolUse:  true,
+			ToolName: tools.ToolNameUnix,
+			ToolInput: map[string]any{
+				"command": "git status",
+			},
+		},
+		{
+			ToolUse:  true,
+			ToolName: ToolNameFinalAnswer,
+			ToolInput: map[string]any{
+				"answer": "done",
+			},
+		},
+	}}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{tools.ToolNameUnix: unixTool},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "inspect git state", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.confirmations, 1)
+	assert.Equal(t, `unix("git status")`, interaction.confirmations[0].Action)
 }
 
 func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {

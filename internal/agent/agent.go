@@ -32,7 +32,7 @@ func NewAgent(connector connector.LLMConnector, toolProvider tools.ToolProvider,
 
 	allTools := filterAvailableTools(toolProvider.GetAllTools())
 
-	askUserTool := NewAskUserTool()
+	askUserTool := NewAskUserTool(nil)
 	allTools[askUserTool.Name()] = askUserTool
 
 	finalAnswerTool := NewFinalAnswerTool()

@@ -11,6 +11,7 @@ type Service interface {
 	Chat(ctx context.Context, req ChatRequest) (ChatResult, error)
 	ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event, error)
 	Task(ctx context.Context, req TaskRequest) (TaskResult, error)
+	TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event, error)
 }
 
 type RunKind string
@@ -24,27 +25,48 @@ const (
 type EventType string
 
 const (
-	EventStarted            EventType = "started"
-	EventOutputDelta        EventType = "output_delta"
-	EventStatus             EventType = "status"
-	EventToolCallRequested  EventType = "tool_call_requested"
-	EventToolCallCompleted  EventType = "tool_call_completed"
-	EventConfirmationNeeded EventType = "confirmation_needed"
-	EventCompleted          EventType = "completed"
-	EventFailed             EventType = "failed"
+	EventStarted             EventType = "started"
+	EventOutputDelta         EventType = "output_delta"
+	EventStatus              EventType = "status"
+	EventToolCallRequested   EventType = "tool_call_requested"
+	EventToolCallCompleted   EventType = "tool_call_completed"
+	EventConfirmationNeeded  EventType = "confirmation_needed"
+	EventClarificationNeeded EventType = "clarification_needed"
+	EventCompleted           EventType = "completed"
+	EventFailed              EventType = "failed"
 )
 
+type TaskConfirmationResponse struct {
+	Allowed  bool
+	Remember bool
+}
+
+type TaskConfirmationEvent struct {
+	Action string
+	Reply  func(TaskConfirmationResponse) error
+}
+
+type TaskClarificationEvent struct {
+	Question string
+	Reply    func(string) error
+}
+
 type Event struct {
-	Kind        RunKind
-	Type        EventType
-	Timestamp   time.Time
-	Text        string
-	Status      string
-	FinalOutput string
-	Err         error
-	ToolName    string
-	ToolInput   map[string]any
-	ToolResult  string
+	Kind            RunKind
+	Type            EventType
+	Timestamp       time.Time
+	Text            string
+	Status          string
+	FinalOutput     string
+	Err             error
+	ToolName        string
+	ToolInput       map[string]any
+	ToolResult      string
+	RawOutput       string
+	RawOutputTool   string
+	DirectRawOutput bool
+	Confirmation    *TaskConfirmationEvent
+	Clarification   *TaskClarificationEvent
 }
 
 type service struct{}
