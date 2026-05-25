@@ -77,11 +77,21 @@ agent config get provider
 
 ## Permissions
 
-Terminal Agent supports tool execution permissions via the `permissions` key in configuration files. Permissions are evaluated using the same action expression format used by confirmations, for example:
+Terminal Agent supports tool execution permissions via the `permissions` key in configuration files and the `--allow` CLI flag. Permissions are evaluated using the same action expression format used by confirmations, for example:
 
 ```
 unix("aws sso login", profile="dev")
 ```
+
+### Permission Sources and Priority
+
+Permission rules come from three sources, listed from lowest to highest priority:
+
+1. Global config: `$HOME/.config/terminal-agent/config.json`
+2. Local config: `.terminal-agent.json` files discovered by walking from the current working directory up to the filesystem root. The closest file to the current directory has the highest priority among local configs.
+3. CLI `--allow` flag (task command only): the highest priority rule set. Use it to temporarily allow an action without modifying config files.
+
+Between `allow` and `deny` rules at different priorities, the highest priority match wins. At the same priority, `deny` wins over `allow`.
 
 ### Global vs Local Configuration
 
@@ -89,6 +99,10 @@ unix("aws sso login", profile="dev")
 - Local config: `.terminal-agent.json` files discovered by walking from the current working directory up to the filesystem root.
 
 Local configs take priority over global rules when both match. The closest `.terminal-agent.json` to the current directory has the highest priority.
+
+An empty `.terminal-agent.json` file (or one containing only whitespace) is treated as having no permission rules and does not affect evaluation. You can create an empty file as a placeholder without changing behavior.
+
+When `yes!` or `no!` writes a remembered decision, it writes to the closest discovered `.terminal-agent.json`. If no local config exists, it falls back to writing to the global `config.json`.
 
 ### Permissions Schema
 
@@ -106,6 +120,18 @@ Rules are evaluated in this order:
 
 1. `ask` matches always prompt, even if `allow` or `deny` also match.
 2. Between `allow` and `deny`, the highest priority match wins; if both match at the same priority, `deny` wins.
+
+### Action Expression Format
+
+Permissions use an action expression syntax that mirrors how tool calls appear in confirmation prompts:
+
+```
+tool_name("positional value", key1="value1", key2="value2")
+```
+
+The first positional argument (typically the command string for `unix` tools) is matched as a regex. Named arguments (`key=value`) are matched against the corresponding tool input fields. Values in patterns are treated as regex anchored to the full string (`^(?:your value)$`).
+
+The `final` field that certain tools support (`unix`, `python`, `file_search`) is ignored during permission matching. This means `unix("ls -la", final=true)` is treated identically to `unix("ls -la")` for allow/deny/ask purposes.
 
 ### Confirmation Shortcuts
 

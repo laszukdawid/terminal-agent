@@ -2,6 +2,8 @@
 
 The `auth` command manages provider credentials. It stores API keys and OAuth tokens separately from the main config file, in `~/.config/terminal-agent/auth.json`.
 
+Currently, only the `openai` provider is supported.
+
 ## Usage
 
 ```sh
@@ -20,8 +22,8 @@ agent auth login openai --device
 agent auth login openai --api-key
 ```
 
-- `agent auth login openai` starts the browser OAuth flow.
-- `agent auth login openai --device` starts the terminal-friendly device-code flow.
+- `agent auth login openai` starts the browser OAuth flow. Opens the system browser by default, then listens on a local callback server to receive the authorization code.
+- `agent auth login openai --device` starts the terminal-friendly device-code flow. Prints a URL and a one-time code to paste in your browser. Polls for authorization for up to 15 minutes (5 second default interval).
 - `agent auth login openai --api-key` stores an API key without using OAuth.
 
 Browser login supports a pasted-code fallback. If the localhost callback does not complete automatically, paste either:
@@ -31,7 +33,7 @@ Browser login supports a pasted-code fallback. If the localhost callback does no
 - `code#state`
 - a query string containing `code=` and optional `state=`
 
-When `--api-key` is used, the command reads the key from the `--key` flag, the `OPENAI_API_KEY` environment variable, an interactive terminal prompt, or stdin (in that order).
+When `--api-key` is used, the command reads the key from the `--key` flag, the `OPENAI_API_KEY` environment variable, an interactive terminal prompt, or stdin (in that order). The terminal prompt hides keystrokes with a password-style masked input.
 
 ```sh
 # Store an API key from the environment
@@ -84,9 +86,9 @@ Credentials are stored in:
 ~/.config/terminal-agent/auth.json
 ```
 
-The file is created with `0600` permissions and uses atomic writes to avoid data corruption.
+The file is created with `0600` permissions and uses atomic writes (write to temp file, sync, rename) to avoid data corruption. File operations are protected by advisory file locks to prevent corruption from concurrent `agent auth` processes.
 
-For stored OAuth logins, Terminal Agent refreshes access tokens automatically while a valid refresh token is still present.
+For stored OAuth logins, Terminal Agent refreshes access tokens automatically while a valid refresh token is still present. If a refresh fails (e.g., the refresh token expired), you will need to run `agent auth login openai` again.
 
 ## Auth Resolution
 
