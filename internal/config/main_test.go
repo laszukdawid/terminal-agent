@@ -113,8 +113,8 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, expectedConfig.GetDefaultModelId(), loadedConfig.GetDefaultModelId())
 	})
 
-		// Test Ollama provider configuration
-		t.Run("OllamaProviderConfig", func(t *testing.T) {
+	// Test Ollama provider configuration
+	t.Run("OllamaProviderConfig", func(t *testing.T) {
 		_, cleanup := setupTempConfig(t)
 		defer cleanup()
 

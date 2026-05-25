@@ -14,23 +14,23 @@ import (
 )
 
 type App struct {
-	fyneApp fyne.App
-	service appservice.Service
-	cfg     config.Config
-	state   *state
-	popup   *popupWindow
-	quit    func()
+	fyneApp       fyne.App
+	service       appservice.Service
+	cfg           config.Config
+	state         *state
+	popup         *popupWindow
+	quit          func()
 	stopIndicator chan struct{}
 }
 
 func NewApp(service appservice.Service, cfg config.Config, appID string) *App {
 	fyneApp := app.NewWithID(appID)
 	gui := &App{
-		fyneApp: fyneApp,
-		service: service,
-		cfg:     cfg,
-		state:   &state{},
-		quit:    fyneApp.Quit,
+		fyneApp:       fyneApp,
+		service:       service,
+		cfg:           cfg,
+		state:         &state{},
+		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
 	}
 	if icon, err := loadAppIcon(); err == nil {

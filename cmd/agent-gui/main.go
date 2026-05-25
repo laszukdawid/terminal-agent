@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/gui"
 	"github.com/laszukdawid/terminal-agent/internal/platform"
 	u "github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
-	"fyne.io/fyne/v2"
 )
 
 const guiAppID = "terminal-agent-gui"

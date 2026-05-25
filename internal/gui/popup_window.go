@@ -5,49 +5,49 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
 const (
-	defaultWindowWidth  float32 = 720
-	defaultWindowHeight float32 = 280
-	minWindowHeight     float32 = 240
-	maxWindowHeight     float32 = 760
-	maxInputRows                = 3
-	compactOutputHeight float32 = 110
-	statusMinWidth      float32 = 130
-	statusIndicatorSize float32 = 18
-	maxVisibleOutputLines       = 5
+	defaultWindowWidth    float32 = 720
+	defaultWindowHeight   float32 = 280
+	minWindowHeight       float32 = 240
+	maxWindowHeight       float32 = 760
+	maxInputRows                  = 3
+	compactOutputHeight   float32 = 110
+	statusMinWidth        float32 = 130
+	statusIndicatorSize   float32 = 18
+	maxVisibleOutputLines         = 5
 )
 
 var spinnerFrames = []string{"|", "/", "-", "\\"}
 
 type popupWindow struct {
-	window        fyne.Window
-	input         *popupEntry
-	inputCard     fyne.CanvasObject
-	requestHeading *widget.Label
-	answerHeading *widget.Label
-	answerHeader  *fyne.Container
-	answerMeta    *fyne.Container
-	questionCard  fyne.CanvasObject
-	questionLabel *canvas.Text
-	outputField   *readOnlyEntry
-	headerStatus  *widget.Label
-	headerBrain   *canvas.Text
-	headerSpinner *canvas.Text
-	headerStatusBox  fyne.CanvasObject
-	modelLabel    *widget.Label
-	actionButton  *widget.Button
-	copyButton    *widget.Button
-	settingsButton *widget.Button
-	answerPanel   *fyne.Container
+	window          fyne.Window
+	input           *popupEntry
+	inputCard       fyne.CanvasObject
+	requestHeading  *widget.Label
+	answerHeading   *widget.Label
+	answerHeader    *fyne.Container
+	answerMeta      *fyne.Container
+	questionCard    fyne.CanvasObject
+	questionLabel   *canvas.Text
+	outputField     *readOnlyEntry
+	headerStatus    *widget.Label
+	headerBrain     *canvas.Text
+	headerSpinner   *canvas.Text
+	headerStatusBox fyne.CanvasObject
+	modelLabel      *widget.Label
+	actionButton    *widget.Button
+	copyButton      *widget.Button
+	settingsButton  *widget.Button
+	answerPanel     *fyne.Container
 
 	onSubmit     func()
 	onShiftEnter func()
@@ -198,25 +198,25 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	window.SetContent(container.NewPadded(content))
 
 	p := &popupWindow{
-		window:        window,
-		input:         input,
-		inputCard:     inputCard,
-		questionCard:  questionCard,
-		requestHeading: requestHeading,
-		answerHeading: answerHeading,
-		answerHeader:  answerHeader,
-		answerMeta:    answerMeta,
-		questionLabel: questionLabel,
-		outputField:   outputField,
-		headerStatus:  headerStatus,
-		headerBrain:   headerBrain,
-		headerSpinner: headerSpinner,
-		headerStatusBox:  headerStatusBox,
-		modelLabel:    modelLabel,
-		actionButton:  actionButton,
-		copyButton:    copyButton,
-		settingsButton: settingsButton,
-		answerPanel:   answerPanel,
+		window:          window,
+		input:           input,
+		inputCard:       inputCard,
+		questionCard:    questionCard,
+		requestHeading:  requestHeading,
+		answerHeading:   answerHeading,
+		answerHeader:    answerHeader,
+		answerMeta:      answerMeta,
+		questionLabel:   questionLabel,
+		outputField:     outputField,
+		headerStatus:    headerStatus,
+		headerBrain:     headerBrain,
+		headerSpinner:   headerSpinner,
+		headerStatusBox: headerStatusBox,
+		modelLabel:      modelLabel,
+		actionButton:    actionButton,
+		copyButton:      copyButton,
+		settingsButton:  settingsButton,
+		answerPanel:     answerPanel,
 	}
 	input.onEscape = func() {
 		if p.onEscape != nil {

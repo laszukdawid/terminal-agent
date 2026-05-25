@@ -25,13 +25,13 @@ const (
 )
 
 type MistralRequest struct {
-	Model             string          `json:"model"`
+	Model             string           `json:"model"`
 	Messages          []MistralMessage `json:"messages"`
-	Stream            bool            `json:"stream,omitempty"`
-	MaxTokens         *int            `json:"max_tokens,omitempty"`
-	Tools             []MistralTool   `json:"tools,omitempty"`
-	ToolChoice        string          `json:"tool_choice,omitempty"`
-	ParallelToolCalls *bool           `json:"parallel_tool_calls,omitempty"`
+	Stream            bool             `json:"stream,omitempty"`
+	MaxTokens         *int             `json:"max_tokens,omitempty"`
+	Tools             []MistralTool    `json:"tools,omitempty"`
+	ToolChoice        string           `json:"tool_choice,omitempty"`
+	ParallelToolCalls *bool            `json:"parallel_tool_calls,omitempty"`
 }
 
 type MistralMessage struct {
@@ -52,8 +52,8 @@ type MistralToolFunction struct {
 }
 
 type MistralToolCall struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`
+	ID       string                  `json:"id"`
+	Type     string                  `json:"type"`
 	Function MistralToolCallFunction `json:"function"`
 }
 

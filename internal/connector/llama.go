@@ -11,13 +11,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/laszukdawid/terminal-agent/internal/config"
-	"github.com/laszukdawid/terminal-agent/internal/tools"
-	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/hybridgroup/yzma/pkg/llama"
 	yzmamessage "github.com/hybridgroup/yzma/pkg/message"
 	yzmatemplate "github.com/hybridgroup/yzma/pkg/template"
 	"github.com/jupiterrider/ffi"
+	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
 )
 

@@ -12,7 +12,7 @@ type state struct {
 	isRunning    bool
 	isVisible    bool
 	showRequest  bool
-	cancelFunc context.CancelFunc
+	cancelFunc   context.CancelFunc
 }
 
 func (s *state) resetOutput() {
