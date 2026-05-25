@@ -368,7 +368,7 @@ func (a *Agent) nextTaskResponse(ctx context.Context, params *connector.QueryPar
 	if toolConnector, ok := a.Connector.(connector.ToolCallingConnector); ok && toolConnector.SupportsNativeToolCalling() {
 		return toolConnector.QueryWithTool(ctx, params, taskTools)
 	}
-	return a.queryTaskActionFallback(ctx, params)
+	return a.queryTaskActionFallback(ctx, params, taskTools)
 }
 
 type taskActionFallbackResponse struct {
@@ -430,7 +430,7 @@ Task context:
 
 Return valid JSON only.`
 
-func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.QueryParams) (connector.LlmResponseWithTools, error) {
+func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.QueryParams, taskTools map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
 	fallbackParams := *params
 	fallbackParams.Messages = nil
 	fallbackParams.Stream = false
@@ -441,7 +441,7 @@ func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.Q
 	var lastRaw string
 	var lastErr error
 	for attempt := 0; attempt < maxTaskActionFallbackRuns; attempt++ {
-		prompt := a.buildTaskActionPrompt(params, lastRaw, lastErr)
+		prompt := a.buildTaskActionPrompt(params, taskTools, lastRaw, lastErr)
 		fallbackParams.UserPrompt = &prompt
 
 		raw, err := a.Connector.Query(ctx, &fallbackParams)
@@ -503,8 +503,8 @@ func buildTaskActionResponse(parsed taskActionFallbackResponse) (connector.LlmRe
 	return response, nil
 }
 
-func (a *Agent) buildTaskActionPrompt(params *connector.QueryParams, previousRaw string, previousErr error) string {
-	toolsText := formatTaskActionTools(a.Tools)
+func (a *Agent) buildTaskActionPrompt(params *connector.QueryParams, taskTools map[string]tools.Tool, previousRaw string, previousErr error) string {
+	toolsText := formatTaskActionTools(taskTools)
 	contextText := formatTaskActionContext(params)
 	if previousErr == nil {
 		return fmt.Sprintf(taskActionPromptTemplate, toolsText, contextText)
