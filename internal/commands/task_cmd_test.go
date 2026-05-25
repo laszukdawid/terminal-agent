@@ -32,10 +32,6 @@ func (s *fakeTaskService) ChatEvents(context.Context, app.ChatRequest) (<-chan a
 	panic("unexpected ChatEvents call")
 }
 
-func (s *fakeTaskService) Task(context.Context, app.TaskRequest) (app.TaskResult, error) {
-	panic("unexpected Task call")
-}
-
 func (s *fakeTaskService) TaskEvents(ctx context.Context, req app.TaskRequest) (<-chan app.Event, error) {
 	return s.events(ctx, req)
 }

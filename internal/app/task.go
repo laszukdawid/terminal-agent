@@ -33,10 +33,6 @@ type TaskResult struct {
 	DirectRawOutput bool
 }
 
-func (s *service) Task(ctx context.Context, req TaskRequest) (TaskResult, error) {
-	return executeTask(ctx, req, req.Interaction)
-}
-
 func (s *service) TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event, error) {
 	if strings.TrimSpace(req.Message) == "" {
 		return nil, internalagent.ErrEmptyQuery

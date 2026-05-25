@@ -10,7 +10,6 @@ type Service interface {
 	AskEvents(ctx context.Context, req AskRequest) (<-chan Event, error)
 	Chat(ctx context.Context, req ChatRequest) (ChatResult, error)
 	ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event, error)
-	Task(ctx context.Context, req TaskRequest) (TaskResult, error)
 	TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event, error)
 }
 
