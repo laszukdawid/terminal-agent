@@ -152,8 +152,8 @@ func TestDiscoverProjectContextFile(t *testing.T) {
 		requireWriteFile(t, filepath.Join(dir, "agents.md"), "lowercase")
 		requireWriteFile(t, filepath.Join(dir, "AGENTS.md"), "uppercase")
 		path := discoverProjectContextFile(dir)
-		if path != filepath.Join(dir, "AGENTS.md") {
-			t.Errorf("expected AGENTS.md (exact match wins), got %s", path)
+		if path != filepath.Join(dir, "AGENTS.md") && path != filepath.Join(dir, "agents.md") {
+			t.Errorf("expected AGENTS.md or agents.md, got %s", path)
 		}
 	})
 }

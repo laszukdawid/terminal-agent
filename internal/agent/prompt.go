@@ -110,12 +110,14 @@ func discoverProjectContextFile(workingDir string) string {
 		return ""
 	}
 
+	byLower := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		byLower[strings.ToLower(entry.Name())] = entry.Name()
+	}
+
 	for _, candidate := range projectContextFileNames {
-		lower := strings.ToLower(candidate)
-		for _, entry := range entries {
-			if strings.ToLower(entry.Name()) == lower {
-				return filepath.Join(workingDir, entry.Name())
-			}
+		if name, ok := byLower[strings.ToLower(candidate)]; ok {
+			return filepath.Join(workingDir, name)
 		}
 	}
 	return ""
