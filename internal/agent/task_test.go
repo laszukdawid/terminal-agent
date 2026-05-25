@@ -317,32 +317,125 @@ func TestSelectRawTaskOutput(t *testing.T) {
 func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 	utils.GetLogger()
 
+	finalSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"final": map[string]string{
+				"type":        "boolean",
+				"description": "Set to true only when the query results themselves fully answer the user's request and should be returned directly without another model summary round.",
+			},
+		},
+	}
+
 	conn := &scriptedToolConnector{
 		responses: []connector.LlmResponseWithTools{{
 			ToolUse:   true,
-			ToolName:  tools.ToolNameFileSearch,
-			ToolInput: map[string]any{"contains": "task", "final": true},
+			ToolName:  "query_db",
+			ToolInput: map[string]any{"sql": "SELECT 1", "final": true},
 		}},
 	}
 	sysPrompt := "task system prompt"
 	agent := &Agent{
 		Connector: conn,
 		Tools: map[string]tools.Tool{
-			tools.ToolNameFileSearch: &fixedOutputTool{name: tools.ToolNameFileSearch, output: "a.go\nb.go"},
+			"query_db": &schemaOutputTool{name: "query_db", output: "column\n------\n1", schema: finalSchema},
 		},
 		systemPromptTask: &sysPrompt,
 		maxTokens:        MaxTokens,
 	}
 
-	result, err := agent.TaskWithOptionsResult(context.Background(), "list matching files", TaskOptions{})
+	result, err := agent.TaskWithOptionsResult(context.Background(), "query the database", TaskOptions{})
 
 	require.NoError(t, err)
 	assert.True(t, result.DirectRawOutput)
-	assert.Equal(t, "a.go\nb.go", result.RawOutput)
-	assert.Equal(t, tools.ToolNameFileSearch, result.RawOutputTool)
-	assert.Equal(t, "a.go\nb.go", result.DisplayText())
+	assert.Equal(t, "column\n------\n1", result.RawOutput)
+	assert.Equal(t, "query_db", result.RawOutputTool)
+	assert.Equal(t, "column\n------\n1", result.DisplayText())
 	assert.Equal(t, 1, conn.queryToolCalls)
 	assert.Equal(t, 0, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultIgnoresFinalForToolWithoutSchemaField(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: "api_call", ToolInput: map[string]any{"endpoint": "/data", "final": true}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			"api_call": &fixedOutputTool{name: "api_call", output: "api result"},
+			ToolNameFinalAnswer: &finalAnswerTool{
+				name:        ToolNameFinalAnswer,
+				description: "final answer",
+				inputSchema: map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"answer": map[string]string{"type": "string"}},
+					"required":   []string{"answer"},
+				},
+			},
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "call api then finish", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.False(t, result.DirectRawOutput)
+	assert.Equal(t, "done", result.Response)
+	assert.Equal(t, 2, conn.queryToolCalls)
+}
+
+func TestTaskWithOptionsResultIgnoresFinalWithConflictingSemantics(t *testing.T) {
+	utils.GetLogger()
+
+	conflictingSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"document_id": map[string]string{"type": "string"},
+			"final": map[string]string{
+				"type":        "boolean",
+				"description": "Set to true to finalize the document and prevent further edits.",
+			},
+		},
+	}
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: "doc_finalize", ToolInput: map[string]any{"document_id": "abc", "final": true}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			"doc_finalize": &schemaOutputTool{name: "doc_finalize", output: "document finalized", schema: conflictingSchema},
+			ToolNameFinalAnswer: &finalAnswerTool{
+				name:        ToolNameFinalAnswer,
+				description: "final answer",
+				inputSchema: map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"answer": map[string]string{"type": "string"}},
+					"required":   []string{"answer"},
+				},
+			},
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "finalize document", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.False(t, result.DirectRawOutput)
+	assert.Equal(t, "done", result.Response)
+	assert.Equal(t, 2, conn.queryToolCalls)
 }
 
 func TestTaskWithOptionsResultPropagatesDevice(t *testing.T) {

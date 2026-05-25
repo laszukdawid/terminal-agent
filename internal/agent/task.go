@@ -223,7 +223,7 @@ func (a *Agent) executeTaskTool(logger *zap.SugaredLogger, run *taskExecutionSta
 		run.state.Phase = TaskPhaseCompleted
 		return run.finalAnswerResult(toolResult), true, nil
 	}
-	if toolInputRequestsFinal(response.ToolInput) && isDisplayOrientedTool(response.ToolName) {
+	if toolInputRequestsFinal(response.ToolInput) && toolSupportsFinal(tool) {
 		run.state.Phase = TaskPhaseCompleted
 		return TaskRunResult{
 			Response:        toolResult,
@@ -768,10 +768,6 @@ func selectRawTaskOutput(outputs []taskToolOutput) taskToolOutput {
 
 func toolInputRequestsFinal(input map[string]any) bool {
 	return taskToolInputRequestsFinal(input)
-}
-
-func isDisplayOrientedTool(toolName string) bool {
-	return isTaskDisplayOrientedTool(toolName)
 }
 
 func requiresConfirmation(toolName string) bool {
