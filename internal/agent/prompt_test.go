@@ -128,6 +128,34 @@ func TestDiscoverProjectContextFile(t *testing.T) {
 			t.Errorf("expected empty string, got %s", path)
 		}
 	})
+
+	t.Run("case insensitive matching for agents.md", func(t *testing.T) {
+		dir := t.TempDir()
+		requireWriteFile(t, filepath.Join(dir, "agents.md"), "lowercase context")
+		path := discoverProjectContextFile(dir)
+		if path != filepath.Join(dir, "agents.md") {
+			t.Errorf("expected agents.md, got %s", path)
+		}
+	})
+
+	t.Run("case insensitive matching for claude.md", func(t *testing.T) {
+		dir := t.TempDir()
+		requireWriteFile(t, filepath.Join(dir, "claude.md"), "claude lowercase")
+		path := discoverProjectContextFile(dir)
+		if path != filepath.Join(dir, "claude.md") {
+			t.Errorf("expected claude.md, got %s", path)
+		}
+	})
+
+	t.Run("AGENTS.md still wins over agents.md due to priority", func(t *testing.T) {
+		dir := t.TempDir()
+		requireWriteFile(t, filepath.Join(dir, "agents.md"), "lowercase")
+		requireWriteFile(t, filepath.Join(dir, "AGENTS.md"), "uppercase")
+		path := discoverProjectContextFile(dir)
+		if path != filepath.Join(dir, "AGENTS.md") {
+			t.Errorf("expected AGENTS.md (exact match wins), got %s", path)
+		}
+	})
 }
 
 func TestReadProjectContext(t *testing.T) {

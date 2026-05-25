@@ -98,15 +98,24 @@ Current system context:
 var projectContextFileNames = []string{"AGENTS.md", "CLAUDE.md", ".agentrules"}
 
 // discoverProjectContextFile returns the path to the first found project context file
-// in the working directory, or an empty string if none exist.
+// in the working directory, or an empty string if none exist. Matching is case-insensitive
+// and files are checked in priority order (AGENTS.md > CLAUDE.md > .agentrules).
 func discoverProjectContextFile(workingDir string) string {
 	if workingDir == "" {
 		return ""
 	}
-	for _, name := range projectContextFileNames {
-		path := filepath.Join(workingDir, name)
-		if _, err := os.Stat(path); err == nil {
-			return path
+
+	entries, err := os.ReadDir(workingDir)
+	if err != nil {
+		return ""
+	}
+
+	for _, candidate := range projectContextFileNames {
+		lower := strings.ToLower(candidate)
+		for _, entry := range entries {
+			if strings.ToLower(entry.Name()) == lower {
+				return filepath.Join(workingDir, entry.Name())
+			}
 		}
 	}
 	return ""
