@@ -186,9 +186,9 @@ func promptTaskConfirmation(cmd *cobra.Command, reader *bufio.Reader, confirmati
 	switch strings.TrimSpace(strings.ToLower(response)) {
 	case "y", "yes":
 		return app.TaskConfirmationResponse{Allowed: true}, nil
-	case "yes!":
+	case "y!", "yes!":
 		return app.TaskConfirmationResponse{Allowed: true, Remember: true}, nil
-	case "no!":
+	case "n!", "no!":
 		return app.TaskConfirmationResponse{Remember: true}, nil
 	default:
 		return app.TaskConfirmationResponse{}, nil
