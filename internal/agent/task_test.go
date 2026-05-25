@@ -355,6 +355,52 @@ func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 	assert.Equal(t, 0, conn.queryCalls)
 }
 
+func TestToolSupportsFinal(t *testing.T) {
+	t.Run("built-in tool opt-in", func(t *testing.T) {
+		assert.True(t, toolSupportsFinal(tools.NewReadTool("")))
+	})
+
+	t.Run("custom schema with matching final semantics", func(t *testing.T) {
+		tool := &schemaOutputTool{
+			name:   "query_db",
+			output: "ok",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"final": map[string]string{
+						"type":        "boolean",
+						"description": "Set to true only when the query results themselves fully answer the user's request and should be returned directly without another model summary round.",
+					},
+				},
+			},
+		}
+
+		assert.True(t, toolSupportsFinal(tool))
+	})
+
+	t.Run("tool without final field", func(t *testing.T) {
+		assert.False(t, toolSupportsFinal(&fixedOutputTool{name: "api_call", output: "ok"}))
+	})
+
+	t.Run("tool with conflicting final semantics", func(t *testing.T) {
+		tool := &schemaOutputTool{
+			name:   "doc_finalize",
+			output: "done",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"final": map[string]string{
+						"type":        "boolean",
+						"description": "Set to true to finalize the document and prevent further edits.",
+					},
+				},
+			},
+		}
+
+		assert.False(t, toolSupportsFinal(tool))
+	})
+}
+
 func TestTaskWithOptionsResultIgnoresFinalForToolWithoutSchemaField(t *testing.T) {
 	utils.GetLogger()
 
@@ -368,16 +414,8 @@ func TestTaskWithOptionsResultIgnoresFinalForToolWithoutSchemaField(t *testing.T
 	agent := &Agent{
 		Connector: conn,
 		Tools: map[string]tools.Tool{
-			"api_call": &fixedOutputTool{name: "api_call", output: "api result"},
-			ToolNameFinalAnswer: &finalAnswerTool{
-				name:        ToolNameFinalAnswer,
-				description: "final answer",
-				inputSchema: map[string]any{
-					"type":       "object",
-					"properties": map[string]any{"answer": map[string]string{"type": "string"}},
-					"required":   []string{"answer"},
-				},
-			},
+			"api_call":          &fixedOutputTool{name: "api_call", output: "api result"},
+			ToolNameFinalAnswer: NewFinalAnswerTool(),
 		},
 		systemPromptTask: &sysPrompt,
 		maxTokens:        MaxTokens,
@@ -415,16 +453,8 @@ func TestTaskWithOptionsResultIgnoresFinalWithConflictingSemantics(t *testing.T)
 	agent := &Agent{
 		Connector: conn,
 		Tools: map[string]tools.Tool{
-			"doc_finalize": &schemaOutputTool{name: "doc_finalize", output: "document finalized", schema: conflictingSchema},
-			ToolNameFinalAnswer: &finalAnswerTool{
-				name:        ToolNameFinalAnswer,
-				description: "final answer",
-				inputSchema: map[string]any{
-					"type":       "object",
-					"properties": map[string]any{"answer": map[string]string{"type": "string"}},
-					"required":   []string{"answer"},
-				},
-			},
+			"doc_finalize":      &schemaOutputTool{name: "doc_finalize", output: "document finalized", schema: conflictingSchema},
+			ToolNameFinalAnswer: NewFinalAnswerTool(),
 		},
 		systemPromptTask: &sysPrompt,
 		maxTokens:        MaxTokens,
