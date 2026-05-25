@@ -18,8 +18,9 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	var allowList *[]string
 
 	cmd := &cobra.Command{
-		Use:   "task",
-		Short: "Execute a task using the underlying LLM model",
+		Use:          "task",
+		Short:        "Execute a task using the underlying LLM model",
+		SilenceUsage: true,
 		Long: `Execute a task using the underlying LLM model
 
 		Any remaining argument that isn't captured by the flags will be concatenated to form the query.`,

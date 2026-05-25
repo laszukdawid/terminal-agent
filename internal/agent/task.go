@@ -152,7 +152,7 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState) (TaskRunResult, bool, error) {
 	response, err := a.queryTaskResponse(ctx, run.state)
 	if err != nil {
-		logger.Errorw("Error querying model", "iteration", run.state.Iterations, "error", err)
+		logger.Debugw("Error querying model", "iteration", run.state.Iterations, "error", err)
 		return TaskRunResult{}, false, fmt.Errorf("error during task processing: %w", err)
 	}
 
@@ -598,7 +598,7 @@ func parseTaskActionFallbackResponse(raw string) (taskActionFallbackResponse, er
 	trimmed := strings.TrimSpace(raw)
 	candidates := extractJSONObjects(trimmed)
 	if len(candidates) == 0 {
-		return taskActionFallbackResponse{}, fmt.Errorf("task fallback response did not contain a JSON object: %q", trimmed)
+		return taskActionFallbackResponse{}, fmt.Errorf("task fallback response did not contain a valid JSON object")
 	}
 
 	var lastErr error

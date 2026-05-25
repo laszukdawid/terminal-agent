@@ -24,7 +24,10 @@ func InitLogger(loglevel *string) (*zap.Logger, error) {
 		cfg.DisableStacktrace = true
 		Logger, err = cfg.Build()
 	case zap.InfoLevel.String():
-		Logger, err = zap.NewProduction()
+		cfg := zap.NewProductionConfig()
+		cfg.Level.SetLevel(zap.InfoLevel)
+		cfg.DisableStacktrace = true
+		Logger, err = cfg.Build()
 	default:
 		Logger, err = zap.NewDevelopment()
 	}
