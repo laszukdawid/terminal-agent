@@ -60,9 +60,6 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 
 	agentInstance := runtime.NewAgent(prompts)
 	agentInstance.SetDevice(req.Device)
-	if agentInstance.Connector == nil {
-		return nil, fmt.Errorf("failed to initialize %s connector", req.Provider)
-	}
 	events := make(chan Event)
 
 	go func() {

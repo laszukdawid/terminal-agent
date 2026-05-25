@@ -22,7 +22,6 @@ type TaskRequest struct {
 	Allow          []string
 	Device         string
 	Config         config.Config
-	Interaction    internalagent.TaskInteraction
 }
 
 type TaskResult struct {

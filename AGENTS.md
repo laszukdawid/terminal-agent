@@ -10,10 +10,11 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 
 `internal/app` is the shared application-service layer used by both the CLI and the GUI.
 
-- CLI commands in `internal/commands/` call `internal/app` service methods such as `Ask`, `AskEvents`, `Chat`, and `Task`.
+- CLI commands in `internal/commands/` call `internal/app` service methods such as `Ask`, `AskEvents`, `Chat`, and `TaskEvents`.
 - GUI code in `internal/gui/` also depends on the same `internal/app` service interface rather than talking directly to connectors or prompt helpers.
 - Changes in `internal/app` should therefore be reviewed as cross-surface changes even when only one entrypoint appears to be affected.
 - The `llama` provider is a direct local runtime, not an HTTP API integration. It resolves model aliases from config and loads GGUF files plus a local llama.cpp shared library inside the current process.
+- Task execution is event-driven at the app layer. `internal/agent` orchestrates task steps and tool use, while confirmation and clarification transport is handled outside the agent core.
 
 Prompt and runtime behavior is also shared through this layer, with one important distinction:
 
