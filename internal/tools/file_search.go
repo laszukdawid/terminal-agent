@@ -41,10 +41,7 @@ func NewFileSearchTool(workDir string) *FileSearchTool {
 			"type":        "integer",
 			"description": "Maximum number of results to return",
 		},
-		"final": map[string]string{
-			"type":        "boolean",
-			"description": "Set to true only when the search results themselves fully answer the user's request and should be returned directly without another model summary round.",
-		},
+		"final": NewFinalOutputField("Set to true only when the search results themselves fully answer the user's request and should be returned directly without another model summary round."),
 	}
 
 	inputSchema := map[string]any{

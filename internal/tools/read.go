@@ -39,10 +39,7 @@ func NewReadTool(workDir string) *ReadTool {
 					"type":        "integer",
 					"description": "Maximum number of lines to read (default reads all lines from offset)",
 				},
-				"final": map[string]string{
-					"type":        "boolean",
-					"description": "Set to true only when the file contents themselves fully answer the user's request and should be returned directly without another model summary round.",
-				},
+				"final": NewFinalOutputField("Set to true only when the file contents themselves fully answer the user's request and should be returned directly without another model summary round."),
 			},
 			"required": []string{"path"},
 		},

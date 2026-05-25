@@ -138,8 +138,8 @@ func toolSupportsFinal(tool tools.Tool) bool {
 	if typeName != "boolean" {
 		return false
 	}
-	desc, _ := finalSchema["description"].(string)
-	return strings.Contains(desc, "returned directly without another")
+	optIn, _ := finalSchema[tools.DirectOutputSchemaFlag].(bool)
+	return optIn
 }
 
 func isTaskDisplayOrientedTool(toolName string) bool {
