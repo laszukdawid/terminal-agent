@@ -144,3 +144,63 @@ func TestStreamOAuthResponseUsesCodexRequestContract(t *testing.T) {
 		t.Fatalf("ChatGPT-Account-ID = %q, want %q", got, "account-1")
 	}
 }
+
+func TestStreamOAuthResponseFallsBackToStreamedText(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`event: response.created
+data: {"type":"response.created","response":{"id":"resp_1","object":"response","created_at":1,"status":"in_progress","instructions":"You are helpful","model":"gpt-5.4","output":[],"parallel_tool_calls":true,"store":false,"tools":[],"usage":null},"sequence_number":0}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","item":{"id":"msg_1","type":"message","status":"in_progress","content":[],"phase":"final_answer","role":"assistant"},"output_index":0,"sequence_number":1}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","content_index":0,"item_id":"msg_1","output_index":0,"part":{"type":"output_text","annotations":[],"logprobs":[],"text":""},"sequence_number":2}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":"Hello","item_id":"msg_1","logprobs":[],"obfuscation":"abc","output_index":0,"sequence_number":3}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":"!","item_id":"msg_1","logprobs":[],"obfuscation":"def","output_index":0,"sequence_number":4}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","content_index":0,"item_id":"msg_1","logprobs":[],"output_index":0,"sequence_number":5,"text":"Hello!"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"id":"msg_1","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":"Hello!"}],"phase":"final_answer","role":"assistant"},"output_index":0,"sequence_number":6}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_1","object":"response","created_at":1,"status":"completed","instructions":"You are helpful","model":"gpt-5.4","output":[],"parallel_tool_calls":true,"store":false,"tools":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}},"sequence_number":7}
+
+`))
+	}))
+	defer server.Close()
+
+	client := openai.NewClient(
+		option.WithAPIKey("token"),
+		option.WithBaseURL(server.URL),
+	)
+	oc := &OpenAIConnector{
+		client:  &client,
+		logger:  *zap.NewNop(),
+		modelID: "gpt-5.4",
+	}
+
+	sysPrompt := "You are helpful"
+	userPrompt := "hello"
+	params := buildResponsesParams("gpt-5.4", &QueryParams{
+		SysPrompt:  &sysPrompt,
+		UserPrompt: &userPrompt,
+	})
+
+	_, text, err := oc.streamOAuthResponse(context.Background(), &QueryParams{
+		SysPrompt:  &sysPrompt,
+		UserPrompt: &userPrompt,
+	}, params)
+	if err != nil {
+		t.Fatalf("streamOAuthResponse() error = %v", err)
+	}
+	if text == nil || *text != "Hello!" {
+		t.Fatalf("streamOAuthResponse() text = %v, want Hello!", text)
+	}
+}

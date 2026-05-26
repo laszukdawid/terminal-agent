@@ -136,6 +136,35 @@ func TestResolveOpenAIAuthReturnsStoredOAuth(t *testing.T) {
 	}
 }
 
+func TestResolveOpenAIAuthPrefersStoredOAuthOverEnvironment(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+		Type:      CredentialTypeOAuth,
+		Access:    "access-token",
+		Refresh:   "refresh-token",
+		Expires:   time.Now().Add(time.Hour).UnixMilli(),
+		AccountID: "workspace-1",
+	}); err != nil {
+		t.Fatalf("SaveProvider() error = %v", err)
+	}
+
+	t.Setenv("OPENAI_API_KEY", "sk-env")
+
+	resolved, err := mgr.ResolveOpenAIAuth()
+	if err != nil {
+		t.Fatalf("ResolveOpenAIAuth() error = %v", err)
+	}
+	if resolved.Type != CredentialTypeOAuth {
+		t.Fatalf("resolved.Type = %q, want %q", resolved.Type, CredentialTypeOAuth)
+	}
+	if resolved.Source != SourceStored {
+		t.Fatalf("resolved.Source = %q, want %q", resolved.Source, SourceStored)
+	}
+	if resolved.Token != "access-token" {
+		t.Fatalf("resolved.Token = %q, want stored OAuth access token", resolved.Token)
+	}
+}
+
 func TestResolveOpenAIAuthRejectsExpiredStoredOAuth(t *testing.T) {
 	mgr := newTestManager(t)
 	if err := mgr.SaveProvider(ProviderOpenAI, Credential{

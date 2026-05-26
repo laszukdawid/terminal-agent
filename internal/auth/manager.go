@@ -139,6 +139,16 @@ func (m *Manager) ResolveOpenAIAuth() (ResolvedAuth, error) {
 }
 
 func (m *Manager) lookupOpenAICredential() (Credential, string, bool, error) {
+	authFile, err := m.Load()
+	if err != nil {
+		return Credential{}, "", false, err
+	}
+
+	credential, exists := authFile[ProviderOpenAI]
+	if exists && credential.Type == CredentialTypeOAuth {
+		return credential, SourceStored, true, nil
+	}
+
 	if envKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); envKey != "" {
 		return Credential{
 			Type: CredentialTypeAPIKey,
@@ -146,15 +156,9 @@ func (m *Manager) lookupOpenAICredential() (Credential, string, bool, error) {
 		}, SourceEnvironment, true, nil
 	}
 
-	authFile, err := m.Load()
-	if err != nil {
-		return Credential{}, "", false, err
+	if exists {
+		return credential, SourceStored, true, nil
 	}
 
-	credential, exists := authFile[ProviderOpenAI]
-	if !exists {
-		return Credential{}, "", false, nil
-	}
-
-	return credential, SourceStored, true, nil
+	return Credential{}, "", false, nil
 }

@@ -122,6 +122,9 @@ func (oc *OpenAIConnector) streamOAuthResponse(ctx context.Context, qParams *Que
 
 	if completedResponse != nil {
 		text := completedResponse.OutputText()
+		if text == "" && streamedText.Len() > 0 {
+			text = streamedText.String()
+		}
 		return completedResponse, &text, nil
 	}
 
