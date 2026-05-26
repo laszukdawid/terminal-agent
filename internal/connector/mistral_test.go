@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/stretchr/testify/assert"
@@ -398,6 +400,99 @@ func TestMistralErrorResponseNonJSON(t *testing.T) {
 	parseErr := mc.parseErrorResponse(resp)
 	assert.Error(t, parseErr)
 	assert.Contains(t, parseErr.Error(), "status 500")
+}
+
+func TestMistralQueryRetriesRateLimitThenSucceeds(t *testing.T) {
+	previousRetries := mistralMaxRateLimitRetries
+	previousBase := mistralRateLimitBackoffBase
+	previousMax := mistralRateLimitBackoffMax
+	mistralMaxRateLimitRetries = 2
+	mistralRateLimitBackoffBase = time.Millisecond
+	mistralRateLimitBackoffMax = 2 * time.Millisecond
+	defer func() {
+		mistralMaxRateLimitRetries = previousRetries
+		mistralRateLimitBackoffBase = previousBase
+		mistralRateLimitBackoffMax = previousMax
+	}()
+
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := requests.Add(1)
+		if attempt == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"object":"error","message":"Rate limit exceeded","type":"rate_limit","code":"rate_limit_exceeded"}`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"1","model":"test","choices":[{"message":{"content":"formatted"}}]}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("MISTRAL_API_KEY", "test-key")
+	t.Setenv("MISTRAL_BASE_URL", server.URL)
+	modelID := "mistral-small-latest"
+	mc := NewMistralConnector(&modelID)
+	if mc == nil {
+		t.Fatal("Expected connector to be created")
+	}
+
+	userPrompt := "format this"
+	result, err := mc.Query(t.Context(), &QueryParams{UserPrompt: &userPrompt})
+	assert.NoError(t, err)
+	assert.Equal(t, "formatted", result)
+	assert.EqualValues(t, 2, requests.Load())
+}
+
+func TestMistralQueryReturnsRateLimitAfterRetriesExhausted(t *testing.T) {
+	previousRetries := mistralMaxRateLimitRetries
+	previousBase := mistralRateLimitBackoffBase
+	previousMax := mistralRateLimitBackoffMax
+	mistralMaxRateLimitRetries = 2
+	mistralRateLimitBackoffBase = time.Millisecond
+	mistralRateLimitBackoffMax = 2 * time.Millisecond
+	defer func() {
+		mistralMaxRateLimitRetries = previousRetries
+		mistralRateLimitBackoffBase = previousBase
+		mistralRateLimitBackoffMax = previousMax
+	}()
+
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"object":"error","message":"Rate limit exceeded","type":"rate_limit","code":"rate_limit_exceeded"}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("MISTRAL_API_KEY", "test-key")
+	t.Setenv("MISTRAL_BASE_URL", server.URL)
+	modelID := "mistral-small-latest"
+	mc := NewMistralConnector(&modelID)
+	if mc == nil {
+		t.Fatal("Expected connector to be created")
+	}
+
+	userPrompt := "format this"
+	_, err := mc.Query(t.Context(), &QueryParams{UserPrompt: &userPrompt})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Rate limit exceeded")
+	assert.EqualValues(t, 3, requests.Load())
+}
+
+func TestParseRetryAfterDelay(t *testing.T) {
+	assert.Equal(t, 2*time.Second, parseRetryAfterDelay("2"))
+
+	future := time.Now().Add(1500 * time.Millisecond).UTC().Format(http.TimeFormat)
+	delay := parseRetryAfterDelay(future)
+	assert.Greater(t, delay, time.Duration(0))
+	assert.LessOrEqual(t, delay, 2*time.Second)
+
+	assert.Equal(t, time.Duration(0), parseRetryAfterDelay("bogus"))
+	assert.Equal(t, time.Duration(0), parseRetryAfterDelay("0"))
 }
 
 func TestMistralSupportsNativeToolCalling(t *testing.T) {

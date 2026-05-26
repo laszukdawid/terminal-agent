@@ -18,7 +18,6 @@ func (b *BashExecutor) Exec(code string) (string, error) {
 
 	// Set working directory if provided
 	if b.workDir != "" {
-		fmt.Printf("Working directory: %s\n", b.workDir)
 		cmd.Dir = b.workDir
 	}
 

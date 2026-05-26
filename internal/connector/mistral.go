@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,12 @@ const (
 	DefaultMistralModel = "mistral-small-latest"
 
 	DefaultMistralBaseURL = "https://api.mistral.ai"
+)
+
+var (
+	mistralMaxRateLimitRetries  = 3
+	mistralRateLimitBackoffBase = time.Second
+	mistralRateLimitBackoffMax  = 8 * time.Second
 )
 
 type MistralRequest struct {
@@ -201,14 +208,7 @@ func (mc *MistralConnector) Query(ctx context.Context, params *QueryParams) (str
 	}
 
 	url := mc.baseURL + "/v1/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+mc.apiKey)
-
-	resp, err := mc.httpClient.Do(req)
+	resp, err := mc.doRequestWithRateLimitRetry(ctx, url, requestBody)
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
@@ -267,16 +267,9 @@ func (mc *MistralConnector) QueryWithTool(ctx context.Context, params *QueryPara
 	}
 
 	url := mc.baseURL + "/v1/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return response, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+mc.apiKey)
-
 	mc.logger.Sugar().Debugw("Sending message to Mistral", "userPrompt", *params.UserPrompt, "tools", len(mistralTools))
 
-	resp, err := mc.httpClient.Do(req)
+	resp, err := mc.doRequestWithRateLimitRetry(ctx, url, requestBody)
 	if err != nil {
 		return response, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -332,6 +325,85 @@ func (mc *MistralConnector) QueryWithTool(ctx context.Context, params *QueryPara
 
 func (mc *MistralConnector) SupportsNativeToolCalling() bool {
 	return true
+}
+
+func (mc *MistralConnector) doRequestWithRateLimitRetry(ctx context.Context, url string, requestBody []byte) (*http.Response, error) {
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(requestBody))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+mc.apiKey)
+
+		resp, err := mc.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode != http.StatusTooManyRequests || attempt >= mistralMaxRateLimitRetries {
+			return resp, nil
+		}
+
+		delay := mistralRateLimitDelay(resp, attempt)
+		mc.logger.Sugar().Warnw("Mistral rate limited, retrying request", "attempt", attempt+1, "maxRetries", mistralMaxRateLimitRetries, "delay", delay)
+		resp.Body.Close()
+
+		if err := sleepWithContext(ctx, delay); err != nil {
+			return nil, err
+		}
+	}
+}
+
+func mistralRateLimitDelay(resp *http.Response, attempt int) time.Duration {
+	if delay := parseRetryAfterDelay(resp.Header.Get("Retry-After")); delay > 0 {
+		return delay
+	}
+
+	delay := mistralRateLimitBackoffBase << attempt
+	if delay > mistralRateLimitBackoffMax {
+		return mistralRateLimitBackoffMax
+	}
+
+	return delay
+}
+
+func parseRetryAfterDelay(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds <= 0 {
+			return 0
+		}
+		return time.Duration(seconds) * time.Second
+	}
+
+	retryTime, err := http.ParseTime(value)
+	if err != nil {
+		return 0
+	}
+
+	delay := time.Until(retryTime)
+	if delay <= 0 {
+		return 0
+	}
+
+	return delay
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (mc *MistralConnector) parseCompletionResponse(resp *http.Response) (string, error) {
