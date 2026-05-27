@@ -117,6 +117,30 @@ tasks:
       - bash scripts/integ_ubuntu.sh --uninstall
     silent: false
 
+  deps:gui:macos:
+    desc: Check macOS GUI build dependencies (Xcode Command Line Tools)
+    cmds:
+      - |
+        if ! xcode-select -p >/dev/null 2>&1; then
+          echo "Xcode Command Line Tools not found."
+          echo "Install them with: xcode-select --install"
+          exit 1
+        fi
+        echo "Xcode Command Line Tools found at $(xcode-select -p)"
+    silent: false
+
+  integration:macos:
+    desc: Install macOS desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_macos.sh
+    silent: false
+
+  integration:macos:uninstall:
+    desc: Remove macOS desktop integration for the popup GUI
+    cmds:
+      - bash scripts/integ_macos.sh --uninstall
+    silent: false
+
   run:ask:
     vars:
       ARGS: "{{.CLI_ARGS}}"

@@ -48,7 +48,15 @@ If you are on Fedora, use:
 task integration:fedora
 ```
 
-Both integrations install `agent-gui` to `~/.local/bin/agent-gui` and set up the desktop launcher for the current user.
+If you are on macOS, use:
+
+```sh
+task integration:macos
+```
+
+The macOS integration creates a `Terminal Agent.app` bundle in `~/Applications/` and symlinks the binary to `~/.local/bin/agent-gui`.
+
+On Linux, both integrations install `agent-gui` to `~/.local/bin/agent-gui` and set up the desktop launcher for the current user.
 On GNOME, `Ctrl+Shift+Space` is configured automatically. On KDE Plasma, run the integration first, then bind a shortcut to the discovered `Terminal Agent Popup` entry in System Settings -> Keyboard -> Shortcuts.
 
 For local GUI development, especially if a launcher-managed popup instance is already running, start an isolated test instance with:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 )
 
@@ -44,7 +45,15 @@ func Acquire(appID string) (*Instance, error) {
 func RuntimeDir(appID string) string {
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {
-		runtimeDir = os.TempDir()
+		if runtime.GOOS == "darwin" {
+			// On macOS, os.TempDir() returns a process-specific TMPDIR that varies
+			// between launch contexts (terminal, Shortcuts.app, Spotlight). Using it
+			// would make IPC between those contexts impossible and can exceed the
+			// 104-byte Unix socket path limit. Use a fixed, short, user-scoped path.
+			runtimeDir = fmt.Sprintf("/tmp/terminal-agent-u%d", os.Getuid())
+		} else {
+			runtimeDir = os.TempDir()
+		}
 	}
 	return filepath.Join(runtimeDir, appID)
 }

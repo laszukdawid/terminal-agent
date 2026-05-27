@@ -67,14 +67,17 @@ In case you want to both build and set it in your path then execute `task instal
 To install the versioned Git pre-commit hook that runs the local test suite before each commit, execute `task install:pre-commit` or `go-task install:pre-commit`.
 
 If you want to test the popup GUI on Linux, install the desktop build dependencies first with `task deps:gui:ubuntu` or `task deps:gui:fedora`, then run it with `task run:gui`.
+On macOS, Xcode Command Line Tools provide all required build dependencies (`task deps:gui:macos` verifies this).
 These tasks currently use distro-specific package names for the Fyne desktop stack.
 
 If you want user-scoped desktop integration, run one of these tasks:
 
 - Ubuntu: `task integration:ubuntu`
 - Fedora: `task integration:fedora`
+- macOS: `task integration:macos`
 
-Both install `agent-gui` into `~/.local/bin/agent-gui`, write a desktop entry, configure the GNOME shortcut automatically, and let KDE Plasma discover `Terminal Agent Popup` in Shortcuts so you can bind `Ctrl+Shift+Space` there.
+On Linux, both install `agent-gui` into `~/.local/bin/agent-gui`, write a desktop entry, configure the GNOME shortcut automatically, and let KDE Plasma discover `Terminal Agent Popup` in Shortcuts so you can bind `Ctrl+Shift+Space` there.
+On macOS, the task creates a `Terminal Agent.app` bundle in `~/Applications/` and symlinks the binary to `~/.local/bin/agent-gui`.
 
 For majority of cases, do check out the `Taskfile.dist.yaml` as it has most relevant tasks / receipies.
 

@@ -33,6 +33,7 @@ nav:
   - Getting Started: getting-started.md
   - Integration:
       - Fedora: integration/fedora.md
+      - macOS: integration/macos.md
       - Ubuntu: integration/ubuntu.md
   - Commands:
       - Overview: commands.md
