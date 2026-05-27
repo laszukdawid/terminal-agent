@@ -16,6 +16,8 @@ import (
 
 const (
 	OpenaiProvider = "openai"
+
+	DefaultOpenAIModel = openai.ChatModelGPT4oMini
 )
 
 var (
@@ -96,7 +98,7 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 	logger.Debug("NewOpenAiConnector")
 
 	if modelID == nil || *modelID == "" {
-		model := openai.ChatModelGPT4oMini
+		model := DefaultOpenAIModel
 		modelID = &model
 	}
 	manager := auth.NewManager()

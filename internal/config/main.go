@@ -81,6 +81,7 @@ func NewDefaultConfig() *config {
 			"bedrock":   "anthropic.claude-3-haiku-20240307-v1:0",
 			"google":    "gemini-2.0-flash-lite",
 			"llama":     "llama3.2",
+			"mimo":      "mimo-v2.5-pro",
 			"mistral":   "mistral-small-latest",
 			"openai":    "gpt-4o-mini",
 			"ollama":    "llama3.2",

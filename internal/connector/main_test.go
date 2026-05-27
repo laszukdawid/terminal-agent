@@ -30,3 +30,13 @@ func TestNewConnectorCreatesMistralConnector(t *testing.T) {
 	require.NoError(t, err)
 	assert.IsType(t, &MistralConnector{}, conn)
 }
+
+func TestNewConnectorCreatesMiMoConnector(t *testing.T) {
+	t.Setenv("MIMO_API_KEY", "test-key")
+
+	conn, err := NewConnector(MiMoProvider, "mimo-v2.5-pro", nil)
+
+	require.NoError(t, err)
+	assert.IsType(t, &MiMoConnector{}, conn)
+	assert.Equal(t, "mimo-v2.5-pro", conn.(*MiMoConnector).modelID)
+}

@@ -138,6 +138,38 @@ export OPENAI_BASE_URL=https://your-custom-endpoint.com/v1
 
 **Auth resolution order:** When both a stored credential and `OPENAI_API_KEY` exist, the environment variable takes precedence.
 
+### Xiaomi MiMo
+
+MiMo uses an OpenAI-compatible chat completions API.
+
+**Setup:**
+1. Create an account at the [Xiaomi MiMo Open Platform](https://platform.xiaomimimo.com/)
+2. Generate an API key
+3. Set the key as an environment variable:
+   ```sh
+   export MIMO_API_KEY=your_api_key_here
+   ```
+
+**Configuration:**
+```sh
+agent config set provider mimo
+agent config set model mimo-v2.5-pro
+```
+
+**Custom API Endpoints:**
+If you need to override the default endpoint, set `MIMO_BASE_URL`:
+```sh
+export MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+```
+
+**Recommended Models:**
+- `mimo-v2.5-pro` - Default MiMo model
+
+**Special Features:**
+- Uses the OpenAI-compatible chat completions protocol
+- Supports streaming output with the `--stream` flag
+- Tool usage capability for the `task` command when supported by the selected MiMo model
+
 ### Anthropic
 
 **Setup:**

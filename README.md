@@ -206,6 +206,30 @@ agent auth status openai
 
 See `agent auth --help` for more authentication options.
 
+### Xiaomi MiMo
+
+Xiaomi MiMo exposes an OpenAI-compatible chat completions API.
+
+To use directly:
+1. Create an account at the [Xiaomi MiMo Open Platform](https://platform.xiaomimimo.com/)
+2. Generate an API key
+3. Set the key as an environment variable:
+   ```sh
+   export MIMO_API_KEY=your_api_key_here
+   ```
+
+Setting `mimo` provider with `mimo-v2.5-pro` model:
+
+```sh
+$ agent config set provider mimo
+$ agent config set model mimo-v2.5-pro
+```
+
+For a custom endpoint, set `MIMO_BASE_URL`:
+```sh
+export MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+```
+
 ### Mistral
 
 Mistral offers a range of models from the lightweight Ministral to the powerful Large model, all accessible through a straightforward API.

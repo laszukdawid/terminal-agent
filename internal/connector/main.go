@@ -14,6 +14,8 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 		connector = NewBedrockConnector((*BedrockModelID)(&modelID))
 	case OpenaiProvider:
 		connector = NewOpenAIConnector(&modelID)
+	case MiMoProvider:
+		connector = NewMiMoConnector(&modelID)
 	case AnthropicProvider:
 		connector = NewAnthropicConnector(&modelID)
 	case GoogleProvider:
