@@ -9,6 +9,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/chat"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 )
 
 type ChatRequest struct {
@@ -64,9 +65,13 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 	agentInstance.SetDevice(req.Device)
 	events := make(chan Event)
 
+	recorder := sessionlog.New(SessionDir(), buildMeta("chat", req.Provider, req.Model, req.WorkingDir, req.Message))
+
 	go func() {
 		defer close(events)
 		defer sessionStore.Close()
+
+		recorder.Write(sessionlog.Record{Type: sessionlog.RecordRequest, Kind: string(RunKindChat), Text: req.Message})
 
 		if err := emitEvent(ctx, events, newEvent(RunKindChat, EventStarted)); err != nil {
 			return
@@ -93,6 +98,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 		if err != nil {
 			failed := newEvent(RunKindChat, EventFailed)
 			failed.Err = err
+			recorder.Write(sessionlog.Record{Type: sessionlog.RecordFailed, Kind: string(RunKindChat), Error: err.Error()})
 			_ = emitEvent(ctx, events, failed)
 			return
 		}
@@ -100,6 +106,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 		if err := sessionStore.AddMessage("assistant", response); err != nil {
 			failed := newEvent(RunKindChat, EventFailed)
 			failed.Err = fmt.Errorf("failed to save assistant response: %w", err)
+			recorder.Write(sessionlog.Record{Type: sessionlog.RecordFailed, Kind: string(RunKindChat), Error: failed.Err.Error()})
 			_ = emitEvent(ctx, events, failed)
 			return
 		}
@@ -107,6 +114,7 @@ func (s *service) ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event
 		completed := newEvent(RunKindChat, EventCompleted)
 		completed.Status = strings.TrimSpace(userMessage)
 		completed.FinalOutput = response
+		recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Kind: string(RunKindChat), Text: response})
 		_ = emitEvent(ctx, events, completed)
 	}()
 

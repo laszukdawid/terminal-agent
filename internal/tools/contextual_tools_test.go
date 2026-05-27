@@ -76,7 +76,11 @@ func TestPythonToolRunSchemaWithContextUsesCurrentDir(t *testing.T) {
 	}, ToolExecutionContext{RootDir: rootDir, CurrentDir: currentDir})
 
 	require.NoError(t, err)
-	assert.Equal(t, currentDir, strings.TrimSpace(result))
+	// Python's os.getcwd() resolves symlinks (e.g. macOS /var -> /private/var), so compare
+	// against the resolved current dir rather than the raw t.TempDir()-derived path.
+	expectedCurrentDir, evalErr := filepath.EvalSymlinks(currentDir)
+	require.NoError(t, evalErr)
+	assert.Equal(t, expectedCurrentDir, strings.TrimSpace(result))
 }
 
 func TestUnixToolRunSchemaWithContextUsesCurrentDir(t *testing.T) {

@@ -44,5 +44,9 @@ func TestResolveTaskRootDirFallsBackToProcessCwd(t *testing.T) {
 	rootDir, err := resolveTaskRootDir(TaskRequest{Config: config.NewDefaultConfig()})
 
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Clean(tempDir), rootDir)
+	// os.Getwd resolves symlinks (e.g. macOS /var -> /private/var), so compare against
+	// the resolved temp dir rather than the raw t.TempDir() path.
+	expected, err := filepath.EvalSymlinks(tempDir)
+	require.NoError(t, err)
+	assert.Equal(t, expected, rootDir)
 }

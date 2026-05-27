@@ -8,6 +8,7 @@ import (
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 )
 
 type AskRequest struct {
@@ -62,8 +63,12 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 	agentInstance.SetDevice(req.Device)
 	events := make(chan Event)
 
+	recorder := sessionlog.New(SessionDir(), buildMeta("ask", req.Provider, req.Model, req.WorkingDir, req.Message))
+
 	go func() {
 		defer close(events)
+
+		recorder.Write(sessionlog.Record{Type: sessionlog.RecordRequest, Kind: string(RunKindAsk), Text: req.Message})
 
 		if err := emitEvent(ctx, events, newEvent(RunKindAsk, EventStarted)); err != nil {
 			return
@@ -89,6 +94,7 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 		if err != nil {
 			failed := newEvent(RunKindAsk, EventFailed)
 			failed.Err = err
+			recorder.Write(sessionlog.Record{Type: sessionlog.RecordFailed, Kind: string(RunKindAsk), Error: err.Error()})
 			_ = emitEvent(ctx, events, failed)
 			return
 		}
@@ -96,6 +102,7 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 		completed := newEvent(RunKindAsk, EventCompleted)
 		completed.Status = userQuestion
 		completed.FinalOutput = response
+		recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Kind: string(RunKindAsk), Text: response})
 		_ = emitEvent(ctx, events, completed)
 	}()
 

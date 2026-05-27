@@ -11,7 +11,9 @@ require (
 	github.com/charmbracelet/glamour v0.9.1
 	github.com/diverged/tavily-go v1.0.0
 	github.com/google/generative-ai-go v0.19.0
+	github.com/google/uuid v1.6.0
 	github.com/hybridgroup/yzma v1.14.1
+	github.com/jupiterrider/ffi v0.6.0
 	github.com/mark3labs/mcp-go v0.23.1
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/openai/openai-go v0.1.0-beta.10
@@ -19,6 +21,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
+	golang.org/x/term v0.38.0
 	google.golang.org/api v0.230.0
 )
 
@@ -71,7 +74,6 @@ require (
 	github.com/go-text/typesetting v0.3.3 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
@@ -80,7 +82,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
-	github.com/jupiterrider/ffi v0.6.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
@@ -117,7 +118,6 @@ require (
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect

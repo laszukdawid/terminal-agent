@@ -28,6 +28,7 @@ type TaskOptions struct {
 	Allow       []string
 	Dirs        TaskDirs
 	Interaction TaskInteraction
+	OnStep      func(TaskStep)
 }
 
 type TaskRunResult struct {
@@ -73,6 +74,14 @@ type taskExecutionState struct {
 	tools             map[string]tools.Tool
 	confirmations     *ConfirmationManager
 	successfulOutputs []taskToolOutput
+	onStep            func(TaskStep)
+}
+
+func (r *taskExecutionState) appendStep(step TaskStep) {
+	r.state.appendStep(step)
+	if r.onStep != nil {
+		r.onStep(r.state.Steps[len(r.state.Steps)-1])
+	}
 }
 
 type taskUserConfirmationRequester struct {
@@ -173,6 +182,7 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		tools:             a.buildTaskTools(interaction),
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
+		onStep:            options.OnStep,
 	}, nil
 }
 
@@ -292,11 +302,11 @@ func (r *taskExecutionState) recordThought(thought string) {
 	if thought == "" {
 		return
 	}
-	r.state.appendStep(TaskStep{Status: TaskStepStatusThought, Thought: thought})
+	r.appendStep(TaskStep{Status: TaskStepStatusThought, Thought: thought})
 }
 
 func (r *taskExecutionState) recordFailure(response connector.LlmResponseWithTools, err error) {
-	r.state.appendStep(TaskStep{
+	r.appendStep(TaskStep{
 		Status:    TaskStepStatusFailed,
 		Thought:   response.Response,
 		ToolName:  response.ToolName,
@@ -306,7 +316,7 @@ func (r *taskExecutionState) recordFailure(response connector.LlmResponseWithToo
 }
 
 func (r *taskExecutionState) recordDeclined(response connector.LlmResponseWithTools) {
-	r.state.appendStep(TaskStep{
+	r.appendStep(TaskStep{
 		Status:    TaskStepStatusDeclined,
 		Thought:   response.Response,
 		ToolName:  response.ToolName,
@@ -328,7 +338,7 @@ func (r *taskExecutionState) recordSuccess(response connector.LlmResponseWithToo
 		step.ToolOutput = ""
 		step.FinalAnswer = toolResult
 	}
-	r.state.appendStep(step)
+	r.appendStep(step)
 }
 
 func (r *taskExecutionState) handleDirectoryChange(response connector.LlmResponseWithTools, logger *zap.SugaredLogger) {

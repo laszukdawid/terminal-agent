@@ -329,6 +329,7 @@ Current limitations:
 - [x] **websearch**: Can search the web and display links
 - [x] **unix**: Designs and evaluates a unix command
 - [x] **custom prompts**: Override system prompts via CLI flag or project files
+- [x] **session logs**: Always-on, per-run execution log written as JSONL
 
 Provider-specific capability notes:
 
@@ -379,6 +380,29 @@ Every LLM request includes a system prompt built from several layers:
 3. **Memory** (`ask` only) — when enabled via config or the `--memory`/`-M` flag, stored memory entries are formatted and prepended to the system prompt
 
 4. **Context files** (`ask` only) — the `--context`/`-c` flag reads specified files and wraps each in `<context>` tags, prepended to the user message
+
+### Session Logs
+
+Every `ask`, `chat`, and `task` invocation writes a per-run execution log so you can inspect exactly what happened after the fact. This is **always on** and **file-only** — it never changes terminal output.
+
+- **Location:** `~/.local/share/terminal-agent/sessions/`
+- **One file per run**, named `{timestamp}_{kind}_{shortid}.jsonl` (e.g. `2026-05-26T15-47-51_ask_ac6781.jsonl`), so `ls` alone shows when each run happened and which command it was.
+- **Format:** newline-delimited JSON (JSONL), one record per step.
+
+The first line is always a `meta` header carrying provenance — `created_at`, `run_id`, `kind`, `user`, `cwd`, `provider`, `model`, and the request `command`. Subsequent lines capture the full run:
+
+| `type` | Recorded for |
+| --- | --- |
+| `request` | the user's input |
+| `thought` | the model's internal reasoning (`task`) |
+| `tool_call` | an attempted tool that failed validation/execution |
+| `tool_result` | a successful tool call, with its name, input, and output |
+| `confirmation` | a tool action that required user approval |
+| `declined` | a tool the user declined to run |
+| `completed` | the final response |
+| `failed` | an error that ended the run |
+
+Streamed output chunks are not logged individually; the aggregated answer is captured in the `completed` record. Inspect a run with, for example, `cat <file> | jq .`. Logging never blocks or fails a run — write errors are logged at warn level and otherwise ignored.
 
 ## Philosphy
 

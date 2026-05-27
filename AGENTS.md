@@ -30,6 +30,16 @@ Task execution has a direct-output path for output-oriented tools:
 - Use this for requests where the tool output itself is the answer, such as listing files or printing search results.
 - Permission matching should ignore the `final` field so `unix("ls -la", final=true)` is treated like `unix("ls -la")` for allow/deny purposes.
 
+## Session Logging
+
+Every `ask`, `chat`, and `task` run writes an always-on, file-only execution log (one JSONL file per run) under `~/.local/share/terminal-agent/sessions/`, named `{timestamp}_{kind}_{shortid}.jsonl`. See `internal/sessionlog` (the `Recorder`, `Meta` header, and unified `Record` schema) and the inline `recorder.Write` calls in each app-layer flow.
+
+- The recorder is created per run at the app boundary (`AskEvents`/`ChatEvents`/`TaskEvents`) and writes a `meta` provenance header first (`user`, `cwd`, `provider`, `model`, `command`, `created_at` — intentionally no hostname).
+- For `ask`/`chat`, recording is inlined at each call site (request, completed, failed). For `task`, app-layer records are also inlined, while agent-internal steps (thoughts, tool calls, results) are captured via an `OnStep` callback in `TaskOptions` that writes through `taskStepToRecord`.
+- `taskExecutionState.appendStep` is the single chokepoint that both appends to history (for prompt building) and forwards the enriched step to the `OnStep` callback.
+- Logging must never break a run: `Recorder.Write` swallows errors (warn-log only) and is mutex-guarded for concurrent writers and monotonic `seq`.
+- Tests redirect output via the `TERMINAL_AGENT_SESSIONS_DIR` env var (see `internal/app/SessionDir` and the app package `TestMain`) to avoid polluting the real data directory.
+
 ## Running Tests
 
 Testing is orchestrated through [Taskfile](https://taskfile.dev/). Common flows:

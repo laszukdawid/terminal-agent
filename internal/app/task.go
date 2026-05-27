@@ -11,6 +11,7 @@ import (
 
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 )
 
 type TaskRequest struct {
@@ -38,25 +39,33 @@ func (s *service) TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event
 	}
 
 	events := make(chan Event)
+	recorder := sessionlog.New(SessionDir(), buildMeta("task", req.Provider, req.Model, req.WorkingDir, req.Message))
 	interaction := &taskEventInteraction{ctx: ctx, events: events}
 
-	go s.runTaskEvents(ctx, req, interaction, events)
+	go s.runTaskEvents(ctx, req, interaction, recorder, events)
 
 	return events, nil
 }
 
-func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interaction *taskEventInteraction, events chan Event) {
+func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interaction *taskEventInteraction, recorder *sessionlog.Recorder, events chan Event) {
 	defer close(events)
 
-	if err := interaction.emit(newEvent(RunKindTask, EventStarted)); err != nil {
+	recorder.Write(sessionlog.Record{Type: sessionlog.RecordRequest, Kind: string(RunKindTask), Text: req.Message})
+
+	if err := emitEvent(ctx, events, newEvent(RunKindTask, EventStarted)); err != nil {
 		return
 	}
 
-	result, err := executeTask(ctx, req, interaction)
+	onStep := func(step internalagent.TaskStep) {
+		recorder.Write(taskStepToRecord(step))
+	}
+
+	result, err := executeTask(ctx, req, interaction, onStep)
 	if err != nil {
 		failed := newEvent(RunKindTask, EventFailed)
 		failed.Err = err
-		_ = interaction.emit(failed)
+		recorder.Write(sessionlog.Record{Type: sessionlog.RecordFailed, Kind: string(RunKindTask), Error: err.Error()})
+		_ = emitEvent(ctx, events, failed)
 		return
 	}
 
@@ -66,10 +75,11 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	completed.RawOutput = result.RawOutput
 	completed.RawOutputTool = result.RawOutputTool
 	completed.DirectRawOutput = result.DirectRawOutput
-	_ = interaction.emit(completed)
+	recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Kind: string(RunKindTask), Text: result.Response, ToolName: result.RawOutputTool})
+	_ = emitEvent(ctx, events, completed)
 }
 
-func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction) (TaskResult, error) {
+func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep)) (TaskResult, error) {
 	if strings.TrimSpace(req.Message) == "" {
 		return TaskResult{}, internalagent.ErrEmptyQuery
 	}
@@ -104,6 +114,7 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{
 		Allow:       req.Allow,
 		Interaction: interaction,
+		OnStep:      onStep,
 		Dirs: internalagent.TaskDirs{
 			RootDir:    taskRootDir,
 			CurrentDir: taskRootDir,
@@ -129,8 +140,37 @@ type taskEventInteraction struct {
 	events chan<- Event
 }
 
-func (i *taskEventInteraction) emit(event Event) error {
-	return emitEvent(i.ctx, i.events, event)
+func taskStepToRecord(step internalagent.TaskStep) sessionlog.Record {
+	rec := sessionlog.Record{
+		Kind:      string(RunKindTask),
+		Timestamp: step.Timestamp,
+		Iteration: step.Iteration,
+		Text:      step.Thought,
+		ToolName:  step.ToolName,
+		ToolInput: step.ToolInput,
+		Error:     step.Error,
+	}
+
+	switch step.Status {
+	case internalagent.TaskStepStatusThought:
+		rec.Type = sessionlog.RecordThought
+	case internalagent.TaskStepStatusSucceeded:
+		rec.Type = sessionlog.RecordToolResult
+		rec.ToolResult = step.ToolOutput
+	case internalagent.TaskStepStatusFailed:
+		rec.Type = sessionlog.RecordToolCall
+	case internalagent.TaskStepStatusDeclined:
+		rec.Type = sessionlog.RecordDeclined
+	case internalagent.TaskStepStatusFinalAnswer:
+		// The run's authoritative completion is the app-level completed event; record the
+		// final-answer step as the final_answer tool's result to avoid a duplicate line.
+		rec.Type = sessionlog.RecordToolResult
+		rec.ToolResult = step.FinalAnswer
+	default:
+		rec.Type = sessionlog.RecordType(step.Status)
+	}
+
+	return rec
 }
 
 func (i *taskEventInteraction) Confirm(req internalagent.TaskConfirmationRequest) (internalagent.TaskConfirmationDecision, error) {
@@ -154,7 +194,7 @@ func (i *taskEventInteraction) Confirm(req internalagent.TaskConfirmationRequest
 		},
 	}
 
-	if err := i.emit(event); err != nil {
+	if err := emitEvent(i.ctx, i.events, event); err != nil {
 		return internalagent.TaskConfirmationDecision{}, err
 	}
 
@@ -187,7 +227,7 @@ func (i *taskEventInteraction) Clarify(req internalagent.TaskClarificationReques
 		},
 	}
 
-	if err := i.emit(event); err != nil {
+	if err := emitEvent(i.ctx, i.events, event); err != nil {
 		return "", err
 	}
 
