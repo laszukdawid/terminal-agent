@@ -11,22 +11,13 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 )
 
-var supportedProviders = []string{
-	connector.AnthropicProvider,
-	connector.BedrockProvider,
-	connector.GoogleProvider,
-	connector.LlamaProvider,
-	connector.MistralProvider,
-	connector.OllamaProvider,
-	connector.OpenaiProvider,
-}
-
 func validateProviderModel(provider, model string) error {
 	if provider == "" {
 		return fmt.Errorf("provider cannot be empty")
 	}
-	if !slices.Contains(supportedProviders, provider) {
-		return fmt.Errorf("unsupported provider %q. Supported providers: %s", provider, strings.Join(supportedProviders, ", "))
+	supported := connector.SupportedProviders()
+	if !slices.Contains(supported, provider) {
+		return fmt.Errorf("unsupported provider %q. Supported providers: %s", provider, strings.Join(supported, ", "))
 	}
 	if model == "" {
 		return fmt.Errorf("model cannot be empty")
@@ -55,6 +46,10 @@ func providerSetupHint(provider string) string {
 	case connector.MistralProvider:
 		if os.Getenv("MISTRAL_API_KEY") == "" {
 			return "Mistral requires MISTRAL_API_KEY to be set."
+		}
+	case connector.MiMoProvider:
+		if os.Getenv("MIMO_API_KEY") == "" {
+			return "MiMo requires MIMO_API_KEY to be set."
 		}
 	case connector.LlamaProvider:
 		return "Llama uses local GGUF model aliases from config.json under llama_models."
@@ -85,7 +80,7 @@ func explainRuntimeError(provider string, err error) string {
 	lower := strings.ToLower(message)
 	switch {
 	case strings.Contains(lower, "unsupported provider"):
-		return fmt.Sprintf("%s Supported providers: %s.", message, strings.Join(supportedProviders, ", "))
+		return fmt.Sprintf("%s Supported providers: %s.", message, strings.Join(connector.SupportedProviders(), ", "))
 	case strings.Contains(lower, "api key"), strings.Contains(lower, "authenticate"), strings.Contains(lower, "authentication"):
 		if hint != "" {
 			return hint
@@ -105,4 +100,20 @@ func explainRuntimeError(provider string, err error) string {
 	}
 
 	return message
+}
+
+// filterProviders returns the providers whose name contains query
+// (case-insensitive substring). An empty query returns all providers unchanged.
+func filterProviders(all []string, query string) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return all
+	}
+	out := make([]string, 0, len(all))
+	for _, p := range all {
+		if strings.Contains(strings.ToLower(p), query) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
