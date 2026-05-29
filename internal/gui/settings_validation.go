@@ -40,8 +40,8 @@ func providerSetupHint(provider string) string {
 			return "Anthropic requires ANTHROPIC_API_KEY to be set."
 		}
 	case connector.GoogleProvider:
-		if os.Getenv("GOOGLE_API_KEY") == "" {
-			return "Google requires GOOGLE_API_KEY to be set."
+		if os.Getenv("GEMINI_API_KEY") == "" {
+			return "Google requires GEMINI_API_KEY to be set."
 		}
 	case connector.MistralProvider:
 		if os.Getenv("MISTRAL_API_KEY") == "" {

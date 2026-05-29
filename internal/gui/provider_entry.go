@@ -39,11 +39,14 @@ func newProviderEntry(initial string, onChange func(string)) *xwidget.Completion
 	display := func(opts []string, q string) {
 		shown = opts
 		query = q
+		// Always update the widget's options first so a no-match query clears
+		// the (hidden) suggestion list rather than leaving stale items that
+		// keyboard navigation could still act on.
+		e.SetOptions(opts)
 		if len(opts) == 0 {
 			e.HideCompletion()
 			return
 		}
-		e.SetOptions(opts)
 		e.ShowCompletion()
 	}
 

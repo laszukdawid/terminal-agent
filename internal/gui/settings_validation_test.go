@@ -16,6 +16,15 @@ func TestProviderSetupHintMiMo(t *testing.T) {
 	assert.Contains(t, providerSetupHint(connector.MiMoProvider), "MIMO_API_KEY")
 }
 
+// The Google hint must name the env var the connector actually reads
+// (GEMINI_API_KEY), not GOOGLE_API_KEY.
+func TestProviderSetupHintGoogle(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
+	hint := providerSetupHint(connector.GoogleProvider)
+	assert.Contains(t, hint, "GEMINI_API_KEY")
+	assert.NotContains(t, hint, "GOOGLE_API_KEY")
+}
+
 func TestFilterProviders(t *testing.T) {
 	all := connector.SupportedProviders()
 
