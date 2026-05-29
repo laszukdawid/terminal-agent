@@ -3,6 +3,8 @@
 
 bin/
 dist/
+/agent
+/agent-gui
 
 Taskfile.yaml
 .env
