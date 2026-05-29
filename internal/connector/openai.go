@@ -297,7 +297,7 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-				panic(err)
+				return response, fmt.Errorf("failed to parse tool call arguments: %w", err)
 			}
 			response.ToolUse = true
 			response.ToolName = toolCall.Function.Name

@@ -67,7 +67,7 @@ func (ac *AnthropicConnector) queryAnthropicStreamWithCallback(ctx context.Conte
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 
 		switch eventVariant := event.AsAny().(type) {
@@ -87,9 +87,10 @@ func (ac *AnthropicConnector) queryAnthropicStreamWithCallback(ctx context.Conte
 
 		}
 
-		if stream.Err() != nil {
-			panic(stream.Err())
-		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return "", err
 	}
 
 	// Flush any remaining content

@@ -133,6 +133,9 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 	logger := utils.Logger.Sugar()
 	ctx, cancel := context.WithTimeout(ctx, 900*time.Second)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, err
+	}
 
 	run, err := a.newTaskExecutionState(s, options)
 	if err != nil {
@@ -140,6 +143,9 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 	}
 
 	for run.state.Phase == TaskPhaseRunning && run.state.Iterations < run.state.MaxTurns && run.state.ToolCalls < run.state.MaxIterations {
+		if err := ctx.Err(); err != nil {
+			return TaskRunResult{}, err
+		}
 		run.state.Iterations++
 
 		result, done, err := a.runTaskIteration(ctx, logger, run)
@@ -151,6 +157,9 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, err
+	}
 	return a.finalizeTaskRun(ctx, run)
 }
 
@@ -192,6 +201,9 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 		logger.Debugw("Error querying model", "iteration", run.state.Iterations, "error", err)
 		return TaskRunResult{}, false, fmt.Errorf("error during task processing: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, false, err
+	}
 
 	if !response.ToolUse {
 		run.recordThought(response.Response)
@@ -199,7 +211,7 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 		return TaskRunResult{}, false, nil
 	}
 
-	return a.handleTaskToolResponse(logger, run, response)
+	return a.handleTaskToolResponse(ctx, logger, run, response)
 }
 
 func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) (connector.LlmResponseWithTools, error) {
@@ -219,12 +231,15 @@ func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) 
 	return response, nil
 }
 
-func (a *Agent) handleTaskToolResponse(logger *zap.SugaredLogger, run *taskExecutionState, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
+func (a *Agent) handleTaskToolResponse(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
 	tool, err := resolveTaskToolCall(response.ToolName, response.ToolInput, run.tools)
 	if err != nil {
 		logger.Errorw("Tool validation failed", "tool", response.ToolName, "error", err)
 		run.recordFailure(response, err)
 		return TaskRunResult{}, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, false, err
 	}
 
 	if response.ToolName == ToolNameChangeDirectory {
@@ -242,16 +257,28 @@ func (a *Agent) handleTaskToolResponse(logger *zap.SugaredLogger, run *taskExecu
 		run.recordDeclined(response)
 		return TaskRunResult{}, false, nil
 	}
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, false, err
+	}
 
-	return a.executeTaskTool(logger, run, tool, response)
+	return a.executeTaskTool(ctx, logger, run, tool, response)
 }
 
-func (a *Agent) executeTaskTool(logger *zap.SugaredLogger, run *taskExecutionState, tool tools.Tool, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
+func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState, tool tools.Tool, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, false, err
+	}
 	toolResult, err := runTaskTool(tool, response.ToolInput, run.state.Dirs)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return TaskRunResult{}, false, ctxErr
+		}
 		logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)
 		run.recordFailure(response, err)
 		return TaskRunResult{}, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, false, err
 	}
 
 	run.state.ToolCalls++
@@ -277,6 +304,9 @@ func (a *Agent) executeTaskTool(logger *zap.SugaredLogger, run *taskExecutionSta
 func (a *Agent) finalizeTaskRun(ctx context.Context, run *taskExecutionState) (TaskRunResult, error) {
 	if run.state.Phase != TaskPhaseRunning {
 		return TaskRunResult{}, fmt.Errorf("task ended without an explicit completion path")
+	}
+	if err := ctx.Err(); err != nil {
+		return TaskRunResult{}, err
 	}
 
 	run.state.Phase = TaskPhaseFinalizing
@@ -451,6 +481,9 @@ func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.Q
 	var lastRaw string
 	var lastErr error
 	for attempt := 0; attempt < maxTaskActionFallbackRuns; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return connector.LlmResponseWithTools{}, err
+		}
 		prompt := a.buildTaskActionPrompt(params, taskTools, lastRaw, lastErr)
 		fallbackParams.UserPrompt = &prompt
 

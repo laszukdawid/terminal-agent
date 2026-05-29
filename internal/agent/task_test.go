@@ -169,6 +169,30 @@ func (c *fallbackTaskConnector) SupportsNativeToolCalling() bool {
 	return false
 }
 
+type cancelingTaskConnector struct {
+	cancel         context.CancelFunc
+	response       connector.LlmResponseWithTools
+	queryCalls     int
+	queryToolCalls int
+}
+
+func (c *cancelingTaskConnector) Query(_ context.Context, _ *connector.QueryParams) (string, error) {
+	c.queryCalls++
+	return "summary should not run", nil
+}
+
+func (c *cancelingTaskConnector) QueryWithTool(_ context.Context, _ *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
+	c.queryToolCalls++
+	if c.cancel != nil {
+		c.cancel()
+	}
+	return c.response, nil
+}
+
+func (c *cancelingTaskConnector) SupportsNativeToolCalling() bool {
+	return true
+}
+
 func TestNewAgentFiltersUnavailableTools(t *testing.T) {
 	connector := &scriptedToolConnector{}
 	cfg := config.NewDefaultConfig()
@@ -336,6 +360,75 @@ func TestTaskUsesInjectedConfirmationInteraction(t *testing.T) {
 	assert.Equal(t, "done", result.Response)
 	require.Len(t, interaction.confirmations, 1)
 	assert.Equal(t, `unix("git status")`, interaction.confirmations[0].Action)
+}
+
+func TestTaskWithOptionsResultStopsWhenContextCanceled(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := &cancelingTaskConnector{
+		cancel:   cancel,
+		response: connector.LlmResponseWithTools{Response: "still thinking"},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	_, err := agent.TaskWithOptionsResult(ctx, "keep going", TaskOptions{
+		Dirs: TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, conn.queryToolCalls)
+	assert.Equal(t, 0, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultDoesNotExecuteToolAfterContextCanceled(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	tool := &schemaOutputTool{
+		name:   "schema_tool",
+		output: "tool-output",
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{"type": "string"},
+			},
+			"required": []string{"command"},
+		},
+	}
+	conn := &cancelingTaskConnector{
+		cancel: cancel,
+		response: connector.LlmResponseWithTools{
+			ToolUse:   true,
+			ToolName:  tool.Name(),
+			ToolInput: map[string]any{"command": "pwd"},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tool.Name(): tool,
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	_, err := agent.TaskWithOptionsResult(ctx, "run the tool", TaskOptions{
+		Dirs: TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, conn.queryToolCalls)
+	assert.Empty(t, tool.inputs)
 }
 
 func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {

@@ -204,3 +204,54 @@ data: {"type":"response.completed","response":{"id":"resp_1","object":"response"
 		t.Fatalf("streamOAuthResponse() text = %v, want Hello!", text)
 	}
 }
+
+func TestOpenAIQueryWithToolReturnsInvalidArgumentError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"chatcmpl-1",
+			"object":"chat.completion",
+			"created":1,
+			"model":"gpt-4o-mini",
+			"choices":[{
+				"index":0,
+				"message":{
+					"role":"assistant",
+					"content":"",
+					"tool_calls":[{
+						"id":"call_1",
+						"type":"function",
+						"function":{"name":"search_code","arguments":"not-json"}
+					}]
+				},
+				"finish_reason":"tool_calls"
+			}],
+			"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
+		}`))
+	}))
+	defer server.Close()
+
+	client := openai.NewClient(
+		option.WithAPIKey("token"),
+		option.WithBaseURL(server.URL),
+	)
+	oc := &OpenAIConnector{
+		client:  &client,
+		logger:  *zap.NewNop(),
+		modelID: "gpt-4o-mini",
+		auth:    auth.ResolvedAuth{Type: auth.CredentialTypeAPIKey},
+	}
+	sysPrompt := "You are helpful"
+	userPrompt := "search"
+
+	_, err := oc.QueryWithTool(context.Background(), &QueryParams{
+		SysPrompt:  &sysPrompt,
+		UserPrompt: &userPrompt,
+	}, map[string]tools.Tool{"search_code": stubTool{}})
+	if err == nil {
+		t.Fatal("expected invalid argument error")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("failed to parse tool call arguments")) {
+		t.Fatalf("error = %v, want tool argument parse failure", err)
+	}
+}
