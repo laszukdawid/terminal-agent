@@ -33,6 +33,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/longrunning v0.5.7 // indirect
 	fyne.io/systray v1.12.0 // indirect
+	fyne.io/x/fyne v0.0.0-20260404122735-cbbdf562353e // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.16.0 // indirect
 	github.com/ardanlabs/jinja v1.1.0 // indirect
