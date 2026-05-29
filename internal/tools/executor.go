@@ -16,9 +16,6 @@ func (b *BashExecutor) Exec(code string) (string, error) {
 }
 
 func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

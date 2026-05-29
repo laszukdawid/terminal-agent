@@ -137,9 +137,6 @@ func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (str
 }
 
 func (u *UnixTool) execCodeWithExecutorContext(ctx context.Context, code string, executor CodeExecutor) (string, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	fmt.Printf("Tool: ExecCode: code: %s\n", code)
 	if code == "" {
 		return "", fmt.Errorf("no Unix command found in the response")

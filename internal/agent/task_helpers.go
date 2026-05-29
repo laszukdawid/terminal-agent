@@ -28,9 +28,6 @@ func selectTaskRawOutput(outputs []taskToolOutput) taskToolOutput {
 }
 
 func runTaskTool(ctx context.Context, tool tools.Tool, input map[string]any, dirs TaskDirs) (string, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

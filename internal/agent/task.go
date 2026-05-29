@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -273,9 +272,6 @@ func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, 
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return TaskRunResult{}, false, ctxErr
-		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return TaskRunResult{}, false, err
 		}
 		logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)
 		run.recordFailure(response, err)
