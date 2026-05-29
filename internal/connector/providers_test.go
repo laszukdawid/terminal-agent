@@ -24,7 +24,7 @@ func TestDefaultModelFor(t *testing.T) {
 	assert.Equal(t, DefaultMiMoModel, DefaultModelFor(MiMoProvider))
 	assert.Equal(t, DefaultMistralModel, DefaultModelFor(MistralProvider))
 	assert.Equal(t, string(ClaudeHaiku), DefaultModelFor(BedrockProvider))
-	assert.Equal(t, "", DefaultModelFor(AnthropicProvider))
+	assert.Equal(t, DefaultAnthropicModel, DefaultModelFor(AnthropicProvider))
 	assert.Equal(t, "", DefaultModelFor("nope"))
 }
 

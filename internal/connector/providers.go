@@ -13,7 +13,7 @@ type ProviderInfo struct {
 // into NewConnector (main.go); TestRegistryProvidersAreHandledByFactory guards
 // against the two drifting apart.
 var providerRegistry = []ProviderInfo{
-	{Name: AnthropicProvider, DefaultModel: ""},
+	{Name: AnthropicProvider, DefaultModel: DefaultAnthropicModel},
 	// BedrockModelID and ChatModel are named string types, hence the conversions.
 	{Name: BedrockProvider, DefaultModel: string(ClaudeHaiku)},
 	{Name: GoogleProvider, DefaultModel: Gemini20FlashLite},
