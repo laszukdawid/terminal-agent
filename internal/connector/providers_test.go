@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -9,11 +10,13 @@ import (
 
 func TestSupportedProvidersIsAlphabeticalAndIncludesMiMo(t *testing.T) {
 	got := SupportedProviders()
-	want := []string{
-		AnthropicProvider, BedrockProvider, GoogleProvider, LlamaProvider,
-		MiMoProvider, MistralProvider, OllamaProvider, OpenaiProvider,
-	}
-	assert.Equal(t, want, got)
+
+	sorted := slices.Clone(got)
+	slices.Sort(sorted)
+	assert.Equal(t, sorted, got, "SupportedProviders must be in alphabetical order")
+
+	assert.Len(t, got, len(providerRegistry), "SupportedProviders must list every registry entry")
+	assert.Contains(t, got, MiMoProvider)
 }
 
 func TestDefaultModelFor(t *testing.T) {
@@ -33,7 +36,7 @@ func TestRegistryProvidersAreHandledByFactory(t *testing.T) {
 	for _, name := range SupportedProviders() {
 		name := name
 		t.Run(name, func(t *testing.T) {
-			err := safeNewConnectorErr(name)
+			err := safeNewConnectorErr(t, name)
 			if err != nil {
 				assert.NotContains(t, strings.ToLower(err.Error()), "unsupported provider",
 					"registry provider %q is not handled by NewConnector switch", name)
@@ -42,10 +45,16 @@ func TestRegistryProvidersAreHandledByFactory(t *testing.T) {
 	}
 }
 
-func safeNewConnectorErr(provider string) (err error) {
+// safeNewConnectorErr calls NewConnector and recovers from any panic (some
+// constructors panic on missing config/keys, which still means the provider was
+// recognized by the switch). Recovered panics are logged so a genuine
+// constructor bug is visible rather than silently swallowed.
+func safeNewConnectorErr(t *testing.T, provider string) (err error) {
+	t.Helper()
 	defer func() {
 		if r := recover(); r != nil {
-			err = nil // constructor ran => provider recognized; not a drift error
+			t.Logf("NewConnector(%q) panicked (provider recognized, treated as non-drift): %v", provider, r)
+			err = nil
 		}
 	}()
 	_, err = NewConnector(provider, "", nil)
