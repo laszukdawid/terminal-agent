@@ -310,27 +310,25 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 			setupHint.SetText(hint)
 			setupHint.Show()
 		} else {
-			setupHint.SetText("")
 			setupHint.Hide()
 		}
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 			modelHint.Show()
 		} else {
-			modelHint.SetText("")
 			modelHint.Hide()
 		}
 	}
 
 	providerInput := newProviderEntry(initialProvider, updateHints)
 
-	form := widget.NewForm(
-		widget.NewFormItem("Provider", providerInput),
-		widget.NewFormItem("", setupHint),
-		widget.NewFormItem("Model", modelEntry),
-		widget.NewFormItem("", modelHint),
+	content := container.NewVBox(
+		widget.NewForm(widget.NewFormItem("Provider", providerInput)),
+		setupHint,
+		widget.NewForm(widget.NewFormItem("Model", modelEntry)),
+		modelHint,
+		errorLabel,
 	)
-	content := container.NewVBox(form, errorLabel)
 	updateHints(initialProvider)
 
 	var dlg dialog.Dialog
