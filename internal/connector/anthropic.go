@@ -14,6 +14,8 @@ import (
 
 const (
 	AnthropicProvider = "anthropic"
+
+	DefaultAnthropicModel = "claude-sonnet-4-6"
 )
 
 type AnthropicConnector struct {
@@ -37,10 +39,15 @@ func NewAnthropicConnector(modelID *string) *AnthropicConnector {
 	logger := *log.GetLogger()
 	logger.Debug("Creating new Anthropic connector", zap.Any("model", modelID))
 
+	model := DefaultAnthropicModel
+	if modelID != nil && *modelID != "" {
+		model = *modelID
+	}
+
 	apiClient := anthropic.NewClient()
 
 	return &AnthropicConnector{
-		modelID: *modelID,
+		modelID: model,
 		logger:  logger, client: apiClient,
 	}
 }

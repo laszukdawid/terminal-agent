@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	fyne.io/fyne/v2 v2.7.3
+	fyne.io/x/fyne v0.0.0-20260404122735-cbbdf562353e
 	github.com/anthropics/anthropic-sdk-go v1.33.0
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.15
@@ -126,3 +127,5 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace fyne.io/x/fyne => github.com/laszukdawid/fyne-x v0.0.0-20260529182451-7d2670a45b5f
