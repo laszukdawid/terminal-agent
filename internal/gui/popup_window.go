@@ -12,6 +12,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/laszukdawid/terminal-agent/internal/connector"
 )
 
 const (
@@ -289,19 +291,47 @@ func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int)
 }
 
 func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, onSave func(provider, model string) error) {
-	providerEntry := widget.NewEntry()
-	providerEntry.SetText(initialProvider)
 	modelEntry := widget.NewEntry()
 	modelEntry.SetText(initialModel)
 	errorLabel := widget.NewLabel("")
 	errorLabel.Wrapping = fyne.TextWrapWord
 	errorLabel.Importance = widget.DangerImportance
 
+	setupHint := widget.NewLabel("")
+	setupHint.Wrapping = fyne.TextWrapWord
+	setupHint.Importance = widget.LowImportance
+	modelHint := widget.NewLabel("")
+	modelHint.Wrapping = fyne.TextWrapWord
+	modelHint.Importance = widget.LowImportance
+
+	updateHints := func(provider string) {
+		provider = strings.TrimSpace(provider)
+		if hint := providerSetupHint(provider); hint != "" {
+			setupHint.SetText(hint)
+			setupHint.Show()
+		} else {
+			setupHint.SetText("")
+			setupHint.Hide()
+		}
+		if def := connector.DefaultModelFor(provider); def != "" {
+			modelHint.SetText("Default model: " + def)
+			modelHint.Show()
+		} else {
+			modelHint.SetText("")
+			modelHint.Hide()
+		}
+	}
+
+	providerInput := newProviderEntry(initialProvider, updateHints)
+
 	form := widget.NewForm(
-		widget.NewFormItem("Provider", providerEntry),
+		widget.NewFormItem("Provider", providerInput),
+		widget.NewFormItem("", setupHint),
 		widget.NewFormItem("Model", modelEntry),
+		widget.NewFormItem("", modelHint),
 	)
 	content := container.NewVBox(form, errorLabel)
+	updateHints(initialProvider)
 
 	var dlg dialog.Dialog
 	dlg = dialog.NewCustomConfirm("Settings", "Save", "Cancel", content, func(confirm bool) {
@@ -309,7 +339,7 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 			return
 		}
 
-		provider := strings.TrimSpace(providerEntry.Text)
+		provider := strings.TrimSpace(providerInput.Text)
 		model := strings.TrimSpace(modelEntry.Text)
 		if provider == "" {
 			errorLabel.SetText("Provider cannot be empty.")
