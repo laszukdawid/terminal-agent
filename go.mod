@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	fyne.io/fyne/v2 v2.7.3
+	fyne.io/x/fyne v0.0.0-20260404122735-cbbdf562353e
 	github.com/anthropics/anthropic-sdk-go v1.33.0
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.15
@@ -33,7 +34,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/longrunning v0.5.7 // indirect
 	fyne.io/systray v1.12.0 // indirect
-	fyne.io/x/fyne v0.0.0-20260404122735-cbbdf562353e // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.16.0 // indirect
 	github.com/ardanlabs/jinja v1.1.0 // indirect
