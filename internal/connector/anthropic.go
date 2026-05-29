@@ -8,7 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 
-	"github.com/laszukdawid/terminal-agent/internal/utils"
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -34,7 +34,7 @@ type ContentBlockDelta struct {
 }
 
 func NewAnthropicConnector(modelID *string) *AnthropicConnector {
-	logger := *utils.GetLogger()
+	logger := *log.GetLogger()
 	logger.Debug("Creating new Anthropic connector", zap.Any("model", modelID))
 
 	apiClient := anthropic.NewClient()
@@ -126,7 +126,7 @@ func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam 
 		properties, ok := inputSchema["properties"].(map[string]any)
 		if !ok {
 			// Handle error
-			utils.Logger.Error("Failed to convert input schema properties", zap.Any("inputSchema", inputSchema))
+			log.Error("Failed to convert input schema properties", zap.Any("inputSchema", inputSchema))
 			continue
 		}
 		extraProps := make(map[string]any)
@@ -145,10 +145,10 @@ func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam 
 		// Print the anthropicTool json
 		b, err := json.Marshal(anthropicTool)
 		if err != nil {
-			utils.Logger.Error("Failed to marshal anthropicTool", zap.Error(err))
+			log.Error("Failed to marshal anthropicTool", zap.Error(err))
 			continue
 		}
-		utils.Logger.Debug("Anthropic Tool", zap.String("tool", string(b)))
+		log.Debug("Anthropic Tool", zap.String("tool", string(b)))
 
 		anthropicTools = append(anthropicTools, anthropicTool)
 	}
@@ -202,7 +202,7 @@ func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (
 }
 
 func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
-	logger := *utils.GetLogger()
+	logger := *log.GetLogger()
 	logger.Sugar().Debugw("Query with tool", "model", ac.modelID)
 
 	response := LlmResponseWithTools{}

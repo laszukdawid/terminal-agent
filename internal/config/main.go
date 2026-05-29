@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -146,7 +146,7 @@ func (config *config) GetDefaultProvider() string {
 }
 
 func (config *config) SetDefaultProvider(provider string) error {
-	log.Println("Setting default provider to:", provider)
+	log.Debugw("Setting default provider", "provider", provider)
 	config.DefaultProvider = provider
 	return SaveConfig(config)
 }
@@ -182,7 +182,7 @@ func (config *config) GetDevice() string {
 }
 
 func (config *config) SetDefaultModelId(modelId string) error {
-	log.Println("Setting default model ID to:", modelId)
+	log.Debugw("Setting default model ID", "model", modelId)
 	config.Providers[config.DefaultProvider] = modelId
 	return SaveConfig(config)
 }
@@ -192,7 +192,7 @@ func (config *config) SetDevice(device string) error {
 	if normalized == "" {
 		return fmt.Errorf("invalid device %q: must be one of auto, cpu, gpu", device)
 	}
-	log.Println("Setting device to:", normalized)
+	log.Debugw("Setting device", "device", normalized)
 	config.Device = normalized
 	return SaveConfig(config)
 }
@@ -202,7 +202,7 @@ func (config *config) GetMcpFilePath() string {
 }
 
 func (config *config) SetMcpFilePath(path string) error {
-	log.Println("Setting MCP file path to:", path)
+	log.Debugw("Setting MCP file path", "path", path)
 	config.McpFilePath = path
 	return SaveConfig(config)
 }
@@ -226,7 +226,7 @@ func (config *config) GetMaxTokens() int {
 }
 
 func (config *config) SetWorkingDir(path string) error {
-	log.Println("Setting working directory to:", path)
+	log.Debugw("Setting working directory", "path", path)
 	config.WorkingDir = path
 	return SaveConfig(config)
 }
@@ -236,7 +236,7 @@ func (config *config) GetMemory() bool {
 }
 
 func (config *config) SetMemory(enabled bool) error {
-	log.Println("Setting memory to:", enabled)
+	log.Debugw("Setting memory", "enabled", enabled)
 	config.Memory = enabled
 	return SaveConfig(config)
 }
@@ -256,30 +256,29 @@ var SetProviderCmd = &cobra.Command{
 	Use:   "set-provider [provider]",
 	Short: "Set the default provider",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := LoadConfig()
 		if err != nil {
-			fmt.Println("Error loading config:", err)
-			return
+			return fmt.Errorf("load config: %w", err)
 		}
 		provider := args[0]
 		if err := config.SetDefaultProvider(provider); err != nil {
-			fmt.Println("Error setting provider:", err)
-		} else {
-			fmt.Println("Default provider set to:", provider)
+			return fmt.Errorf("set provider: %w", err)
 		}
+		cmd.Printf("Default provider set to: %s\n", provider)
+		return nil
 	},
 }
 
 var GetConfigCmd = &cobra.Command{
 	Use:   "get-config",
 	Short: "Get the current configuration",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := LoadConfig()
 		if err != nil {
-			fmt.Println("Error loading config:", err)
-		} else {
-			fmt.Println("Config:", config)
+			return fmt.Errorf("load config: %w", err)
 		}
+		cmd.Printf("Config: %+v\n", config)
+		return nil
 	},
 }

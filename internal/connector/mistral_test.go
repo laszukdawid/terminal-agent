@@ -17,11 +17,7 @@ func TestNewMistralConnector(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	modelID := "mistral-large-latest"
 
-	connector := NewMistralConnector(&modelID)
-
-	if connector == nil {
-		t.Fatal("Expected connector to be created, got nil")
-	}
+	connector := newMistralConnectorForTest(t, &modelID)
 
 	if connector.modelID != modelID {
 		t.Errorf("Expected modelID to be %s, got %s", modelID, connector.modelID)
@@ -40,20 +36,20 @@ func TestNewMistralConnectorNoKey(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "")
 	modelID := "mistral-large-latest"
 
-	connector := NewMistralConnector(&modelID)
+	connector, err := NewMistralConnector(&modelID)
 
+	if !assert.Error(t, err) {
+		return
+	}
 	assert.Nil(t, connector, "Expected connector to be nil when MISTRAL_API_KEY is not set")
+	assert.Contains(t, err.Error(), "MISTRAL_API_KEY")
 }
 
 func TestNewMistralConnectorNoModelID(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	var modelID *string
 
-	connector := NewMistralConnector(modelID)
-
-	if connector == nil {
-		t.Fatal("Expected connector to be created, got nil")
-	}
+	connector := newMistralConnectorForTest(t, modelID)
 
 	if connector.modelID != DefaultMistralModel {
 		t.Errorf("Expected modelID to be %s, got %s", DefaultMistralModel, connector.modelID)
@@ -65,11 +61,7 @@ func TestNewMistralConnectorCustomBaseURL(t *testing.T) {
 	t.Setenv("MISTRAL_BASE_URL", "https://mistral.example.com")
 	modelID := "mistral-large-latest"
 
-	connector := NewMistralConnector(&modelID)
-
-	if connector == nil {
-		t.Fatal("Expected connector to be created, got nil")
-	}
+	connector := newMistralConnectorForTest(t, &modelID)
 
 	if connector.baseURL != "https://mistral.example.com" {
 		t.Errorf("Expected baseURL to be https://mistral.example.com, got %s", connector.baseURL)
@@ -81,15 +73,23 @@ func TestNewMistralConnectorCustomBaseURLTrailingSlash(t *testing.T) {
 	t.Setenv("MISTRAL_BASE_URL", "https://mistral.example.com/")
 	modelID := "mistral-large-latest"
 
-	connector := NewMistralConnector(&modelID)
-
-	if connector == nil {
-		t.Fatal("Expected connector to be created, got nil")
-	}
+	connector := newMistralConnectorForTest(t, &modelID)
 
 	if connector.baseURL != "https://mistral.example.com" {
 		t.Errorf("Expected baseURL to have trailing slash trimmed, got %s", connector.baseURL)
 	}
+}
+
+func newMistralConnectorForTest(t *testing.T, modelID *string) *MistralConnector {
+	t.Helper()
+	connector, err := NewMistralConnector(modelID)
+	if err != nil {
+		t.Fatalf("Expected connector to be created: %v", err)
+	}
+	if connector == nil {
+		t.Fatal("Expected connector to be created, got nil")
+	}
+	return connector
 }
 
 func TestConvertToolsToMistral(t *testing.T) {
@@ -115,10 +115,7 @@ func TestConvertToolsToMistral(t *testing.T) {
 func TestMistralBuildMessages(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	sysPrompt := "You are helpful."
 	userPrompt := "Hello"
@@ -148,10 +145,7 @@ func TestMistralBuildMessages(t *testing.T) {
 func TestMistralBuildMessagesEmptySystem(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	sysPrompt := ""
 	userPrompt := "Hello"
@@ -171,10 +165,7 @@ func TestMistralBuildMessagesEmptySystem(t *testing.T) {
 func TestMistralSSEParse(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	t.Run("normal streaming response", func(t *testing.T) {
 		sseBody := `data: {"id":"1","choices":[{"delta":{"content":"Hello"}}]}
@@ -348,10 +339,7 @@ func TestMistralErrorResponseParse(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "bad-key")
 	t.Setenv("MISTRAL_BASE_URL", server.URL)
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	mc.baseURL = server.URL
 
@@ -380,10 +368,7 @@ func TestMistralErrorResponseNonJSON(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	t.Setenv("MISTRAL_BASE_URL", server.URL)
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	mc.baseURL = server.URL
 
@@ -434,10 +419,7 @@ func TestMistralQueryRetriesRateLimitThenSucceeds(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	t.Setenv("MISTRAL_BASE_URL", server.URL)
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	userPrompt := "format this"
 	result, err := mc.Query(t.Context(), &QueryParams{UserPrompt: &userPrompt})
@@ -471,10 +453,7 @@ func TestMistralQueryReturnsRateLimitAfterRetriesExhausted(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	t.Setenv("MISTRAL_BASE_URL", server.URL)
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	userPrompt := "format this"
 	_, err := mc.Query(t.Context(), &QueryParams{UserPrompt: &userPrompt})
@@ -498,10 +477,7 @@ func TestParseRetryAfterDelay(t *testing.T) {
 func TestMistralSupportsNativeToolCalling(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	assert.True(t, mc.SupportsNativeToolCalling())
 }
@@ -517,10 +493,7 @@ func TestMistralQueryEmptyChoices(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	t.Setenv("MISTRAL_BASE_URL", server.URL)
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	mc.baseURL = server.URL
 
@@ -556,10 +529,7 @@ data: [DONE]
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 	t.Setenv("MISTRAL_BASE_URL", server.URL)
 	modelID := "mistral-small-latest"
-	mc := NewMistralConnector(&modelID)
-	if mc == nil {
-		t.Fatal("Expected connector to be created")
-	}
+	mc := newMistralConnectorForTest(t, &modelID)
 
 	req, err := http.NewRequest("POST", server.URL+"/v1/chat/completions", nil)
 	assert.NoError(t, err)

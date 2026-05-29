@@ -109,7 +109,7 @@ type MistralConnector struct {
 	logger     zap.Logger
 }
 
-func NewMistralConnector(modelID *string) *MistralConnector {
+func NewMistralConnector(modelID *string) (*MistralConnector, error) {
 	logger := *utils.GetLogger()
 	logger.Debug("NewMistralConnector")
 
@@ -120,8 +120,7 @@ func NewMistralConnector(modelID *string) *MistralConnector {
 
 	apiKey := os.Getenv("MISTRAL_API_KEY")
 	if apiKey == "" {
-		logger.Error("MISTRAL_API_KEY is required to use Mistral models")
-		return nil
+		return nil, fmt.Errorf("MISTRAL_API_KEY is required to use Mistral models")
 	}
 
 	baseURL := os.Getenv("MISTRAL_BASE_URL")
@@ -140,7 +139,7 @@ func NewMistralConnector(modelID *string) *MistralConnector {
 		logger: logger,
 	}
 
-	return connector
+	return connector, nil
 }
 
 func convertToolsToMistral(execTools map[string]tools.Tool) []MistralTool {

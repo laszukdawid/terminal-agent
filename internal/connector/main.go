@@ -9,9 +9,10 @@ import (
 
 func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnector, error) {
 	var connector LLMConnector
+	var err error
 	switch provider {
 	case BedrockProvider:
-		connector = NewBedrockConnector((*BedrockModelID)(&modelID))
+		connector, err = NewBedrockConnector((*BedrockModelID)(&modelID))
 	case OpenaiProvider:
 		connector = NewOpenAIConnector(&modelID)
 	case MiMoProvider:
@@ -25,9 +26,12 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 	case OllamaProvider:
 		connector = NewOllamaConnector(&modelID)
 	case MistralProvider:
-		connector = NewMistralConnector(&modelID)
+		connector, err = NewMistralConnector(&modelID)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", provider)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize %s connector: %w", provider, err)
 	}
 
 	if isNilConnector(connector) {

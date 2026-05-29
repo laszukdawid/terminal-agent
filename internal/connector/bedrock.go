@@ -142,7 +142,7 @@ func convertToolsToBedrock(tools map[string]tools.Tool) []types.Tool {
 	return bedrockTools
 }
 
-func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
+func NewBedrockConnector(modelID *BedrockModelID) (*BedrockConnector, error) {
 	logger := *utils.GetLogger()
 	logger.Debug("NewBedrockConnector")
 	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
@@ -157,9 +157,7 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion(awsRegion))
 
 	if err != nil {
-		fmt.Println("Couldn't load default configuration. Have you set up your AWS account?")
-		fmt.Println(err)
-		return nil
+		return nil, fmt.Errorf("failed to load AWS configuration for Bedrock: %w", err)
 	}
 
 	if modelID == nil || *modelID == "" {
@@ -173,7 +171,7 @@ func NewBedrockConnector(modelID *BedrockModelID) *BedrockConnector {
 		client:  client,
 		modelID: *modelID,
 		logger:  logger,
-	}
+	}, nil
 }
 
 func (bc *BedrockConnector) queryBedrock(

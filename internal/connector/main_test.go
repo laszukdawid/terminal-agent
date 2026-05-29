@@ -31,6 +31,17 @@ func TestNewConnectorCreatesMistralConnector(t *testing.T) {
 	assert.IsType(t, &MistralConnector{}, conn)
 }
 
+func TestNewConnectorReturnsMistralInitializationError(t *testing.T) {
+	t.Setenv("MISTRAL_API_KEY", "")
+
+	conn, err := NewConnector(MistralProvider, "mistral-large-latest", nil)
+
+	require.Error(t, err)
+	assert.Nil(t, conn)
+	assert.Contains(t, err.Error(), "failed to initialize mistral connector")
+	assert.Contains(t, err.Error(), "MISTRAL_API_KEY")
+}
+
 func TestNewConnectorCreatesMiMoConnector(t *testing.T) {
 	t.Setenv("MIMO_API_KEY", "test-key")
 

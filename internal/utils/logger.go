@@ -47,3 +47,39 @@ func GetLogger() *zap.Logger {
 	}
 	return Logger
 }
+
+func Sugar() *zap.SugaredLogger {
+	return GetLogger().Sugar()
+}
+
+func Debug(msg string, fields ...zap.Field) {
+	GetLogger().Debug(msg, fields...)
+}
+
+func Info(msg string, fields ...zap.Field) {
+	GetLogger().Info(msg, fields...)
+}
+
+func Warn(msg string, fields ...zap.Field) {
+	GetLogger().Warn(msg, fields...)
+}
+
+func Error(msg string, fields ...zap.Field) {
+	GetLogger().Error(msg, fields...)
+}
+
+func Debugw(msg string, keysAndValues ...any) {
+	Sugar().Debugw(msg, keysAndValues...)
+}
+
+func Infow(msg string, keysAndValues ...any) {
+	Sugar().Infow(msg, keysAndValues...)
+}
+
+func Warnw(msg string, keysAndValues ...any) {
+	Sugar().Warnw(msg, keysAndValues...)
+}
+
+func Errorw(msg string, keysAndValues ...any) {
+	Sugar().Errorw(msg, keysAndValues...)
+}

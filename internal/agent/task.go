@@ -11,7 +11,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
-	"github.com/laszukdawid/terminal-agent/internal/utils"
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -130,7 +130,7 @@ func (r TaskRunResult) DisplayText() string {
 }
 
 func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options TaskOptions) (TaskRunResult, error) {
-	logger := utils.Logger.Sugar()
+	logger := log.Sugar()
 	ctx, cancel := context.WithTimeout(ctx, 900*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
