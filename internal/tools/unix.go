@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -128,18 +129,36 @@ func (u *UnixTool) HelpText() string {
 }
 
 func (u *UnixTool) ExecCode(code string) (string, error) {
-	return u.execCodeWithExecutor(code, u.executor)
+	return u.execCodeWithExecutorContext(context.Background(), code, u.executor)
 }
 
 func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (string, error) {
+	return u.execCodeWithExecutorContext(context.Background(), code, executor)
+}
+
+func (u *UnixTool) execCodeWithExecutorContext(ctx context.Context, code string, executor CodeExecutor) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	fmt.Printf("Tool: ExecCode: code: %s\n", code)
 	if code == "" {
 		return "", fmt.Errorf("no Unix command found in the response")
 	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 
-	cmdOutput, err := executor.Exec(code)
+	var (
+		cmdOutput string
+		err       error
+	)
+	if contextAwareExecutor, ok := executor.(ContextAwareCodeExecutor); ok {
+		cmdOutput, err = contextAwareExecutor.ExecContext(ctx, code)
+	} else {
+		cmdOutput, err = executor.Exec(code)
+	}
 	if err != nil {
-		return "", fmt.Errorf("failed to execute Unix command: %v", err)
+		return "", fmt.Errorf("failed to execute Unix command: %w", err)
 	}
 	return cmdOutput, nil
 }
@@ -154,14 +173,18 @@ func (u *UnixTool) RunSchema(input map[string]any) (string, error) {
 }
 
 func (u *UnixTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error) {
+	return u.RunSchemaContext(context.Background(), input, ctx)
+}
+
+func (u *UnixTool) RunSchemaContext(ctx context.Context, input map[string]any, execCtx ToolExecutionContext) (string, error) {
 	cmd, ok := input["command"].(string)
 	if !ok {
 		return "", fmt.Errorf("failed to extract command from tool input")
 	}
 
 	executor := u.executor
-	if ctx.CurrentDir != "" {
-		executor = &BashExecutor{workDir: ctx.CurrentDir}
+	if execCtx.CurrentDir != "" {
+		executor = &BashExecutor{workDir: execCtx.CurrentDir}
 	}
-	return u.execCodeWithExecutor(cmd, executor)
+	return u.execCodeWithExecutorContext(ctx, cmd, executor)
 }

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,12 +27,22 @@ func selectTaskRawOutput(outputs []taskToolOutput) taskToolOutput {
 	return taskToolOutput{}
 }
 
-func runTaskTool(tool tools.Tool, input map[string]any, dirs TaskDirs) (string, error) {
+func runTaskTool(ctx context.Context, tool tools.Tool, input map[string]any, dirs TaskDirs) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	execCtx := tools.ToolExecutionContext{
+		RootDir:    dirs.RootDir,
+		CurrentDir: dirs.CurrentDir,
+	}
+	if contextAwareTool, ok := tool.(tools.ContextAwareTool); ok {
+		return contextAwareTool.RunSchemaContext(ctx, input, execCtx)
+	}
 	if contextualTool, ok := tool.(tools.ContextualTool); ok {
-		return contextualTool.RunSchemaWithContext(input, tools.ToolExecutionContext{
-			RootDir:    dirs.RootDir,
-			CurrentDir: dirs.CurrentDir,
-		})
+		return contextualTool.RunSchemaWithContext(input, execCtx)
 	}
 	return tool.RunSchema(input)
 }

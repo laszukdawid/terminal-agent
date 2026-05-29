@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -11,10 +12,21 @@ type BashExecutor struct {
 }
 
 func (b *BashExecutor) Exec(code string) (string, error) {
+	return b.ExecContext(context.Background(), code)
+}
+
+func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 
 	// Prepare command for execution
 	fmt.Printf("Executing Unix command: %s\n", code)
-	cmd := exec.Command("bash", "-c", code)
+	cmd := exec.CommandContext(ctx, "bash", "-c", code)
+	configureCommandCancellation(cmd)
 
 	// Set working directory if provided
 	if b.workDir != "" {
@@ -25,6 +37,9 @@ func (b *BashExecutor) Exec(code string) (string, error) {
 	output, err := cmd.CombinedOutput()
 	strOutput := string(output)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return strOutput, ctxErr
+		}
 		return strOutput, fmt.Errorf("bash command returned non-zero status: %w\nOutput: %s", err, strOutput)
 	}
 
