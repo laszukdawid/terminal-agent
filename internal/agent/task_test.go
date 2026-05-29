@@ -431,6 +431,51 @@ func TestTaskWithOptionsResultDoesNotExecuteToolAfterContextCanceled(t *testing.
 	assert.Empty(t, tool.inputs)
 }
 
+func TestTaskWithOptionsResultCancelsActiveUnixCommand(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	conn := &scriptedToolConnector{responses: []connector.LlmResponseWithTools{
+		{
+			ToolUse:  true,
+			ToolName: tools.ToolNameUnix,
+			ToolInput: map[string]any{
+				"command": "sleep 5",
+			},
+		},
+	}}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tools.ToolNameUnix: tools.NewUnixTool(nil),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+	steps := []TaskStep{}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := agent.TaskWithOptionsResult(ctx, "run a long command", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+		OnStep: func(step TaskStep) {
+			steps = append(steps, step)
+		},
+	})
+	elapsed := time.Since(start)
+
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 2*time.Second)
+	assert.Empty(t, steps)
+	assert.Equal(t, 1, conn.queryToolCalls)
+	require.Len(t, interaction.confirmations, 1)
+	assert.Equal(t, `unix("sleep 5")`, interaction.confirmations[0].Action)
+}
+
 func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {
 	prompt := buildTaskPrompt(&TaskState{
 		OriginalQuery: "trace repeated tool calls",

@@ -1,5 +1,7 @@
 package tools
 
+import "context"
+
 type Tool interface {
 
 	// Runs the tool on the input. Execpts the input to be in accordance with the input schema.
@@ -42,8 +44,18 @@ type ContextualTool interface {
 	RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error)
 }
 
+type ContextAwareTool interface {
+	Tool
+	RunSchemaContext(ctx context.Context, input map[string]any, execCtx ToolExecutionContext) (string, error)
+}
+
 type CodeExecutor interface {
 	Exec(code string) (string, error)
+}
+
+type ContextAwareCodeExecutor interface {
+	CodeExecutor
+	ExecContext(ctx context.Context, code string) (string, error)
 }
 
 type LlmResponseWithTools struct {
