@@ -10,16 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var supportedProviders = []string{
-	connector.AnthropicProvider,
-	connector.BedrockProvider,
-	connector.GoogleProvider,
-	connector.LlamaProvider,
-	connector.MistralProvider,
-	connector.OllamaProvider,
-	connector.OpenaiProvider,
-}
-
 const (
 	cmdProvider   = "provider"
 	cmdModel      = "model"
@@ -106,9 +96,10 @@ For example:
 
 			switch key {
 			case cmdProvider:
-				if !slices.Contains(supportedProviders, value) {
+				supported := connector.SupportedProviders()
+				if !slices.Contains(supported, value) {
 					fmt.Printf("Unsupported provider: %s\n", value)
-					fmt.Printf("Supported providers: %s\n", strings.Join(supportedProviders, ", "))
+					fmt.Printf("Supported providers: %s\n", strings.Join(supported, ", "))
 					return
 				}
 				config.SetDefaultProvider(value)
