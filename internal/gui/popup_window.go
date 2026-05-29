@@ -297,38 +297,45 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 	errorLabel.Wrapping = fyne.TextWrapWord
 	errorLabel.Importance = widget.DangerImportance
 
-	setupHint := widget.NewLabel("")
-	setupHint.Wrapping = fyne.TextWrapWord
-	setupHint.Importance = widget.LowImportance
-	modelHint := widget.NewLabel("")
-	modelHint.Wrapping = fyne.TextWrapWord
-	modelHint.Importance = widget.LowImportance
+	// Hints are always present and single-line so changing their text never
+	// changes the dialog height. A height change would resize and recenter the
+	// dialog, moving the provider field without moving the already-open
+	// autocomplete popup, leaving the popup covering the field's text.
+	newHint := func() *widget.Label {
+		l := widget.NewLabel("")
+		l.Wrapping = fyne.TextWrapOff
+		l.Truncation = fyne.TextTruncateEllipsis
+		l.TextStyle = fyne.TextStyle{Italic: true}
+		return l
+	}
+	setupHint := newHint()
+	modelHint := newHint()
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
-		if hint := providerSetupHint(provider); hint != "" {
-			setupHint.SetText(hint)
-			setupHint.Show()
-		} else {
-			setupHint.Hide()
-		}
+		setupHint.SetText(providerSetupHint(provider))
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
-			modelHint.Show()
 		} else {
-			modelHint.Hide()
+			modelHint.SetText("")
 		}
 	}
 
 	providerInput := newProviderEntry(initialProvider, updateHints)
 
-	content := container.NewVBox(
-		widget.NewForm(widget.NewFormItem("Provider", providerInput)),
-		setupHint,
-		widget.NewForm(widget.NewFormItem("Model", modelEntry)),
-		modelHint,
-		errorLabel,
+	providerLabel := widget.NewLabelWithStyle("Provider", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	modelLabel := widget.NewLabelWithStyle("Model", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+
+	// A single FormLayout grid keeps the Provider and Model labels and inputs
+	// aligned, and makes both inputs start at the same x with the same width.
+	// Hint rows use an empty label cell so each hint aligns under its input.
+	form := container.New(layout.NewFormLayout(),
+		providerLabel, providerInput,
+		widget.NewLabel(""), setupHint,
+		modelLabel, modelEntry,
+		widget.NewLabel(""), modelHint,
 	)
+	content := container.NewVBox(form, errorLabel)
 	updateHints(initialProvider)
 
 	var dlg dialog.Dialog
@@ -353,7 +360,7 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 		}
 		dlg.Hide()
 	}, p.window)
-	dlg.Resize(fyne.NewSize(420, 0))
+	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
 }
 
