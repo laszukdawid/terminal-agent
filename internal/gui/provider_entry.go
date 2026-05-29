@@ -36,7 +36,9 @@ func newProviderEntry(initial string, onChange func(string)) *providerEntry {
 	return e
 }
 
-// FocusGained shows the full provider list when the field is focused while empty.
+// FocusGained shows the full provider list when the field is focused while
+// empty. Gaining focus does not fire OnChanged (which only runs on text
+// changes), so this does not duplicate the suggestion popup shown while typing.
 func (e *providerEntry) FocusGained() {
 	e.CompletionEntry.FocusGained()
 	if e.Text == "" {
