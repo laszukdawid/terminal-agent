@@ -75,6 +75,10 @@ func (t *FileSearchTool) Name() string {
 	return t.name
 }
 
+func (t *FileSearchTool) PermissionCategory() PermissionCategory {
+	return PermissionRead
+}
+
 func (t *FileSearchTool) Description() string {
 	return t.description
 }

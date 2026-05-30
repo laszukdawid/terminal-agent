@@ -90,6 +90,13 @@ func resolveRootInContext(root string, ctx ToolExecutionContext, fallbackDir str
 	return resolvePathInContext(root, normalizedCtx, fallbackDir)
 }
 
+// PathWithinRoot reports whether path resolves to a location inside the
+// context's workspace root. An empty or unresolvable path returns false.
+func PathWithinRoot(path string, ctx ToolExecutionContext) bool {
+	_, err := resolvePathInContext(path, ctx, ctx.CurrentDir)
+	return err == nil
+}
+
 func resolvePath(path string, workDir string) (string, error) {
 	return resolvePathInContext(path, ToolExecutionContext{RootDir: workDir, CurrentDir: workDir}, workDir)
 }

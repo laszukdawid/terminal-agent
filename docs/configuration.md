@@ -83,6 +83,19 @@ Terminal Agent supports tool execution permissions via the `permissions` key in 
 unix("aws sso login", profile="dev")
 ```
 
+### Default Behavior by Tool Category
+
+When no `allow`, `deny`, or `ask` rule matches an action, whether Terminal Agent prompts is decided by the tool's **permission category**:
+
+| Category | Tools | Default when no rule matches |
+| --- | --- | --- |
+| `read` | `read`, `file_search`, `websearch` | Runs without prompting |
+| `write` | `file_edit` | Runs without prompting when the target path is inside the task workspace root; prompts otherwise |
+| `execute` | `unix`, `python` | Always prompts |
+| _undeclared_ | MCP tools and any third-party tool that does not declare a category | Treated as `execute` and prompts |
+
+The rules below always take precedence over these defaults — an `allow` rule lets an `execute` tool run without a prompt, and a `deny` rule blocks even a `read` tool.
+
 ### Permission Sources and Priority
 
 Permission rules come from three sources, listed from lowest to highest priority:

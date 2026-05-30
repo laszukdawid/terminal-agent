@@ -82,6 +82,10 @@ func (t *PythonTool) Name() string {
 	return t.name
 }
 
+func (t *PythonTool) PermissionCategory() PermissionCategory {
+	return PermissionExecute
+}
+
 func (t *PythonTool) Description() string {
 	return t.description
 }

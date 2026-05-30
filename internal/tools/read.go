@@ -55,6 +55,10 @@ func (t *ReadTool) Name() string {
 	return t.name
 }
 
+func (t *ReadTool) PermissionCategory() PermissionCategory {
+	return PermissionRead
+}
+
 func (t *ReadTool) Description() string {
 	return t.description
 }

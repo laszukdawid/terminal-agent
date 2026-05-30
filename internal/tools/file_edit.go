@@ -65,6 +65,10 @@ func (t *FileEditTool) Name() string {
 	return t.name
 }
 
+func (t *FileEditTool) PermissionCategory() PermissionCategory {
+	return PermissionWrite
+}
+
 func (t *FileEditTool) Description() string {
 	return t.description
 }
