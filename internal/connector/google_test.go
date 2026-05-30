@@ -207,7 +207,7 @@ func TestConvertToGenaiSchema(t *testing.T) {
 
 func TestNewGoogleConnector(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test")
-	modelID := "gemini-2.0-flash-lite"
+	modelID := "gemini-3.1-flash-lite"
 
 	connector := NewGoogleConnector(&modelID)
 
@@ -222,7 +222,7 @@ func TestNewGoogleConnector(t *testing.T) {
 
 func TestNewGoogleConnectorNoKey(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
-	modelID := "gemini-2.0-flash-lite"
+	modelID := "gemini-3.1-flash-lite"
 
 	connector := NewGoogleConnector(&modelID)
 
@@ -239,7 +239,7 @@ func TestNewGoogleConnectorNoModelID(t *testing.T) {
 		t.Fatal("Expected connector to be created, got nil")
 	}
 
-	if connector.modelID != "gemini-2.0-flash-lite" {
-		t.Errorf("Expected modelID to be gemini-2.0-flash-lite, got %s", connector.modelID)
+	if connector.modelID != "gemini-3.1-flash-lite" {
+		t.Errorf("Expected modelID to be gemini-3.1-flash-lite, got %s", connector.modelID)
 	}
 }

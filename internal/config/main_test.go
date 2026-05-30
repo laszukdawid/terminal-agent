@@ -77,7 +77,7 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "mimo-v2.5-pro", config.Providers["mimo"])
 		assert.Equal(t, "mistral-small-latest", config.Providers["mistral"])
 		assert.Equal(t, "gpt-4o-mini", config.Providers["openai"])
-		assert.Equal(t, "gemini-2.0-flash-lite", config.Providers["google"])
+		assert.Equal(t, "gemini-3.1-flash-lite", config.Providers["google"])
 		assert.Equal(t, "llama3.2", config.Providers["ollama"])
 		assert.Empty(t, config.GetLlamaModels())
 

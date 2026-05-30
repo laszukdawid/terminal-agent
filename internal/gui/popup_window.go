@@ -71,6 +71,74 @@ type readOnlyEntry struct {
 	widget.Entry
 }
 
+type providerStatusIcon struct {
+	widget.BaseWidget
+	canvas  fyne.Canvas
+	icon    *canvas.Text
+	message string
+	popup   *widget.PopUp
+}
+
+func newProviderStatusIcon(c fyne.Canvas) *providerStatusIcon {
+	status := &providerStatusIcon{
+		canvas: c,
+		icon:   canvas.NewText("", theme.Color(theme.ColorNameForeground)),
+	}
+	status.icon.TextSize = theme.TextSize() + 1
+	status.icon.TextStyle = fyne.TextStyle{Bold: true}
+	status.ExtendBaseWidget(status)
+	return status
+}
+
+func (s *providerStatusIcon) setStatus(status providerReadiness) {
+	s.message = ""
+	if status.Message == "" {
+		s.icon.Text = ""
+	} else if status.Available {
+		s.icon.Text = "✓"
+		s.icon.Color = theme.Color(theme.ColorNameSuccess)
+	} else {
+		s.icon.Text = "✕"
+		s.icon.Color = theme.Color(theme.ColorNameError)
+		s.message = status.Message
+	}
+	if s.popup != nil {
+		s.popup.Hide()
+		s.popup = nil
+	}
+	s.icon.Refresh()
+	s.Refresh()
+}
+
+func (s *providerStatusIcon) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(s.icon)
+}
+
+func (s *providerStatusIcon) MouseIn(e *desktop.MouseEvent) {
+	if s.message == "" || s.canvas == nil {
+		return
+	}
+	label := widget.NewLabel(s.message)
+	label.Wrapping = fyne.TextWrapWord
+	content := container.NewPadded(label)
+	s.popup = widget.NewPopUp(content, s.canvas)
+	s.popup.Resize(fyne.NewSize(360, content.MinSize().Height))
+	pos := s.Position().AddXY(s.Size().Width+8, 0)
+	if e != nil {
+		pos = e.AbsolutePosition.AddXY(12, 12)
+	}
+	s.popup.ShowAtPosition(pos)
+}
+
+func (s *providerStatusIcon) MouseMoved(*desktop.MouseEvent) {}
+
+func (s *providerStatusIcon) MouseOut() {
+	if s.popup != nil {
+		s.popup.Hide()
+		s.popup = nil
+	}
+}
+
 func newPopupEntry(app fyne.App) *popupEntry {
 	entry := &popupEntry{app: app}
 	entry.ExtendBaseWidget(entry)
@@ -308,12 +376,12 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 		l.TextStyle = fyne.TextStyle{Italic: true}
 		return l
 	}
-	setupHint := newHint()
 	modelHint := newHint()
+	providerStatus := newProviderStatusIcon(p.window.Canvas())
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
-		setupHint.SetText(providerSetupHint(provider))
+		providerStatus.setStatus(providerReadinessStatus(provider))
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 		} else {
@@ -324,14 +392,14 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 	providerInput := newProviderEntry(initialProvider, updateHints)
 
 	providerLabel := widget.NewLabelWithStyle("Provider", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	providerLabelBox := container.NewHBox(providerLabel, providerStatus)
 	modelLabel := widget.NewLabelWithStyle("Model", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 
 	// A single FormLayout grid keeps the Provider and Model labels and inputs
 	// aligned, and makes both inputs start at the same x with the same width.
 	// Hint rows use an empty label cell so each hint aligns under its input.
 	form := container.New(layout.NewFormLayout(),
-		providerLabel, providerInput,
-		widget.NewLabel(""), setupHint,
+		providerLabelBox, providerInput,
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)

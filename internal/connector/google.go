@@ -15,7 +15,7 @@ import (
 
 const (
 	GoogleProvider    = "google"
-	Gemini20FlashLite = "gemini-2.0-flash-lite"
+	Gemini31FlashLite = "gemini-3.1-flash-lite"
 )
 
 type GoogleConnector struct {
@@ -30,7 +30,7 @@ func NewGoogleConnector(modelID *string) *GoogleConnector {
 	logger.Debug("NewGoogleConnector")
 
 	if modelID == nil || *modelID == "" {
-		model := Gemini20FlashLite
+		model := Gemini31FlashLite
 		modelID = &model
 	}
 

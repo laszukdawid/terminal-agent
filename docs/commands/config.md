@@ -106,7 +106,7 @@ agent config set model anthropic.claude-3-haiku-20240307-v1:0
 ### Google
 ```sh
 agent config set provider google
-agent config set model gemini-2.0-flash-lite
+agent config set model gemini-3.1-flash-lite
 ```
 
 ### Ollama

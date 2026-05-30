@@ -63,6 +63,57 @@ func providerSetupHint(provider string) string {
 	return ""
 }
 
+type providerReadiness struct {
+	Available bool
+	Message   string
+}
+
+func providerReadinessStatus(provider string) providerReadiness {
+	switch provider {
+	case connector.OpenaiProvider:
+		if os.Getenv("OPENAI_API_KEY") != "" {
+			return providerReadiness{Available: true, Message: "Available: OPENAI_API_KEY is visible to the GUI process."}
+		}
+		status, err := auth.NewManager().Status(provider)
+		if err == nil && status.Configured {
+			return providerReadiness{Available: true, Message: "Available: stored OpenAI auth is configured."}
+		}
+		return providerReadiness{Message: "Unavailable: OPENAI_API_KEY is not visible to the GUI process, and no stored OpenAI auth is configured."}
+	case connector.AnthropicProvider:
+		return envProviderReadiness("Anthropic", "ANTHROPIC_API_KEY")
+	case connector.GoogleProvider:
+		return envProviderReadiness("Google", "GEMINI_API_KEY")
+	case connector.MistralProvider:
+		return envProviderReadiness("Mistral", "MISTRAL_API_KEY")
+	case connector.MiMoProvider:
+		return envProviderReadiness("MiMo", "MIMO_API_KEY")
+	case connector.LlamaProvider:
+		if os.Getenv("YZMA_LIB") != "" {
+			return providerReadiness{Available: true, Message: "Available: YZMA_LIB is visible to the GUI process."}
+		}
+		return providerReadiness{Message: "Unavailable: YZMA_LIB is not visible to the GUI process."}
+	case connector.OllamaProvider:
+		return providerReadiness{Available: true, Message: "Available: Ollama does not require an API key; OLLAMA_HOST is optional."}
+	case connector.BedrockProvider:
+		if os.Getenv("AWS_REGION") != "" {
+			return providerReadiness{Available: true, Message: "Check AWS credentials: AWS_REGION is visible; Bedrock uses the AWS SDK credential chain."}
+		}
+		return providerReadiness{Available: true, Message: "Check AWS credentials: Bedrock uses the AWS SDK credential chain and defaults AWS_REGION when unset."}
+	default:
+		if provider == "" {
+			return providerReadiness{}
+		}
+		return providerReadiness{Message: fmt.Sprintf("Unknown provider: %s", provider)}
+	}
+}
+
+func envProviderReadiness(displayName, envVar string) providerReadiness {
+	if os.Getenv(envVar) != "" {
+		return providerReadiness{Available: true, Message: fmt.Sprintf("Available: %s is visible to the GUI process.", envVar)}
+	}
+	return providerReadiness{Message: fmt.Sprintf("Unavailable: %s is not visible to the GUI process. %s requires it.", envVar, displayName)}
+}
+
 func explainRuntimeError(provider string, err error) string {
 	if err == nil {
 		return ""

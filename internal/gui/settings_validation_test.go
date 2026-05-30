@@ -16,6 +16,28 @@ func TestProviderSetupHintMiMo(t *testing.T) {
 	assert.Contains(t, providerSetupHint(connector.MiMoProvider), "MIMO_API_KEY")
 }
 
+func TestProviderReadinessMiMoMissing(t *testing.T) {
+	t.Setenv("MIMO_API_KEY", "")
+
+	status := providerReadinessStatus(connector.MiMoProvider)
+
+	assert.False(t, status.Available)
+	assert.Contains(t, status.Message, "Unavailable")
+	assert.Contains(t, status.Message, "MIMO_API_KEY")
+	assert.Contains(t, status.Message, "GUI process")
+}
+
+func TestProviderReadinessMiMoAvailable(t *testing.T) {
+	t.Setenv("MIMO_API_KEY", "test-key")
+
+	status := providerReadinessStatus(connector.MiMoProvider)
+
+	assert.True(t, status.Available)
+	assert.Contains(t, status.Message, "Available")
+	assert.Contains(t, status.Message, "MIMO_API_KEY")
+	assert.Contains(t, status.Message, "GUI process")
+}
+
 // The Google hint must name the env var the connector actually reads
 // (GEMINI_API_KEY), not GOOGLE_API_KEY.
 func TestProviderSetupHintGoogle(t *testing.T) {
@@ -23,6 +45,23 @@ func TestProviderSetupHintGoogle(t *testing.T) {
 	hint := providerSetupHint(connector.GoogleProvider)
 	assert.Contains(t, hint, "GEMINI_API_KEY")
 	assert.NotContains(t, hint, "GOOGLE_API_KEY")
+}
+
+func TestProviderReadinessGoogleUsesGeminiAPIKey(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
+
+	status := providerReadinessStatus(connector.GoogleProvider)
+
+	assert.False(t, status.Available)
+	assert.Contains(t, status.Message, "GEMINI_API_KEY")
+	assert.NotContains(t, status.Message, "GOOGLE_API_KEY")
+}
+
+func TestProviderReadinessOllamaAvailable(t *testing.T) {
+	status := providerReadinessStatus(connector.OllamaProvider)
+
+	assert.True(t, status.Available)
+	assert.Contains(t, status.Message, "does not require an API key")
 }
 
 func TestFilterProviders(t *testing.T) {

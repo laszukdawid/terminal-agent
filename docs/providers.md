@@ -203,17 +203,17 @@ agent config set model claude-3-5-sonnet-latest
 2. Generate an API key
 3. Set the key as an environment variable:
    ```sh
-   export GOOGLE_API_KEY=your_api_key_here
+   export GEMINI_API_KEY=your_api_key_here
    ```
 
 **Configuration:**
 ```sh
 agent config set provider google
-agent config set model gemini-2.0-flash-lite
+agent config set model gemini-3.1-flash-lite
 ```
 
 **Recommended Models:**
-- `gemini-2.0-flash-lite` - Fast response times
+- `gemini-3.1-flash-lite` - Fast response times
 - `gemini-2.0-pro` - More capable model
 
 **Special Features:**
