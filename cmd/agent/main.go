@@ -15,6 +15,7 @@ import (
 
 var (
 	loglevel string
+	verbose  bool
 	device   string
 	version  = "dev"
 	commit   = "none"
@@ -62,6 +63,9 @@ func NewCommand() *cobra.Command {
 		Short: "Terminal Agent is a CLI tool to interact with the terminal",
 		Long:  `Terminal Agent is a CLI tool to interact with the terminal. It can be used to run commands, ask questions, and more.`,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if verbose {
+				loglevel = "debug"
+			}
 			logger, err := u.InitLogger(&loglevel)
 
 			if err != nil {
@@ -90,6 +94,7 @@ func NewCommand() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "set the log level (debug, info, warn, error, dpanic, panic, fatal)")
+	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "V", false, "shorthand for --loglevel debug")
 	cmd.PersistentFlags().StringVar(&device, "device", "", "set runtime device preference for direct llama provider (auto, cpu, gpu)")
 	cmd.Flags().BoolP("version", "v", false, "Print the version of the CLI")
 
