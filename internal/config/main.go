@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	log "github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ type Config interface {
 	GetWorkingDir() string
 	SetWorkingDir(string) error
 	GetMaxTokens() int
+	GetTaskTimeout() time.Duration
 	GetMemory() bool
 	SetMemory(bool) error
 	GetPermissions() Permissions
@@ -44,6 +46,7 @@ type config struct {
 	McpFilePath     string            `json:"mcp_file_path"`
 	WorkingDir      string            `json:"working_dir"`
 	MaxTokens       int               `json:"max_tokens"`
+	TaskTimeout     string            `json:"task_timeout,omitempty"`
 	Memory          bool              `json:"memory"`
 	ProjectContext  *bool             `json:"project_context,omitempty"`
 	Permissions     Permissions       `json:"permissions,omitempty"`
@@ -223,6 +226,20 @@ func (config *config) GetMaxTokens() int {
 		return NewDefaultConfig().MaxTokens
 	}
 	return config.MaxTokens
+}
+
+// GetTaskTimeout returns the configured default task timeout. An empty value or
+// an unparseable duration string yields 0, which the agent treats as unlimited.
+func (config *config) GetTaskTimeout() time.Duration {
+	if config.TaskTimeout == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(config.TaskTimeout)
+	if err != nil {
+		log.Warnw("Invalid task_timeout in config, treating as unlimited", "value", config.TaskTimeout, "error", err)
+		return 0
+	}
+	return d
 }
 
 func (config *config) SetWorkingDir(path string) error {

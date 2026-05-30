@@ -476,6 +476,80 @@ func TestTaskWithOptionsResultCancelsActiveUnixCommand(t *testing.T) {
 	assert.Equal(t, `unix("sleep 5")`, interaction.confirmations[0].Action)
 }
 
+// blockingTaskConnector blocks each query until the context is done, then
+// returns the context error. It is used to exercise task-level timeouts.
+type blockingTaskConnector struct {
+	queryCalls     int
+	queryToolCalls int
+}
+
+func (c *blockingTaskConnector) Query(ctx context.Context, _ *connector.QueryParams) (string, error) {
+	c.queryCalls++
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func (c *blockingTaskConnector) QueryWithTool(ctx context.Context, _ *connector.QueryParams, _ map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
+	c.queryToolCalls++
+	<-ctx.Done()
+	return connector.LlmResponseWithTools{}, ctx.Err()
+}
+
+func (c *blockingTaskConnector) SupportsNativeToolCalling() bool {
+	return true
+}
+
+func TestTaskWithOptionsResultReturnsErrTaskTimeoutWhenTimeoutElapses(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	conn := &blockingTaskConnector{}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	start := time.Now()
+	_, err := agent.TaskWithOptionsResult(context.Background(), "keep going forever", TaskOptions{
+		Timeout: 100 * time.Millisecond,
+		Dirs:    TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+	elapsed := time.Since(start)
+
+	require.ErrorIs(t, err, ErrTaskTimeout)
+	assert.NotErrorIs(t, err, context.Canceled)
+	assert.Less(t, elapsed, 2*time.Second)
+}
+
+func TestTaskWithOptionsResultCallerCancellationTakesPrecedenceOverTimeout(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := &cancelingTaskConnector{
+		cancel:   cancel,
+		response: connector.LlmResponseWithTools{Response: "still thinking"},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	_, err := agent.TaskWithOptionsResult(ctx, "keep going", TaskOptions{
+		Timeout: 10 * time.Second,
+		Dirs:    TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.NotErrorIs(t, err, ErrTaskTimeout)
+}
+
 func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {
 	prompt := buildTaskPrompt(&TaskState{
 		OriginalQuery: "trace repeated tool calls",

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
@@ -22,7 +23,18 @@ type TaskRequest struct {
 	WorkingDir     string
 	Allow          []string
 	Device         string
-	Config         config.Config
+	// Timeout bounds the whole task run. 0 means no task-level timeout (unlimited).
+	Timeout time.Duration
+	Config  config.Config
+}
+
+// formatTaskTimeout renders a task timeout for the session log meta header.
+// A zero duration is reported as "unlimited".
+func formatTaskTimeout(d time.Duration) string {
+	if d <= 0 {
+		return "unlimited"
+	}
+	return d.String()
 }
 
 type TaskResult struct {
@@ -39,7 +51,9 @@ func (s *service) TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event
 	}
 
 	events := make(chan Event)
-	recorder := sessionlog.New(SessionDir(), buildMeta("task", req.Provider, req.Model, req.WorkingDir, req.Message))
+	meta := buildMeta("task", req.Provider, req.Model, req.WorkingDir, req.Message)
+	meta.TaskTimeout = formatTaskTimeout(req.Timeout)
+	recorder := sessionlog.New(SessionDir(), meta)
 	interaction := &taskEventInteraction{ctx: ctx, events: events}
 
 	go s.runTaskEvents(ctx, req, interaction, recorder, events)
@@ -115,6 +129,7 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 		Allow:       req.Allow,
 		Interaction: interaction,
 		OnStep:      onStep,
+		Timeout:     req.Timeout,
 		Dirs: internalagent.TaskDirs{
 			RootDir:    taskRootDir,
 			CurrentDir: taskRootDir,

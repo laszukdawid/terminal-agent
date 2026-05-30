@@ -49,6 +49,15 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				allow = *allowList
 			}
 
+			// Resolve the task timeout: an explicit --timeout (including 0 =
+			// unlimited) wins; otherwise fall back to the configured default.
+			taskTimeout := config.GetTaskTimeout()
+			if flags.Changed("timeout") {
+				if flagTimeout, err := flags.GetDuration("timeout"); err == nil {
+					taskTimeout = flagTimeout
+				}
+			}
+
 			events, err := service.TaskEvents(ctx, app.TaskRequest{
 				Message:        userRequest,
 				Provider:       *provider,
@@ -57,6 +66,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				WorkingDir:     taskWorkingDir,
 				Allow:          allow,
 				Device:         device,
+				Timeout:        taskTimeout,
 				Config:         config,
 			})
 			if err != nil {
@@ -118,6 +128,10 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
 	promptFlag = cmd.Flags().String("prompt", "", "Custom system prompt (overrides file-based and default prompts)")
 	allowList = cmd.Flags().StringArray("allow", []string{}, "Allow exact action without confirmation (repeatable)")
+
+	// 'timeout' flag bounds the whole task run (Go duration, e.g. 15m). 0 means unlimited.
+	// Defaults to unlimited unless task_timeout is set in config.
+	cmd.Flags().Duration("timeout", 0, "Maximum task duration (e.g. 90s, 15m, 2h); 0 means no timeout")
 
 	// 'print' flag whether to print response to the stdout (default: true)
 	cmd.Flags().BoolP("print", "x", true, "Print the response to the stdout")
