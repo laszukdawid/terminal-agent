@@ -6,5 +6,8 @@ dist/
 /agent
 /agent-gui
 
+# Local design specs / implementation plans — never committed
+docs/superpowers/
+
 Taskfile.yaml
 .env
