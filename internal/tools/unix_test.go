@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"io"
+	"os"
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/utils"
@@ -65,4 +67,26 @@ func TestUnixToolsRun(t *testing.T) {
 		})
 	}
 
+}
+
+func TestUnixToolDoesNotPrintExecutionInternals(t *testing.T) {
+	mockExecutor := &mockBashExecutor{}
+	tool := NewUnixTool(mockExecutor)
+
+	stdout := os.Stdout
+	r, w, err := os.Pipe()
+	assert.NoError(t, err)
+	os.Stdout = w
+	defer func() {
+		os.Stdout = stdout
+	}()
+
+	out, runErr := tool.RunSchema(map[string]any{"command": "ls"})
+	assert.NoError(t, runErr)
+	assert.Equal(t, "exec: ls", out)
+
+	assert.NoError(t, w.Close())
+	printed, readErr := io.ReadAll(r)
+	assert.NoError(t, readErr)
+	assert.Empty(t, string(printed))
 }

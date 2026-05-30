@@ -472,7 +472,8 @@ Rules:
 - Use "tool", not "tool_name".
 - The "input" field must contain the actual tool arguments for the chosen tool.
 - Do not return a JSON schema.
-- If the raw output of unix, python, or file_search fully answers the request, set "final": true in that tool input.
+- Use "final": true ONLY when raw output is definitely the final user-facing answer: concise, clean, readable, and requiring no interpretation.
+- If raw output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set "final": true.
 
 Available tools:
 %s

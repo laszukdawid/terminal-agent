@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 const (
@@ -141,7 +143,7 @@ func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (str
 }
 
 func (u *UnixTool) execCodeWithExecutorContext(ctx context.Context, code string, executor CodeExecutor) (string, error) {
-	fmt.Printf("Tool: ExecCode: code: %s\n", code)
+	utils.GetLogger().Sugar().Debugw("Executing Unix tool", "command", code)
 	if code == "" {
 		return "", fmt.Errorf("no Unix command found in the response")
 	}
