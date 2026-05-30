@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
@@ -19,12 +20,14 @@ func (g *App) submit() {
 		return
 	}
 
+	hadPreviousResponse := strings.TrimSpace(g.state.output) != ""
 	g.state.resetOutput()
 	g.state.question = message
 	g.state.showRequest = false
 	ctx, cancel := context.WithCancel(context.Background())
 	g.state.setRunning(cancel)
-	g.popup.setOutput("")
+	g.state.responsePrefix = responseMarker(message, hadPreviousResponse)
+	g.renderOutput()
 	g.startIndicator()
 	g.render()
 
@@ -47,6 +50,17 @@ func (g *App) submit() {
 	}
 
 	go g.consumeAskEvents(events)
+}
+
+// responseMarker builds the label rendered above a response. It echoes the
+// prompt, and prefixes a separator when it replaces a previous response so the
+// new, changed prompt is visually distinct.
+func responseMarker(prompt string, afterPrevious bool) string {
+	marker := fmt.Sprintf("Response to: %s\n\n", prompt)
+	if afterPrevious {
+		marker = "---\n\n" + marker
+	}
+	return marker
 }
 
 func (g *App) cancel() {

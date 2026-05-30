@@ -172,7 +172,7 @@ func (g *App) render() {
 	g.popup.questionLabel.Text = g.state.question
 	g.popup.questionLabel.Refresh()
 	if !g.state.isRunning {
-		g.popup.setOutput(g.state.output)
+		g.renderOutput()
 	}
 	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
@@ -260,8 +260,14 @@ func (g *App) showCannedOutput(question, output string) {
 	g.state.question = question
 	g.state.output = output
 	g.state.showRequest = true
-	g.popup.setOutput(output)
+	g.renderOutput()
 	g.render()
+}
+
+// renderOutput pushes the current response into the view: the request marker
+// (responsePrefix) followed by the accumulated output.
+func (g *App) renderOutput() {
+	g.popup.setOutput(g.state.responsePrefix + g.state.output)
 }
 
 func memoryPath() string {

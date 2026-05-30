@@ -18,12 +18,12 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 				g.state.status = "thinking"
 			case appservice.EventOutputDelta:
 				g.state.output += eventCopy.Text
-				g.popup.setOutput(g.state.output)
+				g.renderOutput()
 				g.popup.outputScroll.ScrollToBottom()
 				g.state.status = "responding"
 			case appservice.EventCompleted:
 				g.state.output = eventCopy.FinalOutput
-				g.popup.setOutput(g.state.output)
+				g.renderOutput()
 				g.stopIndicatorAnimation()
 				g.state.clearRunning()
 			case appservice.EventFailed:
