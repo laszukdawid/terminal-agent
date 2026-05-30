@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 type BashExecutor struct {
@@ -20,8 +22,7 @@ func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, er
 		return "", err
 	}
 
-	// Prepare command for execution
-	fmt.Printf("Executing Unix command: %s\n", code)
+	log.Debugw("Executing Unix command", "command", code)
 	cmd := exec.CommandContext(ctx, "bash", "-c", code)
 	configureCommandCancellation(cmd)
 

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBashExecutorDoesNotPrintWorkingDirectory(t *testing.T) {
+func TestBashExecutorDoesNotPrintExecutionInternals(t *testing.T) {
 	tempDir := t.TempDir()
 	executor := &BashExecutor{workDir: tempDir}
 
@@ -33,8 +33,7 @@ func TestBashExecutorDoesNotPrintWorkingDirectory(t *testing.T) {
 	printed, readErr := io.ReadAll(r)
 	require.NoError(t, readErr)
 
-	assert.Contains(t, string(printed), "Executing Unix command: pwd")
-	assert.NotContains(t, string(printed), "Working directory:")
+	assert.Empty(t, string(printed))
 	assert.False(t, strings.Contains(output, "Working directory:"))
 }
 

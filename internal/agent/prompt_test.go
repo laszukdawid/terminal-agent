@@ -223,6 +223,20 @@ func TestSystemPromptHeaderIncludesProjectContextPath(t *testing.T) {
 	})
 }
 
+func TestSystemPromptTaskFinalGuidanceIsSelective(t *testing.T) {
+	prompt := SystemPromptTask
+
+	if !strings.Contains(prompt, "Use final=true ONLY when the raw output is definitely the final user-facing answer") {
+		t.Fatal("expected task prompt to reserve final=true for definitely final raw output")
+	}
+	if !strings.Contains(prompt, "If the output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set final=true") {
+		t.Fatal("expected task prompt to avoid final=true when output needs model review")
+	}
+	if strings.Contains(prompt, "fully answers the user's request and should be returned directly") {
+		t.Fatal("old final=true guidance is too broad")
+	}
+}
+
 func requireWriteFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

@@ -758,6 +758,14 @@ func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 	assert.Equal(t, 0, conn.queryCalls)
 }
 
+func TestTaskActionPromptFinalGuidanceIsSelective(t *testing.T) {
+	prompt := taskActionPromptTemplate
+
+	assert.Contains(t, prompt, `Use "final": true ONLY when raw output is definitely the final user-facing answer`)
+	assert.Contains(t, prompt, `If raw output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set "final": true`)
+	assert.NotContains(t, prompt, "fully answers the request")
+}
+
 func TestToolSupportsFinal(t *testing.T) {
 	t.Run("built-in tool opt-in", func(t *testing.T) {
 		assert.True(t, toolSupportsFinal(tools.NewReadTool("")))
