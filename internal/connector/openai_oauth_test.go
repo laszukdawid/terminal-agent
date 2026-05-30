@@ -205,6 +205,63 @@ data: {"type":"response.completed","response":{"id":"resp_1","object":"response"
 	}
 }
 
+func TestQueryWithToolOAuthCapturesStreamedFunctionCall(t *testing.T) {
+	// Codex delivers function calls via output_item.done with an empty completed output array.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`event: response.created
+data: {"type":"response.created","response":{"id":"resp_1","object":"response","created_at":1,"status":"in_progress","instructions":"You are helpful","model":"gpt-5.5","output":[],"parallel_tool_calls":true,"store":false,"tools":[],"usage":null},"sequence_number":0}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","item":{"id":"fc_1","type":"function_call","status":"in_progress","arguments":"","call_id":"call_1","name":"search_code"},"output_index":0,"sequence_number":1}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":0,"delta":"{\"query\":\"hi\"}","sequence_number":2}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","item_id":"fc_1","output_index":0,"arguments":"{\"query\":\"hi\"}","sequence_number":3}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"id":"fc_1","type":"function_call","status":"completed","arguments":"{\"query\":\"hi\"}","call_id":"call_1","name":"search_code"},"output_index":0,"sequence_number":4}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_1","object":"response","created_at":1,"status":"completed","instructions":"You are helpful","model":"gpt-5.5","output":[],"parallel_tool_calls":true,"store":false,"tools":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}},"sequence_number":5}
+
+`))
+	}))
+	defer server.Close()
+
+	client := openai.NewClient(
+		option.WithAPIKey("token"),
+		option.WithBaseURL(server.URL),
+	)
+	oc := &OpenAIConnector{
+		client:  &client,
+		logger:  *zap.NewNop(),
+		modelID: "gpt-5.5",
+		auth:    auth.ResolvedAuth{Type: auth.CredentialTypeOAuth},
+	}
+
+	sysPrompt := "You are helpful"
+	userPrompt := "find hi"
+	resp, err := oc.queryWithToolOAuth(context.Background(), &QueryParams{
+		SysPrompt:  &sysPrompt,
+		UserPrompt: &userPrompt,
+	}, map[string]tools.Tool{"search_code": stubTool{}})
+	if err != nil {
+		t.Fatalf("queryWithToolOAuth() error = %v", err)
+	}
+	if !resp.ToolUse {
+		t.Fatal("expected ToolUse=true for streamed function call")
+	}
+	if resp.ToolName != "search_code" {
+		t.Fatalf("ToolName = %q, want %q", resp.ToolName, "search_code")
+	}
+	if got, _ := resp.ToolInput["query"].(string); got != "hi" {
+		t.Fatalf("ToolInput[query] = %q, want %q", got, "hi")
+	}
+}
+
 func TestOpenAIQueryWithToolReturnsInvalidArgumentError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -86,6 +86,7 @@ func (oc *OpenAIConnector) streamOAuthResponse(ctx context.Context, qParams *Que
 
 	stream := oc.client.Responses.NewStreaming(ctx, params)
 	var streamedText strings.Builder
+	var streamedItems []responses.ResponseOutputItemUnion
 	var completedResponse *responses.Response
 
 	for stream.Next() {
@@ -106,6 +107,9 @@ func (oc *OpenAIConnector) streamOAuthResponse(ctx context.Context, qParams *Que
 			} else {
 				print(delta)
 			}
+		case "response.output_item.done":
+			// Codex returns an empty output array in response.completed, so items are captured here.
+			streamedItems = append(streamedItems, event.AsResponseOutputItemDone().Item)
 		case "response.completed":
 			response := event.AsResponseCompleted().Response
 			completedResponse = &response
@@ -121,6 +125,9 @@ func (oc *OpenAIConnector) streamOAuthResponse(ctx context.Context, qParams *Que
 	}
 
 	if completedResponse != nil {
+		if len(completedResponse.Output) == 0 && len(streamedItems) > 0 {
+			completedResponse.Output = streamedItems
+		}
 		text := completedResponse.OutputText()
 		if text == "" && streamedText.Len() > 0 {
 			text = streamedText.String()
