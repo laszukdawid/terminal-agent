@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -196,5 +197,24 @@ func TestGetProjectContext(t *testing.T) {
 		val := false
 		cfg.ProjectContext = &val
 		assert.False(t, cfg.GetProjectContext())
+	})
+}
+
+func TestGetTaskTimeout(t *testing.T) {
+	t.Run("defaults to zero (unlimited) when unset", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		assert.Equal(t, time.Duration(0), cfg.GetTaskTimeout())
+	})
+
+	t.Run("parses a valid duration string", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		cfg.TaskTimeout = "15m"
+		assert.Equal(t, 15*time.Minute, cfg.GetTaskTimeout())
+	})
+
+	t.Run("returns zero (unlimited) on invalid duration string", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		cfg.TaskTimeout = "not-a-duration"
+		assert.Equal(t, time.Duration(0), cfg.GetTaskTimeout())
 	})
 }

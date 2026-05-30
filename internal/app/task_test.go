@@ -4,11 +4,18 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFormatTaskTimeout(t *testing.T) {
+	assert.Equal(t, "unlimited", formatTaskTimeout(0))
+	assert.Equal(t, "15m0s", formatTaskTimeout(15*time.Minute))
+	assert.Equal(t, "1m30s", formatTaskTimeout(90*time.Second))
+}
 
 func TestResolveTaskRootDirUsesExplicitRequestWorkingDir(t *testing.T) {
 	requestDir := t.TempDir()

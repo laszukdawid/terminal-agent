@@ -40,14 +40,17 @@ const (
 
 // Meta is the provenance header written as the first line of every session file.
 type Meta struct {
-	RunID     string    `json:"run_id"`
-	Kind      string    `json:"kind"`
-	User      string    `json:"user,omitempty"`
-	Cwd       string    `json:"cwd,omitempty"`
-	Provider  string    `json:"provider,omitempty"`
-	Model     string    `json:"model,omitempty"`
-	Command   string    `json:"command,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	RunID    string `json:"run_id"`
+	Kind     string `json:"kind"`
+	User     string `json:"user,omitempty"`
+	Cwd      string `json:"cwd,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Command  string `json:"command,omitempty"`
+	// TaskTimeout records the resolved task-level timeout for task runs
+	// (e.g. "15m" or "unlimited"); empty for non-task runs.
+	TaskTimeout string    `json:"task_timeout,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Record is a single line in a session log file.

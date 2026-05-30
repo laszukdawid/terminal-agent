@@ -67,8 +67,37 @@ You will be asked to confirm each execution step, and the agent may also ask fol
 | `--log` | `-l` | `false` | Whether to log the input and output to a file |
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
 | `--allow` |  | `[]` | Allow actions without confirmation (repeatable, glob-based) |
+| `--timeout` |  | unlimited | Maximum duration for the whole task run (Go duration, e.g. `90s`, `15m`, `2h`); `0` means no timeout |
 
 Action strings use a function-style format, e.g. `unix("aws login sso")` or `file_edit("README.md", operation="write")`. String values use glob matching against the full value: `*` matches any sequence, `?` matches a single character, and character classes like `[ab]` or `[a-z]` are supported. Escape glob metacharacters with `\` when you want a literal match, for example `unix("ls -d \\*/")`. To constrain keys, use `allowKeys=["region", "profile", "read*"]`, and key values can use the same glob syntax, e.g. `region="us-*"`.
+
+## Task Timeout
+
+By default a task runs with **no timeout** — useful for long-running, foreground work such as monitoring (`agent task "watch CPU usage and tell me when it crosses 50%"`). The run stops only when the task completes, you cancel it (Ctrl-C), or it hits the internal max tool-call/turn limits.
+
+Use `--timeout` to bound the whole run with a Go duration string:
+
+```sh
+# Stop the task after 15 minutes
+agent task --timeout 15m "tail the log and summarize errors as they appear"
+
+# Short bound for a quick job
+agent task --timeout 90s "run the test suite and report failures"
+```
+
+Resolution order, highest priority first:
+
+1. The `--timeout` flag (including an explicit `--timeout 0`, which forces unlimited even when a config default is set).
+2. The `task_timeout` value in `~/.config/terminal-agent/config.json` (a duration string such as `"15m"`).
+3. The built-in default: unlimited.
+
+```json
+{
+  "task_timeout": "15m"
+}
+```
+
+When a task stops because its timeout elapsed, the run fails with a distinct timeout error so it is distinguishable from tool or model failures. The resolved timeout (`"15m"` or `"unlimited"`) is recorded in the session log header so you can audit why a task stopped. Cancelling the caller's context (e.g. pressing Ctrl-C) always takes precedence over the timeout.
 
 ## Safety Features
 

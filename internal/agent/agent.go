@@ -12,6 +12,11 @@ import (
 // ErrEmptyQuery is returned when the query is empty.
 var ErrEmptyQuery = fmt.Errorf("empty query")
 
+// ErrTaskTimeout is returned when a task run is stopped because its configured
+// timeout elapsed. It is distinct from caller context cancellation and from
+// tool or model failures so callers can identify timeout-driven stops.
+var ErrTaskTimeout = fmt.Errorf("task timed out")
+
 const MaxTokens = 400
 
 type Agent struct {

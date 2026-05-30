@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
@@ -130,4 +131,69 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	assert.Contains(t, output.String(), "Execute the following action?")
 	assert.Contains(t, output.String(), "Need clarification: Which directory?")
 	assert.Contains(t, output.String(), "done")
+}
+
+// runTaskCommandCapture runs the task command with the given config and args,
+// returning the TaskRequest the service received.
+func runTaskCommandCapture(t *testing.T, cfg config.Config, args ...string) app.TaskRequest {
+	t.Helper()
+	originalNewService := newService
+	defer func() { newService = originalNewService }()
+
+	var captured app.TaskRequest
+	newService = func() app.Service {
+		return &fakeTaskService{events: func(_ context.Context, req app.TaskRequest) (<-chan app.Event, error) {
+			captured = req
+			ch := make(chan app.Event)
+			go func() {
+				defer close(ch)
+				ch <- app.Event{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message}
+			}()
+			return ch, nil
+		}}
+	}
+
+	cmd := NewTaskCommand(cfg)
+	cmd.SetIn(bytes.NewBufferString(""))
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	cmd.Flags().String("device", "", "")
+	cmd.SetArgs(args)
+
+	require.NoError(t, cmd.ExecuteContext(context.Background()))
+	return captured
+}
+
+func TestTaskCommandResolvesTimeout(t *testing.T) {
+	t.Run("defaults to unlimited (zero) when neither flag nor config set", func(t *testing.T) {
+		req := runTaskCommandCapture(t, config.NewDefaultConfig(), "do", "something")
+		assert.Equal(t, time.Duration(0), req.Timeout)
+	})
+
+	t.Run("uses --timeout flag when provided", func(t *testing.T) {
+		req := runTaskCommandCapture(t, config.NewDefaultConfig(), "--timeout", "30s", "do", "something")
+		assert.Equal(t, 30*time.Second, req.Timeout)
+	})
+
+	t.Run("falls back to config when flag absent", func(t *testing.T) {
+		cfg := config.NewDefaultConfig()
+		cfg.TaskTimeout = "5m"
+		req := runTaskCommandCapture(t, cfg, "do", "something")
+		assert.Equal(t, 5*time.Minute, req.Timeout)
+	})
+
+	t.Run("flag overrides config", func(t *testing.T) {
+		cfg := config.NewDefaultConfig()
+		cfg.TaskTimeout = "5m"
+		req := runTaskCommandCapture(t, cfg, "--timeout", "1m", "do", "something")
+		assert.Equal(t, time.Minute, req.Timeout)
+	})
+
+	t.Run("explicit --timeout 0 overrides config back to unlimited", func(t *testing.T) {
+		cfg := config.NewDefaultConfig()
+		cfg.TaskTimeout = "5m"
+		req := runTaskCommandCapture(t, cfg, "--timeout", "0", "do", "something")
+		assert.Equal(t, time.Duration(0), req.Timeout)
+	})
 }

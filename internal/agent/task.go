@@ -29,6 +29,9 @@ type TaskOptions struct {
 	Dirs        TaskDirs
 	Interaction TaskInteraction
 	OnStep      func(TaskStep)
+	// Timeout bounds the whole task run. A value of 0 means no task-level
+	// timeout (unlimited). Caller context cancellation always takes precedence.
+	Timeout time.Duration
 }
 
 type TaskRunResult struct {
@@ -130,9 +133,24 @@ func (r TaskRunResult) DisplayText() string {
 }
 
 func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options TaskOptions) (TaskRunResult, error) {
+	// A positive timeout bounds the whole run; 0 means unlimited so the caller's
+	// context passes through untouched. WithTimeoutCause lets us distinguish a
+	// timeout-driven stop (cause == ErrTaskTimeout) from caller cancellation.
+	if options.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeoutCause(ctx, options.Timeout, ErrTaskTimeout)
+		defer cancel()
+	}
+
+	result, err := a.runTaskLoop(ctx, s, options)
+	if err != nil && context.Cause(ctx) == ErrTaskTimeout {
+		return TaskRunResult{}, ErrTaskTimeout
+	}
+	return result, err
+}
+
+func (a *Agent) runTaskLoop(ctx context.Context, s string, options TaskOptions) (TaskRunResult, error) {
 	logger := log.Sugar()
-	ctx, cancel := context.WithTimeout(ctx, 900*time.Second)
-	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return TaskRunResult{}, err
 	}
