@@ -21,6 +21,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.11.1
+	github.com/yuin/goldmark v1.7.10
 	go.uber.org/zap v1.27.0
 	golang.org/x/term v0.38.0
 	google.golang.org/api v0.230.0
@@ -104,7 +105,6 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	github.com/yuin/goldmark v1.7.10 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
@@ -128,4 +128,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace fyne.io/x/fyne => github.com/laszukdawid/fyne-x v0.0.0-20260529182451-7d2670a45b5f
+replace fyne.io/x/fyne => /Users/dawidlaszuk/projects/fyne-x

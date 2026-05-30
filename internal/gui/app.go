@@ -21,9 +21,10 @@ type App struct {
 	popup         *popupWindow
 	quit          func()
 	stopIndicator chan struct{}
+	devMode       bool
 }
 
-func NewApp(service appservice.Service, cfg config.Config, appID string) *App {
+func NewApp(service appservice.Service, cfg config.Config, appID string, devMode bool) *App {
 	fyneApp := app.NewWithID(appID)
 	gui := &App{
 		fyneApp:       fyneApp,
@@ -32,11 +33,12 @@ func NewApp(service appservice.Service, cfg config.Config, appID string) *App {
 		state:         &state{},
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
+		devMode:       devMode,
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
 	}
-	gui.popup = newPopupWindow(fyneApp)
+	gui.popup = newPopupWindow(fyneApp, devMode)
 	gui.wire()
 	gui.render()
 	return gui
@@ -126,6 +128,7 @@ func (g *App) wire() {
 	}
 	g.popup.onCopy = g.copyOutput
 	g.popup.onSettings = g.openSettings
+	g.popup.onTest = g.openTestMenu
 	g.popup.onEscape = func() {
 		g.Hide()
 	}
@@ -168,8 +171,8 @@ func (g *App) render() {
 	g.popup.input.SetText(g.state.input)
 	g.popup.questionLabel.Text = g.state.question
 	g.popup.questionLabel.Refresh()
-	if !g.state.isRunning && g.popup.outputField.Text != g.state.output {
-		g.popup.outputField.SetText(g.state.output)
+	if !g.state.isRunning {
+		g.renderOutput()
 	}
 	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
@@ -232,6 +235,38 @@ func (g *App) openSettings() {
 		g.render()
 		return nil
 	})
+}
+
+// openTestMenu shows the dev-only test dialog. Each entry injects a canned
+// response so rendering can be exercised without a live model call.
+func (g *App) openTestMenu() {
+	g.popup.showTestDialog([]devTest{
+		{
+			name: "Exhaustive markdown",
+			run: func() {
+				g.showCannedOutput("Markdown feature test", exhaustiveMarkdown)
+			},
+		},
+	})
+}
+
+// showCannedOutput places static content in the response area as if a run had
+// completed, without contacting any provider.
+func (g *App) showCannedOutput(question, output string) {
+	if g.state.isRunning {
+		g.cancel()
+	}
+	g.state.resetOutput()
+	g.state.question = question
+	g.state.output = output
+	g.state.showRequest = true
+	g.renderOutput()
+	g.render()
+}
+
+// renderOutput pushes the current response into the view.
+func (g *App) renderOutput() {
+	g.popup.setOutput(g.state.output)
 }
 
 func memoryPath() string {

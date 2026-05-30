@@ -27,6 +27,7 @@ const fyneAppID = "com.terminal-agent.popup"
 func main() {
 	show := flag.Bool("show", false, "show an existing popup or start a visible primary instance")
 	newInstance := flag.Bool("new", false, "start a new isolated GUI instance")
+	devMode := flag.Bool("dev", false, "enable developer tools (adds a Test button for rendering checks)")
 	flag.Parse()
 
 	loglevel := zap.InfoLevel.String()
@@ -81,7 +82,7 @@ func main() {
 	}
 	defer os.Remove(instance.SocketPath)
 
-	guiApp := gui.NewApp(service, cfg, windowAppID)
+	guiApp := gui.NewApp(service, cfg, windowAppID, *devMode)
 	server, err := platform.Listen(instance.SocketPath, func(command string) error {
 		switch command {
 		case platform.CommandShow:

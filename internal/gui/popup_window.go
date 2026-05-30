@@ -21,13 +21,12 @@ const (
 	defaultWindowHeight   float32 = 280
 	minWindowHeight       float32 = 240
 	maxWindowHeight       float32 = 760
-	maxInputRows                  = 3
-	compactOutputHeight   float32 = 110
-	statusMinWidth        float32 = 130
-	statusIndicatorSize   float32 = 18
-	providerStatusWidth   float32 = 28
-	providerStatusHeight  float32 = 24
-	maxVisibleOutputLines         = 5
+	maxInputRows                 = 3
+	compactOutputHeight  float32 = 110
+	statusMinWidth       float32 = 130
+	statusIndicatorSize  float32 = 18
+	providerStatusWidth  float32 = 28
+	providerStatusHeight float32 = 24
 )
 
 var spinnerFrames = []string{"|", "/", "-", "\\"}
@@ -42,7 +41,9 @@ type popupWindow struct {
 	answerMeta      *fyne.Container
 	questionCard    fyne.CanvasObject
 	questionLabel   *canvas.Text
-	outputField     *readOnlyEntry
+	outputField     *widget.RichText
+	outputScroll    *container.Scroll
+	lastRendered    string
 	headerStatus    *widget.Label
 	headerBrain     *canvas.Text
 	headerSpinner   *canvas.Text
@@ -51,6 +52,7 @@ type popupWindow struct {
 	actionButton    *widget.Button
 	copyButton      *widget.Button
 	settingsButton  *widget.Button
+	testButton      *widget.Button
 	answerPanel     *fyne.Container
 
 	onSubmit     func()
@@ -59,6 +61,7 @@ type popupWindow struct {
 	onAction     func()
 	onCopy       func()
 	onSettings   func()
+	onTest       func()
 	onInput      func(string)
 }
 
@@ -67,10 +70,6 @@ type popupEntry struct {
 	app      fyne.App
 	onEscape func()
 	onSubmit func()
-}
-
-type readOnlyEntry struct {
-	widget.Entry
 }
 
 type providerStatusIcon struct {
@@ -196,25 +195,7 @@ func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 	e.Entry.TypedKey(key)
 }
 
-func newReadOnlyEntry() *readOnlyEntry {
-	entry := &readOnlyEntry{}
-	entry.ExtendBaseWidget(entry)
-	entry.MultiLine = true
-	entry.Wrapping = fyne.TextWrapWord
-	entry.Scroll = fyne.ScrollVerticalOnly
-	return entry
-}
-
-func (e *readOnlyEntry) TypedRune(rune) {}
-
-func (e *readOnlyEntry) TypedKey(key *fyne.KeyEvent) {
-	switch key.Name {
-	case fyne.KeyUp, fyne.KeyDown, fyne.KeyLeft, fyne.KeyRight, fyne.KeyPageUp, fyne.KeyPageDown, fyne.KeyHome, fyne.KeyEnd:
-		e.Entry.TypedKey(key)
-	}
-}
-
-func newPopupWindow(app fyne.App) *popupWindow {
+func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	window := app.NewWindow("Terminal Agent")
 	window.Resize(fyne.NewSize(defaultWindowWidth, defaultWindowHeight))
 	window.SetFixedSize(false)
@@ -230,8 +211,10 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	questionLabel.Alignment = fyne.TextAlignLeading
 	questionLabel.TextSize = theme.TextSize()
 
-	outputField := newReadOnlyEntry()
-	outputField.SetMinRowsVisible(6)
+	outputField := widget.NewRichText()
+	outputField.Wrapping = fyne.TextWrapWord
+	outputScroll := container.NewVScroll(outputField)
+	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 
 	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	headerStatus.Alignment = fyne.TextAlignCenter
@@ -253,11 +236,15 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	settingsButton := widget.NewButton("Settings", nil)
 	copyButton.Disable()
 
+	var testButton *widget.Button
+	if devMode {
+		testButton = widget.NewButton("Test", nil)
+	}
+
 	questionCard := withBackground(questionLabel, color.NRGBA{R: 232, G: 235, B: 239, A: 255})
 	questionCard.Hide()
 	inputCard := withBackground(input, theme.Color(theme.ColorNameInputBackground))
-	outputCard := withBackground(outputField, theme.Color(theme.ColorNameInputBackground))
-	outputCard.Resize(fyne.NewSize(0, compactOutputHeight))
+	outputCard := withBackground(outputScroll, theme.Color(theme.ColorNameInputBackground))
 
 	answerHeader := container.NewHBox(
 		answerHeading,
@@ -266,7 +253,11 @@ func newPopupWindow(app fyne.App) *popupWindow {
 	)
 	answerMeta := container.NewVBox(requestHeading, questionCard, answerHeader)
 	answerPanel := container.NewBorder(answerMeta, nil, nil, nil, outputCard)
-	toolbar := container.NewHBox(actionButton, layout.NewSpacer(), settingsButton)
+	toolbar := container.NewHBox(actionButton, layout.NewSpacer())
+	if testButton != nil {
+		toolbar.Add(testButton)
+	}
+	toolbar.Add(settingsButton)
 	statusSlot := container.NewGridWrap(
 		fyne.NewSize(statusMinWidth, max(headerStatus.MinSize().Height, statusIndicatorSize)),
 		container.NewCenter(headerStatus),
@@ -304,6 +295,7 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		answerMeta:      answerMeta,
 		questionLabel:   questionLabel,
 		outputField:     outputField,
+		outputScroll:    outputScroll,
 		headerStatus:    headerStatus,
 		headerBrain:     headerBrain,
 		headerSpinner:   headerSpinner,
@@ -312,6 +304,7 @@ func newPopupWindow(app fyne.App) *popupWindow {
 		actionButton:    actionButton,
 		copyButton:      copyButton,
 		settingsButton:  settingsButton,
+		testButton:      testButton,
 		answerPanel:     answerPanel,
 	}
 	input.onEscape = func() {
@@ -345,12 +338,52 @@ func newPopupWindow(app fyne.App) *popupWindow {
 			p.onSettings()
 		}
 	}
+	if testButton != nil {
+		testButton.OnTapped = func() {
+			if p.onTest != nil {
+				p.onTest()
+			}
+		}
+	}
 
 	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyL, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
 		p.window.Canvas().Focus(p.input)
 	})
 
 	return p
+}
+
+func (p *popupWindow) setOutput(content string) {
+	if p.lastRendered == content {
+		return
+	}
+	p.lastRendered = content
+	p.outputField.Segments = renderMarkdown(unwrapMarkdownFence(content))
+	p.outputField.Refresh()
+}
+
+// unwrapMarkdownFence strips an outer ```markdown or ```md code fence so
+// the inner content is parsed as rich text instead of a single code block.
+// LLMs commonly wrap markdown responses this way.
+func unwrapMarkdownFence(content string) string {
+	trimmed := strings.TrimSpace(content)
+	lower := strings.ToLower(trimmed)
+
+	var prefixLen int
+	switch {
+	case strings.HasPrefix(lower, "```markdown\n"):
+		prefixLen = len("```markdown\n")
+	case strings.HasPrefix(lower, "```md\n"):
+		prefixLen = len("```md\n")
+	default:
+		return content
+	}
+
+	inner := trimmed[prefixLen:]
+	if !strings.HasSuffix(inner, "\n```") {
+		return content
+	}
+	return inner[:len(inner)-4]
 }
 
 func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int) {
@@ -382,6 +415,29 @@ func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int)
 		p.headerSpinner.Text = spinnerFrames[0]
 		p.headerSpinner.Refresh()
 	}
+}
+
+// showTestDialog presents the dev-only Test menu. Each entry runs its action
+// and closes the dialog. The dialog is only reachable when the GUI is started
+// in dev mode.
+func (p *popupWindow) showTestDialog(tests []devTest) {
+	var dlg dialog.Dialog
+	buttons := make([]fyne.CanvasObject, 0, len(tests))
+	for _, t := range tests {
+		run := t.run
+		btn := widget.NewButton(t.name, func() {
+			dlg.Hide()
+			if run != nil {
+				run()
+			}
+		})
+		btn.Alignment = widget.ButtonAlignLeading
+		buttons = append(buttons, btn)
+	}
+	content := container.NewVBox(buttons...)
+	dlg = dialog.NewCustom("Test", "Close", content, p.window)
+	dlg.Resize(fyne.NewSize(360, 0))
+	dlg.Show()
 }
 
 func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, onSave func(provider, model string) error) {

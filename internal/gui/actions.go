@@ -2,7 +2,6 @@ package gui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
@@ -25,11 +24,7 @@ func (g *App) submit() {
 	g.state.showRequest = false
 	ctx, cancel := context.WithCancel(context.Background())
 	g.state.setRunning(cancel)
-	separator := "\n────────────────────────\n\n"
-	if g.popup.outputField.Text == "" {
-		separator = ""
-	}
-	g.popup.outputField.SetText(separator + fmt.Sprintf("Response to: %s\n\n", message))
+	g.renderOutput()
 	g.startIndicator()
 	g.render()
 
