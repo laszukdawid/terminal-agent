@@ -210,7 +210,7 @@ tasks:
     desc: Set the provider to google
     cmds:
       - go run cmd/agent/main.go config set provider google
-      - go run cmd/agent/main.go config set model gemini-2.0-flash-lite
+      - go run cmd/agent/main.go config set model gemini-3.1-flash-lite
   
   run:set:ollama:
     desc: Set the provider to ollama
@@ -361,7 +361,7 @@ tasks:
     vars:
       Q: "What command shows disk usage in human readable form?"
       PROVIDER: "google"
-      MODEL: "gemini-2.0-flash-lite"
+      MODEL: "gemini-3.1-flash-lite"
     cmds:
       - task: test:model:ask
         vars:
@@ -414,7 +414,7 @@ tasks:
     vars:
       Q: "List all files in home directory"
       PROVIDER: "google"
-      MODEL: "gemini-2.0-flash-lite"
+      MODEL: "gemini-3.1-flash-lite"
     cmds:
       - task: test:model:task
         vars:

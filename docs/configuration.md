@@ -184,7 +184,7 @@ Stored credentials are managed with the `agent auth` command and take effect aut
 |----------|---------------------|-----------|-------------|
 | OpenAI | `OPENAI_API_KEY` | supported | API key or stored credential for OpenAI services |
 | Anthropic | `ANTHROPIC_API_KEY` | — | API key for Anthropic Claude models |
-| Google | `GOOGLE_API_KEY` | — | API key for Google AI (Gemini) |
+| Google | `GEMINI_API_KEY` | — | API key for Google AI (Gemini) |
 | Xiaomi MiMo | `MIMO_API_KEY` | — | API key for Xiaomi MiMo models |
 | Mistral | `MISTRAL_API_KEY` | — | API key for Mistral AI models |
 | AWS Bedrock | AWS credentials | — | Standard AWS credential configuration |
@@ -227,7 +227,9 @@ mkdir -p ~/.local/share/yzma/lib
 export YZMA_LIB=$HOME/.local/share/yzma/lib
 ```
 
-For persistent configuration, add this to your shell profile (`.bashrc`, `.zshrc`, etc.).
+For persistent CLI configuration, add this to your shell profile (`.bashrc`, `.zshrc`, etc.).
+Desktop-launched GUI processes usually do not source shell startup files, so variables set only there may not be visible to `agent-gui`.
+If the GUI reports a provider key as unavailable, export it through your desktop/session environment or start `agent-gui` from a shell that already has the variable.
 
 ## Model Context Protocol (MCP)
 
