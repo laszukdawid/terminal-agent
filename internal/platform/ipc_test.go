@@ -2,13 +2,14 @@ package platform
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestIPCServerHandlesShowCommand(t *testing.T) {
-	socketPath := filepath.Join(t.TempDir(), "ipc.sock")
+	socketPath := ipcTestSocketPath(t)
 	commands := make(chan string, 1)
 
 	server, err := Listen(socketPath, func(command string) error {
@@ -38,7 +39,7 @@ func TestIPCServerHandlesShowCommand(t *testing.T) {
 }
 
 func TestSendRejectsUnexpectedResponse(t *testing.T) {
-	socketPath := filepath.Join(t.TempDir(), "ipc.sock")
+	socketPath := ipcTestSocketPath(t)
 	server, err := Listen(socketPath, func(command string) error {
 		if command != CommandShow {
 			t.Fatalf("command = %q, want %q", command, CommandShow)
@@ -56,4 +57,16 @@ func TestSendRejectsUnexpectedResponse(t *testing.T) {
 	if err := Send(ctx, socketPath, CommandShow); err == nil {
 		t.Fatal("Send() error = nil, want non-nil")
 	}
+}
+
+func ipcTestSocketPath(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("/tmp", "ta-ipc-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	return filepath.Join(dir, "ipc.sock")
 }

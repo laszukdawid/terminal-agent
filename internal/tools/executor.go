@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/laszukdawid/terminal-agent/internal/utils"
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 type BashExecutor struct {
@@ -22,7 +22,7 @@ func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, er
 		return "", err
 	}
 
-	utils.GetLogger().Sugar().Debugw("Executing Unix command", "command", code)
+	log.Debugw("Executing Unix command", "command", code)
 	cmd := exec.CommandContext(ctx, "bash", "-c", code)
 	configureCommandCancellation(cmd)
 
