@@ -25,8 +25,6 @@ const (
 	compactOutputHeight   float32 = 110
 	statusMinWidth        float32 = 130
 	statusIndicatorSize   float32 = 18
-	providerStatusWidth   float32 = 28
-	providerStatusHeight  float32 = 24
 	maxVisibleOutputLines         = 5
 )
 
@@ -113,35 +111,14 @@ func (s *providerStatusIcon) setStatus(status providerReadiness) {
 }
 
 func (s *providerStatusIcon) CreateRenderer() fyne.WidgetRenderer {
-	return &providerStatusIconRenderer{icon: s.icon}
-}
-
-type providerStatusIconRenderer struct {
-	icon *canvas.Text
-}
-
-func (r *providerStatusIconRenderer) Destroy() {}
-
-func (r *providerStatusIconRenderer) Layout(size fyne.Size) {
-	iconSize := r.icon.MinSize()
-	r.icon.Resize(iconSize)
-	r.icon.Move(fyne.NewPos((size.Width-iconSize.Width)/2, (size.Height-iconSize.Height)/2))
-}
-
-func (r *providerStatusIconRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(providerStatusWidth, providerStatusHeight)
-}
-
-func (r *providerStatusIconRenderer) Objects() []fyne.CanvasObject {
-	return []fyne.CanvasObject{r.icon}
-}
-
-func (r *providerStatusIconRenderer) Refresh() {
-	r.icon.Refresh()
+	return widget.NewSimpleRenderer(s.icon)
 }
 
 func (s *providerStatusIcon) MouseIn(e *desktop.MouseEvent) {
 	if s.message == "" || s.canvas == nil {
+		return
+	}
+	if s.popup != nil {
 		return
 	}
 	label := widget.NewLabel(s.message)
@@ -151,7 +128,7 @@ func (s *providerStatusIcon) MouseIn(e *desktop.MouseEvent) {
 	s.popup.Resize(fyne.NewSize(360, content.MinSize().Height))
 	pos := s.Position().AddXY(s.Size().Width+8, 0)
 	if e != nil {
-		pos = e.AbsolutePosition.AddXY(12, 12)
+		pos = e.AbsolutePosition.AddXY(28, 28)
 	}
 	s.popup.ShowAtPosition(pos)
 }
