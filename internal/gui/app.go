@@ -264,10 +264,9 @@ func (g *App) showCannedOutput(question, output string) {
 	g.render()
 }
 
-// renderOutput pushes the current response into the view: the request marker
-// (responsePrefix) followed by the accumulated output.
+// renderOutput pushes the current response into the view.
 func (g *App) renderOutput() {
-	g.popup.setOutput(g.state.responsePrefix + g.state.output)
+	g.popup.setOutput(g.state.output)
 }
 
 func memoryPath() string {
