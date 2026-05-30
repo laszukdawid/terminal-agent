@@ -34,6 +34,22 @@ type AvailabilityAwareTool interface {
 	IsAvailable() bool
 }
 
+// PermissionCategory describes a tool's blast radius for confirmation policy.
+type PermissionCategory string
+
+const (
+	PermissionRead    PermissionCategory = "read"
+	PermissionWrite   PermissionCategory = "write"
+	PermissionExecute PermissionCategory = "execute"
+)
+
+// CategorizedTool lets a tool declare its permission category. Tools that do
+// not implement it are treated as PermissionExecute (gated).
+type CategorizedTool interface {
+	Tool
+	PermissionCategory() PermissionCategory
+}
+
 type ToolExecutionContext struct {
 	RootDir    string
 	CurrentDir string

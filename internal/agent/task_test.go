@@ -24,21 +24,29 @@ type fixedOutputTool struct {
 	output string
 }
 
-func (t *fixedOutputTool) Name() string                             { return t.name }
-func (t *fixedOutputTool) Description() string                      { return "" }
-func (t *fixedOutputTool) InputSchema() map[string]any              { return map[string]any{} }
-func (t *fixedOutputTool) HelpText() string                         { return "" }
-func (t *fixedOutputTool) RunSchema(map[string]any) (string, error) { return t.output, nil }
-func (t *fixedOutputTool) Run(*string) (string, error)              { return t.output, nil }
+func (t *fixedOutputTool) Name() string                                 { return t.name }
+func (t *fixedOutputTool) PermissionCategory() tools.PermissionCategory { return tools.PermissionRead }
+func (t *fixedOutputTool) Description() string                          { return "" }
+func (t *fixedOutputTool) InputSchema() map[string]any                  { return map[string]any{} }
+func (t *fixedOutputTool) HelpText() string                             { return "" }
+func (t *fixedOutputTool) RunSchema(map[string]any) (string, error)     { return t.output, nil }
+func (t *fixedOutputTool) Run(*string) (string, error)                  { return t.output, nil }
 
 type schemaOutputTool struct {
-	name   string
-	output string
-	schema map[string]any
-	inputs []map[string]any
+	name     string
+	output   string
+	schema   map[string]any
+	inputs   []map[string]any
+	category tools.PermissionCategory
 }
 
-func (t *schemaOutputTool) Name() string                { return t.name }
+func (t *schemaOutputTool) Name() string { return t.name }
+func (t *schemaOutputTool) PermissionCategory() tools.PermissionCategory {
+	if t.category != "" {
+		return t.category
+	}
+	return tools.PermissionRead
+}
 func (t *schemaOutputTool) Description() string         { return "" }
 func (t *schemaOutputTool) InputSchema() map[string]any { return t.schema }
 func (t *schemaOutputTool) HelpText() string            { return "" }
@@ -55,7 +63,10 @@ type sequentialOutputTool struct {
 	inputs  []map[string]any
 }
 
-func (t *sequentialOutputTool) Name() string                { return t.name }
+func (t *sequentialOutputTool) Name() string { return t.name }
+func (t *sequentialOutputTool) PermissionCategory() tools.PermissionCategory {
+	return tools.PermissionRead
+}
 func (t *sequentialOutputTool) Description() string         { return "" }
 func (t *sequentialOutputTool) InputSchema() map[string]any { return t.schema }
 func (t *sequentialOutputTool) HelpText() string            { return "" }
@@ -231,6 +242,55 @@ func (i *fakeTaskInteraction) Clarify(req TaskClarificationRequest) (string, err
 	return i.answer, nil
 }
 
+// uncategorizedStubTool stands in for an MCP/third-party tool that does not
+// declare a permission category, so it must default to gated.
+type uncategorizedStubTool struct{}
+
+func (uncategorizedStubTool) RunSchema(map[string]any) (string, error) { return "", nil }
+func (uncategorizedStubTool) Run(*string) (string, error)              { return "", nil }
+func (uncategorizedStubTool) Name() string                             { return "mcp_thing" }
+func (uncategorizedStubTool) Description() string                      { return "external tool" }
+func (uncategorizedStubTool) InputSchema() map[string]any              { return map[string]any{} }
+func (uncategorizedStubTool) HelpText() string                         { return "" }
+
+func TestConfirmToolByCategory(t *testing.T) {
+	cases := []struct {
+		name       string
+		tool       tools.Tool
+		input      map[string]any
+		wantPrompt bool
+	}{
+		{"read never prompts", tools.NewReadTool("/repo"), map[string]any{"path": "x"}, false},
+		{"write inside root", tools.NewFileEditTool("/repo"), map[string]any{"path": "notes.txt", "operation": "write"}, false},
+		{"write outside root", tools.NewFileEditTool("/repo"), map[string]any{"path": "../escape.txt", "operation": "write"}, true},
+		{"execute always prompts", tools.NewUnixTool(nil), map[string]any{"command": "ls"}, true},
+		{"undeclared tool gated", uncategorizedStubTool{}, map[string]any{}, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+			requester := taskUserConfirmationRequester{interaction: interaction}
+			run := &taskExecutionState{
+				state:         &TaskState{Dirs: TaskDirs{RootDir: "/repo", CurrentDir: "/repo"}},
+				confirmations: NewConfirmationManager(nil, nil, requester.RequestUserConfirmation, nil),
+			}
+			response := connector.LlmResponseWithTools{ToolName: tc.tool.Name(), ToolInput: tc.input}
+
+			allowed, err := run.confirmTool(tc.tool, response)
+			if err != nil {
+				t.Fatalf("confirmTool error: %v", err)
+			}
+			if !allowed {
+				t.Fatal("expected allow (interaction approves)")
+			}
+			if gotPrompt := len(interaction.confirmations) > 0; gotPrompt != tc.wantPrompt {
+				t.Fatalf("prompted = %v, want %v", gotPrompt, tc.wantPrompt)
+			}
+		})
+	}
+}
+
 func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
 	conn := &summaryCaptureConnector{}
 	sysPrompt := "task system prompt"
@@ -318,8 +378,9 @@ func TestTaskUsesInjectedConfirmationInteraction(t *testing.T) {
 	rootDir := t.TempDir()
 	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true, Remember: true}}
 	unixTool := &schemaOutputTool{
-		name:   tools.ToolNameUnix,
-		output: "status output",
+		name:     tools.ToolNameUnix,
+		category: tools.PermissionExecute,
+		output:   "status output",
 		schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

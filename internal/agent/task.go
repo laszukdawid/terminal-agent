@@ -266,7 +266,7 @@ func (a *Agent) handleTaskToolResponse(ctx context.Context, logger *zap.SugaredL
 		return TaskRunResult{}, false, nil
 	}
 
-	allowed, err := run.confirmTool(response)
+	allowed, err := run.confirmTool(tool, response)
 	if err != nil {
 		logger.Errorw("Tool confirmation failed", "tool", response.ToolName, "error", err)
 		return TaskRunResult{}, false, fmt.Errorf("tool confirmation failed: %w", err)
@@ -339,11 +339,27 @@ func (a *Agent) finalizeTaskRun(ctx context.Context, run *taskExecutionState) (T
 	return TaskRunResult{Response: response, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}, nil
 }
 
-func (r *taskExecutionState) confirmTool(response connector.LlmResponseWithTools) (bool, error) {
-	if !requiresConfirmation(response.ToolName) {
-		return true, nil
+func (r *taskExecutionState) confirmTool(tool tools.Tool, response connector.LlmResponseWithTools) (bool, error) {
+	autoAllow := r.autoAllowsTool(tool, response.ToolInput)
+	return r.confirmations.ConfirmWithDefault(BuildActionString(response.ToolName, response.ToolInput), autoAllow)
+}
+
+// autoAllowsTool reports the default confirmation decision for a tool when no
+// explicit allow/deny/ask rule matches: read tools and in-workspace writes run
+// without prompting; arbitrary execution and undeclared tools are gated.
+func (r *taskExecutionState) autoAllowsTool(tool tools.Tool, input map[string]any) bool {
+	switch permissionCategoryFor(tool) {
+	case tools.PermissionRead:
+		return true
+	case tools.PermissionWrite:
+		path, _ := input["path"].(string)
+		return tools.PathWithinRoot(path, tools.ToolExecutionContext{
+			RootDir:    r.state.Dirs.RootDir,
+			CurrentDir: r.state.Dirs.CurrentDir,
+		})
+	default:
+		return false
 	}
-	return r.confirmations.Confirm(BuildActionString(response.ToolName, response.ToolInput))
 }
 
 func (r *taskExecutionState) recordThought(thought string) {
@@ -866,13 +882,14 @@ func toolInputRequestsFinal(input map[string]any) bool {
 	return taskToolInputRequestsFinal(input)
 }
 
-func requiresConfirmation(toolName string) bool {
-	switch toolName {
-	case tools.ToolNameUnix, tools.ToolNameFileEdit, tools.ToolNamePython:
-		return true
-	default:
-		return false
+// permissionCategoryFor returns a tool's declared permission category, treating
+// tools that do not declare one (e.g. MCP tools) as PermissionExecute so they
+// are gated by default.
+func permissionCategoryFor(tool tools.Tool) tools.PermissionCategory {
+	if categorized, ok := tool.(tools.CategorizedTool); ok {
+		return categorized.PermissionCategory()
 	}
+	return tools.PermissionExecute
 }
 
 type askUserTool struct {
@@ -902,6 +919,10 @@ func NewAskUserTool(interaction TaskInteraction) *askUserTool {
 
 func (t *askUserTool) Name() string {
 	return t.name
+}
+
+func (t *askUserTool) PermissionCategory() tools.PermissionCategory {
+	return tools.PermissionRead
 }
 
 func (t *askUserTool) Description() string {
@@ -963,6 +984,10 @@ func NewFinalAnswerTool() *finalAnswerTool {
 
 func (t *finalAnswerTool) Name() string {
 	return t.name
+}
+
+func (t *finalAnswerTool) PermissionCategory() tools.PermissionCategory {
+	return tools.PermissionRead
 }
 
 func (t *finalAnswerTool) Description() string {

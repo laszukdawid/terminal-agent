@@ -115,6 +115,10 @@ func (u *UnixTool) Name() string {
 	return u.name
 }
 
+func (u *UnixTool) PermissionCategory() PermissionCategory {
+	return PermissionExecute
+}
+
 func (u *UnixTool) Description() string {
 	return u.description
 }

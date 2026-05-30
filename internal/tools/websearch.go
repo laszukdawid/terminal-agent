@@ -102,6 +102,10 @@ func (w *WebsearchTool) Name() string {
 	return w.name
 }
 
+func (w *WebsearchTool) PermissionCategory() PermissionCategory {
+	return PermissionRead
+}
+
 func (w *WebsearchTool) Description() string {
 	return w.description
 }

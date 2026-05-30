@@ -4,6 +4,15 @@ Terminal Agent is a CLI-first AI assistant that lets you collaborate with large 
 
 Tool execution permissions can be set in `~/.config/terminal-agent/config.json` and in project-local `.terminal-agent.json` files. Local configs are discovered by walking from the current working directory up to the filesystem root; the closest file wins when priorities overlap. Permissions use the same action expression format shown in confirmations (for example `unix("aws sso login", profile="dev")`) and support `allow`, `deny`, and `ask` lists. When prompted, `yes!` or `no!` will remember a decision by writing to the nearest `.terminal-agent.json`, falling back to the global config when no local file exists.
 
+Whether a tool prompts by default (when no `allow`/`deny`/`ask` rule matches) is driven by a per-tool **permission category** rather than a hardcoded list. Tools declare their category via the optional `tools.CategorizedTool` interface (`PermissionCategory()` returning `read`, `write`, or `execute`):
+
+- **read** (`read`, `file_search`, `websearch`, `ask_user`, `final_answer`) — never prompts.
+- **write** (`file_edit`) — does not prompt when the target path resolves inside the task workspace root; prompts otherwise. `file_edit` is already physically confined to the root by `ensureWithinRoot`, so the prompt branch is a backstop for future write tools.
+- **execute** (`unix`, `python`) — always prompts; arbitrary effect.
+- **undeclared** (MCP tools, any new tool not implementing the interface) — treated as `execute` and gated by default. This is deliberate: a tool with no declared category must not run silently.
+
+The `allow`/`deny`/`ask` rule engine is unchanged and remains the override layer on top of these category defaults: `ask` always prompts, `deny` beats `allow` at equal-or-higher priority, and matched decisions are cached per run. The category only decides the fallback when no rule matches. See `permissionCategoryFor`/`confirmTool` in `internal/agent/task.go` and `ConfirmWithDefault` in `internal/agent/confirmation.go`.
+
 The repo is structured around the Go implementation of the binary (see `cmd/` and `internal/`), plus documentation in `docs/` that backs the published site. Installation can happen via Homebrew, downloading release archives, `go install`, or building from source with Taskfile tasks such as `task build`/`task install`.
 
 ## Contribution Conventions

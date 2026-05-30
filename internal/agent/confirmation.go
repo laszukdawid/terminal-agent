@@ -75,6 +75,13 @@ func NewConfirmationManager(allow []string, ruleSets []config.PermissionRuleSet,
 }
 
 func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
+	return cm.ConfirmWithDefault(action, false)
+}
+
+// ConfirmWithDefault resolves an action against the ask/allow/deny rules. When
+// no rule matches, autoAllow decides the fallback: true allows without
+// prompting (e.g. read tools, in-workspace writes), false prompts the user.
+func (cm *ConfirmationManager) ConfirmWithDefault(action string, autoAllow bool) (bool, error) {
 	if action == "" {
 		return true, nil
 	}
@@ -90,6 +97,10 @@ func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
 	if allowed, matched := cm.resolveAllowDeny(action); matched {
 		cm.decisions[action] = allowed
 		return allowed, nil
+	}
+
+	if autoAllow {
+		return true, nil
 	}
 
 	return cm.confirmAndRemember(action)
