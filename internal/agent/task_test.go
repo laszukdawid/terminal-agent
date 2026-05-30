@@ -761,7 +761,7 @@ func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 func TestTaskActionPromptFinalGuidanceIsSelective(t *testing.T) {
 	prompt := taskActionPromptTemplate
 
-	assert.Contains(t, prompt, `Use "final": true only when raw output is definitely the final user-facing answer`)
+	assert.Contains(t, prompt, `Use "final": true ONLY when raw output is definitely the final user-facing answer`)
 	assert.Contains(t, prompt, `If raw output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set "final": true`)
 	assert.NotContains(t, prompt, "fully answers the request")
 }

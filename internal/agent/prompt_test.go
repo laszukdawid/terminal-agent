@@ -226,7 +226,7 @@ func TestSystemPromptHeaderIncludesProjectContextPath(t *testing.T) {
 func TestSystemPromptTaskFinalGuidanceIsSelective(t *testing.T) {
 	prompt := SystemPromptTask
 
-	if !strings.Contains(prompt, "Use final=true only when the raw output is definitely the final user-facing answer") {
+	if !strings.Contains(prompt, "Use final=true ONLY when the raw output is definitely the final user-facing answer") {
 		t.Fatal("expected task prompt to reserve final=true for definitely final raw output")
 	}
 	if !strings.Contains(prompt, "If the output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set final=true") {
