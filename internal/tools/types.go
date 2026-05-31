@@ -1,6 +1,9 @@
 package tools
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type Tool interface {
 
@@ -50,9 +53,21 @@ type CategorizedTool interface {
 	PermissionCategory() PermissionCategory
 }
 
+// ProcessesStartedWriter is an optional live-output sink extension for tools that
+// launch local processes. It lets callers correlate streamed output or display
+// warnings with the OS process that is still running.
+type ProcessesStartedWriter interface {
+	io.Writer
+	ProcessStarted(pid int)
+}
+
 type ToolExecutionContext struct {
 	RootDir    string
 	CurrentDir string
+	// Output is an optional live, user-facing output sink. Tools should still
+	// return their captured result for agent reasoning; Output is only for
+	// incremental display and may be ignored by tools without useful live output.
+	Output io.Writer
 }
 
 type ContextualTool interface {

@@ -133,6 +133,60 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	assert.Contains(t, output.String(), "done")
 }
 
+func TestTaskCommandStreamedOutput(t *testing.T) {
+	t.Run("suppresses streamed output when print disabled", func(t *testing.T) {
+		output := runTaskCommandWithEvents(t, []string{"--print=false", "inspect", "repo"}, func(req app.TaskRequest) []app.Event {
+			return []app.Event{
+				{Type: app.EventOutputDelta, Text: "live output"},
+				{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message},
+			}
+		})
+
+		assert.Empty(t, output)
+	})
+
+	t.Run("separates streamed output from final response", func(t *testing.T) {
+		output := runTaskCommandWithEvents(t, []string{"--plain", "inspect", "repo"}, func(req app.TaskRequest) []app.Event {
+			return []app.Event{
+				{Type: app.EventOutputDelta, Text: "live output"},
+				{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message},
+			}
+		})
+
+		assert.Equal(t, "live output\ndone", output)
+	})
+}
+
+func runTaskCommandWithEvents(t *testing.T, args []string, events func(app.TaskRequest) []app.Event) string {
+	t.Helper()
+	originalNewService := newService
+	defer func() { newService = originalNewService }()
+
+	newService = func() app.Service {
+		return &fakeTaskService{events: func(_ context.Context, req app.TaskRequest) (<-chan app.Event, error) {
+			ch := make(chan app.Event)
+			go func() {
+				defer close(ch)
+				for _, event := range events(req) {
+					ch <- event
+				}
+			}()
+			return ch, nil
+		}}
+	}
+
+	cmd := NewTaskCommand(config.NewDefaultConfig())
+	output := &bytes.Buffer{}
+	cmd.SetIn(bytes.NewBufferString(""))
+	cmd.SetOut(output)
+	cmd.SetErr(output)
+	cmd.Flags().String("device", "", "")
+	cmd.SetArgs(args)
+
+	require.NoError(t, cmd.ExecuteContext(context.Background()))
+	return output.String()
+}
+
 // runTaskCommandCapture runs the task command with the given config and args,
 // returning the TaskRequest the service received.
 func runTaskCommandCapture(t *testing.T, cfg config.Config, args ...string) app.TaskRequest {

@@ -1,16 +1,20 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
+	"sync"
 
 	log "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 type BashExecutor struct {
 	workDir string
+	output  io.Writer
 }
 
 func (b *BashExecutor) Exec(code string) (string, error) {
@@ -31,8 +35,7 @@ func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, er
 		cmd.Dir = b.workDir
 	}
 
-	// Gather cmd results
-	output, err := cmd.CombinedOutput()
+	output, err := runCombinedOutput(cmd, b.output)
 	strOutput := string(output)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -42,4 +45,40 @@ func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, er
 	}
 
 	return strings.TrimSpace(strOutput), nil
+}
+
+type combinedOutputWriter struct {
+	mu     sync.Mutex
+	buf    bytes.Buffer
+	stream io.Writer
+}
+
+func (w *combinedOutputWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if _, err := w.buf.Write(p); err != nil {
+		return 0, err
+	}
+	if w.stream != nil {
+		if _, err := w.stream.Write(p); err != nil {
+			return 0, err
+		}
+	}
+	return len(p), nil
+}
+
+func runCombinedOutput(cmd *exec.Cmd, stream io.Writer) ([]byte, error) {
+	writer := &combinedOutputWriter{stream: stream}
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+	err := cmd.Start()
+	if err != nil {
+		return writer.buf.Bytes(), err
+	}
+	if processWriter, ok := stream.(ProcessesStartedWriter); ok && cmd.Process != nil {
+		processWriter.ProcessStarted(cmd.Process.Pid)
+	}
+	err = cmd.Wait()
+	return writer.buf.Bytes(), err
 }

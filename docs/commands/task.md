@@ -16,6 +16,10 @@ The agent will:
 
 The `task` command runs through an event-driven task execution path. The agent core decides what to do next, while the CLI owns terminal interaction for confirmations and clarification questions.
 
+When task tools run long-lived foreground commands, their stdout/stderr can be streamed to the terminal while the command is still running. This live stream is controlled by the same `--print` flag as the final response: with the default `--print=true`, output is printed as soon as it is available; with `--print=false`, live tool output and the final response are both suppressed while the task still consumes the event stream internally.
+
+If Terminal Agent cannot display live output but the process is still running, it emits a warning event that includes the process id when available. If the display event path itself is unavailable, the warning is written to logs instead.
+
 When the selected provider does not expose dependable native tool calling, Terminal Agent can fall back to a structured JSON action protocol. The direct local `llama` provider uses this path today, so `task` works there as well, although providers with native tool APIs are generally more reliable for complex workflows.
 
 ## Examples

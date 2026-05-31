@@ -152,7 +152,7 @@ func (t *PythonTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutio
 
 	cmd := exec.Command(commandName, commandArgs...)
 	cmd.Dir = normalizedCtx.CurrentDir
-	output, err := cmd.CombinedOutput()
+	output, err := runCombinedOutput(cmd, ctx.Output)
 	if err != nil {
 		return string(output), fmt.Errorf("python execution failed: %w", err)
 	}

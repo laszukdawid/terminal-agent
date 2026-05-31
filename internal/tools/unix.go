@@ -186,8 +186,14 @@ func (u *UnixTool) RunSchemaContext(ctx context.Context, input map[string]any, e
 	}
 
 	executor := u.executor
-	if execCtx.CurrentDir != "" {
-		executor = &BashExecutor{workDir: execCtx.CurrentDir}
+	if execCtx.CurrentDir != "" || execCtx.Output != nil {
+		workDir := execCtx.CurrentDir
+		if workDir == "" {
+			if bashExecutor, ok := u.executor.(*BashExecutor); ok {
+				workDir = bashExecutor.workDir
+			}
+		}
+		executor = &BashExecutor{workDir: workDir, output: execCtx.Output}
 	}
 	return u.execCodeWithExecutorContext(ctx, cmd, executor)
 }

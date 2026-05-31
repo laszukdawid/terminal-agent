@@ -26,6 +26,7 @@ type EventType string
 const (
 	EventStarted             EventType = "started"
 	EventOutputDelta         EventType = "output_delta"
+	EventWarning             EventType = "warning"
 	EventConfirmationNeeded  EventType = "confirmation_needed"
 	EventClarificationNeeded EventType = "clarification_needed"
 	EventCompleted           EventType = "completed"
@@ -56,6 +57,7 @@ type Event struct {
 	FinalOutput     string
 	Err             error
 	ToolName        string
+	ProcessID       int
 	ToolInput       map[string]any
 	ToolResult      string
 	RawOutput       string
