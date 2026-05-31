@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,12 @@ import (
 )
 
 type mockBashExecutor struct {
+}
+
+type testOutputWriter func([]byte) (int, error)
+
+func (w testOutputWriter) Write(p []byte) (int, error) {
+	return w(p)
 }
 
 func (m *mockBashExecutor) Exec(code string) (string, error) {
@@ -89,4 +96,43 @@ func TestUnixToolDoesNotPrintExecutionInternals(t *testing.T) {
 	printed, readErr := io.ReadAll(r)
 	assert.NoError(t, readErr)
 	assert.Empty(t, string(printed))
+}
+
+func TestBashExecutor(t *testing.T) {
+	t.Run("streams output before command completes", func(t *testing.T) {
+		chunks := make(chan string, 4)
+		executor := &BashExecutor{output: testOutputWriter(func(p []byte) (int, error) {
+			chunks <- string(p)
+			return len(p), nil
+		})}
+		done := make(chan struct {
+			output string
+			err    error
+		}, 1)
+
+		go func() {
+			output, err := executor.Exec(`printf first; sleep 0.2; printf second`)
+			done <- struct {
+				output string
+				err    error
+			}{output: output, err: err}
+		}()
+
+		select {
+		case chunk := <-chunks:
+			assert.Equal(t, "first", chunk)
+		case <-done:
+			t.Fatal("command completed before streaming first output chunk")
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for streamed output")
+		}
+
+		select {
+		case result := <-done:
+			assert.NoError(t, result.err)
+			assert.Equal(t, "firstsecond", result.output)
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for command completion")
+		}
+	})
 }

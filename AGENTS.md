@@ -30,6 +30,13 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 - The `llama` provider is a direct local runtime, not an HTTP API integration. It resolves model aliases from config and loads GGUF files plus a local llama.cpp shared library inside the current process.
 - Task execution is event-driven at the app layer. `internal/agent` orchestrates task steps and tool use, while confirmation and clarification transport is handled outside the agent core.
 
+Task tool output has two separate paths:
+
+- The tool's returned string is the captured result used by the agent for history, reasoning, summaries, and `final=true` direct output.
+- `tools.ToolExecutionContext.Output` is an optional live display sink for incremental user-facing output while a tool is still running. Tools may ignore it, but process-style tools such as `unix` and `python` should write stdout/stderr chunks there as soon as they are available while still returning the captured output at completion.
+
+For task events, live tool output is emitted as `EventOutputDelta` with `ToolName` and, when available, `ProcessID`. CLI printing is controlled by the task `--print` flag: `--print=false` suppresses both final output and live tool output, but the stream is still consumed so the task can continue. If live output delivery fails without task cancellation, the process should keep running and the app should emit `EventWarning` with the process id when the event channel is still usable; if the event path itself is broken, log the warning instead. Do not report display failures as command execution failures unless the context is canceled.
+
 Prompt and runtime behavior is also shared through this layer, with one important distinction:
 
 - `ask` and `chat` use ask-prompt resolution and may include memory/context features.
@@ -74,6 +81,8 @@ Taskfile commands will install Go dependencies automatically, but if you need to
 ## System Prompt Context
 
 Every request to an LLM includes a system prompt assembled from several layers (see `internal/agent/prompt.go`):
+
+Prompt-building code should prefer templates with named variables over positional string builders or `fmt.Sprintf` placeholders. Named fields such as `{{.OriginalQuery}}`, `{{.CurrentDir}}`, or `{{.History}}` make prompt changes easier to review and reduce accidental argument-order bugs. Keep template data structs small and specific to the prompt being rendered.
 
 1. **Header (`{{header}}`)** — `SystemPromptHeader()` injects dynamic system information:
    - Hostname, username, current time

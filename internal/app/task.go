@@ -13,6 +13,7 @@ import (
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 type TaskRequest struct {
@@ -73,8 +74,27 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	onStep := func(step internalagent.TaskStep) {
 		recorder.Write(taskStepToRecord(step))
 	}
+	onToolOutput := func(output internalagent.TaskToolOutputEvent) error {
+		if output.Err != nil {
+			warning := newEvent(RunKindTask, EventWarning)
+			warning.ToolName = output.ToolName
+			warning.ProcessID = output.ProcessID
+			warning.Text = formatToolOutputWarning(output.ProcessID, output.Err)
+			if emitErr := emitEvent(ctx, events, warning); emitErr != nil {
+				// If this channel is the failing display path, logs are the only reliable signal.
+				log.Warnw("Failed to emit task output warning", "tool", output.ToolName, "process_id", output.ProcessID, "warning", warning.Text, "error", emitErr)
+			}
+			return nil
+		}
 
-	result, err := executeTask(ctx, req, interaction, onStep)
+		event := newEvent(RunKindTask, EventOutputDelta)
+		event.Text = output.Output
+		event.ToolName = output.ToolName
+		event.ProcessID = output.ProcessID
+		return emitEvent(ctx, events, event)
+	}
+
+	result, err := executeTask(ctx, req, interaction, onStep, onToolOutput)
 	if err != nil {
 		failed := newEvent(RunKindTask, EventFailed)
 		failed.Err = err
@@ -93,7 +113,7 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	_ = emitEvent(ctx, events, completed)
 }
 
-func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep)) (TaskResult, error) {
+func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep), onToolOutput func(internalagent.TaskToolOutputEvent) error) (TaskResult, error) {
 	if strings.TrimSpace(req.Message) == "" {
 		return TaskResult{}, internalagent.ErrEmptyQuery
 	}
@@ -126,10 +146,11 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 	agentInstance := runtime.NewAgent(PromptSet{Task: taskPrompt})
 	agentInstance.SetDevice(req.Device)
 	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{
-		Allow:       req.Allow,
-		Interaction: interaction,
-		OnStep:      onStep,
-		Timeout:     req.Timeout,
+		Allow:        req.Allow,
+		Interaction:  interaction,
+		OnStep:       onStep,
+		OnToolOutput: onToolOutput,
+		Timeout:      req.Timeout,
 		Dirs: internalagent.TaskDirs{
 			RootDir:    taskRootDir,
 			CurrentDir: taskRootDir,
@@ -146,6 +167,13 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 		RawOutputTool:   response.RawOutputTool,
 		DirectRawOutput: response.DirectRawOutput,
 	}, nil
+}
+
+func formatToolOutputWarning(processID int, err error) string {
+	if processID > 0 {
+		return fmt.Sprintf("Live output display failed; process %d is still running: %v", processID, err)
+	}
+	return fmt.Sprintf("Live output display failed; process is still running: %v", err)
 }
 
 var errTaskEventAlreadyReplied = errors.New("task event already replied")

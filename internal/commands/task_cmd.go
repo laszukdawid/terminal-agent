@@ -73,9 +73,28 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				return fmt.Errorf("failed to request a task: %w", err)
 			}
 
+			printFlag, printFlagErr := flags.GetBool("print")
+			if printFlagErr != nil {
+				printFlag = true
+			}
+
 			result := app.TaskResult{Request: userRequest}
+			printedStreamedToolOutput := false
+			lastStreamChunkEndedWithNewline := true
 			for event := range events {
 				switch event.Type {
+				case app.EventOutputDelta:
+					if printFlag {
+						printedStreamedToolOutput = true
+						if event.Text != "" {
+							lastStreamChunkEndedWithNewline = strings.HasSuffix(event.Text, "\n")
+						}
+						cmd.Print(event.Text)
+					}
+				case app.EventWarning:
+					if event.Text != "" {
+						cmd.PrintErrf("Warning: %s\n", event.Text)
+					}
 				case app.EventConfirmationNeeded:
 					decision, promptErr := promptTaskConfirmation(cmd, inputReader, event.Confirmation)
 					if promptErr != nil {
@@ -94,7 +113,9 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					}
 				case app.EventCompleted:
 					result.Response = event.FinalOutput
-					result.RawOutput = event.RawOutput
+					if !printedStreamedToolOutput {
+						result.RawOutput = event.RawOutput
+					}
 					result.RawOutputTool = event.RawOutputTool
 					result.DirectRawOutput = event.DirectRawOutput
 				case app.EventFailed:
@@ -104,7 +125,14 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 			response := result.Response
 
-			if printFlag, err := flags.GetBool("print"); printFlag && err == nil {
+			if printedStreamedToolOutput && result.DirectRawOutput {
+				response = ""
+			}
+
+			if printFlag && response != "" {
+				if printedStreamedToolOutput && !lastStreamChunkEndedWithNewline {
+					cmd.Print("\n")
+				}
 				plain, _ := flags.GetBool("plain")
 				cmd.Print(formatTaskOutput(app.TaskResult{
 					Response:        response,

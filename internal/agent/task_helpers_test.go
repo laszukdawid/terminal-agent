@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -46,32 +47,49 @@ func (t *legacyTaskTool) RunSchema(input map[string]any) (string, error) {
 }
 func (t *legacyTaskTool) Run(*string) (string, error) { return "legacy", nil }
 
-func TestRunTaskToolPassesTaskContextToContextAwareTool(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	input := map[string]any{"command": "pwd"}
-	tool := &contextAwareTaskTool{}
-	dirs := TaskDirs{RootDir: "/repo", CurrentDir: "/repo/internal"}
+func TestRunTaskTool(t *testing.T) {
+	t.Run("passes task context to context-aware tool", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		input := map[string]any{"command": "pwd"}
+		tool := &contextAwareTaskTool{}
+		dirs := TaskDirs{RootDir: "/repo", CurrentDir: "/repo/internal"}
 
-	output, err := runTaskTool(ctx, tool, input, dirs)
+		output, err := runTaskTool(ctx, tool, input, dirs, nil)
 
-	require.NoError(t, err)
-	assert.Equal(t, "context-aware", output)
-	assert.False(t, tool.legacyCalled)
-	assert.Equal(t, input, tool.receivedInput)
-	assert.Equal(t, tools.ToolExecutionContext{RootDir: dirs.RootDir, CurrentDir: dirs.CurrentDir}, tool.receivedExec)
-	assert.Equal(t, ctx, tool.receivedCtx)
-	cancel()
-	require.ErrorIs(t, tool.receivedCtx.Err(), context.Canceled)
-}
+		require.NoError(t, err)
+		assert.Equal(t, "context-aware", output)
+		assert.False(t, tool.legacyCalled)
+		assert.Equal(t, input, tool.receivedInput)
+		assert.Equal(t, dirs.RootDir, tool.receivedExec.RootDir)
+		assert.Equal(t, dirs.CurrentDir, tool.receivedExec.CurrentDir)
+		assert.Nil(t, tool.receivedExec.Output)
+		assert.Equal(t, ctx, tool.receivedCtx)
+		cancel()
+		require.ErrorIs(t, tool.receivedCtx.Err(), context.Canceled)
+	})
 
-func TestRunTaskToolFallsBackToLegacyTool(t *testing.T) {
-	input := map[string]any{"value": "ok"}
-	tool := &legacyTaskTool{}
+	t.Run("passes output writer to context-aware tool", func(t *testing.T) {
+		input := map[string]any{"command": "pwd"}
+		tool := &contextAwareTaskTool{}
+		dirs := TaskDirs{RootDir: "/repo", CurrentDir: "/repo/internal"}
+		var liveOutput bytes.Buffer
 
-	output, err := runTaskTool(context.Background(), tool, input, TaskDirs{})
+		output, err := runTaskTool(context.Background(), tool, input, dirs, &liveOutput)
 
-	require.NoError(t, err)
-	assert.Equal(t, "legacy", output)
-	assert.Equal(t, input, tool.receivedInput)
+		require.NoError(t, err)
+		assert.Equal(t, "context-aware", output)
+		assert.Same(t, &liveOutput, tool.receivedExec.Output)
+	})
+
+	t.Run("falls back to legacy tool", func(t *testing.T) {
+		input := map[string]any{"value": "ok"}
+		tool := &legacyTaskTool{}
+
+		output, err := runTaskTool(context.Background(), tool, input, TaskDirs{}, nil)
+
+		require.NoError(t, err)
+		assert.Equal(t, "legacy", output)
+		assert.Equal(t, input, tool.receivedInput)
+	})
 }

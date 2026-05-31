@@ -143,6 +143,8 @@ To add a new tool:
 3. Update the `ToolProvider` to return your new tool
 4. Add documentation for your tool
 
+Tools that run long-lived processes or produce incremental output should also support `tools.ToolExecutionContext.Output` when they implement `ContextualTool` or `ContextAwareTool`. Write live user-facing chunks to `Output` as they become available, but still return the captured final result from `RunSchema*` so the task agent can reason over it. If the output sink implements `tools.ProcessesStartedWriter`, call `ProcessStarted(pid)` after the process starts so task events can include the process id in output and warning events.
+
 ## Documentation
 
 Documentation is written in Markdown and stored in the `docs/` directory. To update the documentation:
