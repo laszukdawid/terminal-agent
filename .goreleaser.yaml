@@ -43,11 +43,25 @@ builds:
       - -X main.date={{.Date}}
 
 archives:
-  - id: default
+  - id: agent
+    ids:
+      - agent
     formats:
       - tar.gz
     name_template: >-
       {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+
+  - id: agent-gui
+    ids:
+      - agent-gui
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}-gui_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
@@ -95,25 +109,19 @@ release:
   name_template: "{{.ProjectName}} v{{.Version}}"
 
 # Homebrew Tap configuration
-# Note: 'brews' is deprecated but still functional for CLI tools
-# homebrew_casks is for GUI apps only
-brews:
+homebrew_casks:
   - name: terminal-agent
+    ids:
+      - agent
+    binaries:
+      - agent
     repository:
       owner: laszukdawid
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
-    directory: Formula
     homepage: "https://github.com/laszukdawid/terminal-agent"
     description: "An LLM Agent to help you from and within the terminal"
-    license: "MIT"
-
-    install: |
-      bin.install "agent"
-
-    test: |
-      system "#{bin}/agent", "--help"
 
     caveats: |
       To get started with Terminal Agent:
