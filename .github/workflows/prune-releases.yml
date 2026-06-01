@@ -1,0 +1,34 @@
+name: Prune Releases
+
+on:
+  schedule:
+    - cron: "17 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete releases older than latest 100
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP_RELEASES: "100"
+        run: |
+          set -euo pipefail
+
+          mapfile -t releases < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].tag_name')
+          total=${#releases[@]}
+
+          echo "Found ${total} releases. Keeping latest ${KEEP_RELEASES}."
+          if (( total <= KEEP_RELEASES )); then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          for tag in "${releases[@]:KEEP_RELEASES}"; do
+            echo "Deleting release ${tag}"
+            gh release delete "${tag}" --yes --repo "${GITHUB_REPOSITORY}"
+          done
