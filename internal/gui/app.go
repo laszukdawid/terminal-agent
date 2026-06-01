@@ -22,9 +22,10 @@ type App struct {
 	quit          func()
 	stopIndicator chan struct{}
 	devMode       bool
+	version       string
 }
 
-func NewApp(service appservice.Service, cfg config.Config, appID string, devMode bool) *App {
+func NewApp(service appservice.Service, cfg config.Config, appID string, devMode bool, version string) *App {
 	fyneApp := app.NewWithID(appID)
 	gui := &App{
 		fyneApp:       fyneApp,
@@ -34,6 +35,7 @@ func NewApp(service appservice.Service, cfg config.Config, appID string, devMode
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
 		devMode:       devMode,
+		version:       version,
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
@@ -178,6 +180,11 @@ func (g *App) render() {
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
 	showMeta := g.state.showRequest || showAnswer
 	if showMeta {
+		g.popup.answerPanel.Show()
+	} else {
+		g.popup.answerPanel.Hide()
+	}
+	if showMeta {
 		g.popup.answerMeta.Show()
 	} else {
 		g.popup.answerMeta.Hide()
@@ -218,7 +225,7 @@ func (g *App) render() {
 }
 
 func (g *App) openSettings() {
-	g.popup.showSettingsDialog(g.cfg.GetDefaultProvider(), g.cfg.GetDefaultModelId(), func(provider, model string) error {
+	g.popup.showSettingsDialog(g.cfg.GetDefaultProvider(), g.cfg.GetDefaultModelId(), g.version, func(provider, model string) error {
 		provider = strings.TrimSpace(provider)
 		model = strings.TrimSpace(model)
 		if err := validateProviderModel(provider, model); err != nil {

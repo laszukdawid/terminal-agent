@@ -213,7 +213,8 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 
 	outputField := widget.NewRichText()
 	outputField.Wrapping = fyne.TextWrapWord
-	outputScroll := container.NewVScroll(outputField)
+	outputBody := withBackground(outputField, color.NRGBA{R: 248, G: 249, B: 251, A: 255})
+	outputScroll := container.NewVScroll(outputBody)
 	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 
 	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
@@ -244,7 +245,7 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	questionCard := withBackground(questionLabel, color.NRGBA{R: 232, G: 235, B: 239, A: 255})
 	questionCard.Hide()
 	inputCard := withBackground(input, theme.Color(theme.ColorNameInputBackground))
-	outputCard := withBackground(outputScroll, theme.Color(theme.ColorNameInputBackground))
+	outputCard := outputScroll
 
 	answerHeader := container.NewHBox(
 		answerHeading,
@@ -440,7 +441,7 @@ func (p *popupWindow) showTestDialog(tests []devTest) {
 	dlg.Show()
 }
 
-func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, onSave func(provider, model string) error) {
+func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version string, onSave func(provider, model string) error) {
 	modelEntry := widget.NewEntry()
 	modelEntry.SetText(initialModel)
 	errorLabel := widget.NewLabel("")
@@ -485,15 +486,8 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)
-	content := container.NewVBox(form, errorLabel)
-	updateHints(initialProvider)
-
 	var dlg dialog.Dialog
-	dlg = dialog.NewCustomConfirm("Settings", "Save", "Cancel", content, func(confirm bool) {
-		if !confirm {
-			return
-		}
-
+	saveButton := widget.NewButton("Save", func() {
 		provider := strings.TrimSpace(providerInput.Text)
 		model := strings.TrimSpace(modelEntry.Text)
 		if provider == "" {
@@ -509,7 +503,17 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel string, o
 			return
 		}
 		dlg.Hide()
-	}, p.window)
+	})
+	saveButton.Importance = widget.HighImportance
+	cancelButton := widget.NewButton("Cancel", func() {
+		dlg.Hide()
+	})
+	versionLabel := widget.NewLabelWithStyle(version, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
+	footer := container.NewHBox(versionLabel, layout.NewSpacer(), cancelButton, saveButton)
+	content := container.NewVBox(form, errorLabel, footer)
+	updateHints(initialProvider)
+
+	dlg = dialog.NewCustomWithoutButtons("Settings", content, p.window)
 	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
 }

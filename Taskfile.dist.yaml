@@ -30,8 +30,15 @@ tasks:
       - go build -ldflags "-X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o bin/agent ./cmd/agent/main.go
 
   build:gui:
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+      COMMIT:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo "none"
+      DATE:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
     cmds:
-      - go build -o bin/agent-gui ./cmd/agent-gui/main.go
+      - go build -ldflags "-X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o bin/agent-gui ./cmd/agent-gui/main.go
     silent: false
 
   install:

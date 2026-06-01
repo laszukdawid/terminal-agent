@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"syscall"
 	"time"
@@ -21,8 +22,40 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 const guiAppID = "terminal-agent-gui"
 const fyneAppID = "com.terminal-agent.popup"
+
+func resolveVersion() string {
+	buildInfo, ok := debug.ReadBuildInfo()
+	if ok {
+		return selectVersion(version, buildInfo.Main.Version)
+	}
+	return selectVersion(version, "")
+}
+
+func displayVersion() string {
+	resolved := resolveVersion()
+	if len(resolved) > 0 && resolved[0] >= '0' && resolved[0] <= '9' {
+		return "v" + resolved
+	}
+	return resolved
+}
+
+func selectVersion(linkerVersion, buildInfoVersion string) string {
+	if linkerVersion != "" && linkerVersion != "dev" && linkerVersion != "(devel)" {
+		return linkerVersion
+	}
+	if buildInfoVersion != "" && buildInfoVersion != "(devel)" {
+		return buildInfoVersion
+	}
+	return "unknown"
+}
 
 func main() {
 	show := flag.Bool("show", false, "show an existing popup or start a visible primary instance")
@@ -82,7 +115,7 @@ func main() {
 	}
 	defer os.Remove(instance.SocketPath)
 
-	guiApp := gui.NewApp(service, cfg, windowAppID, *devMode)
+	guiApp := gui.NewApp(service, cfg, windowAppID, *devMode, displayVersion())
 	server, err := platform.Listen(instance.SocketPath, func(command string) error {
 		switch command {
 		case platform.CommandShow:
