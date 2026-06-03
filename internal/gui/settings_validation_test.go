@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
@@ -91,4 +93,20 @@ func TestFilterProviders(t *testing.T) {
 	assert.Equal(t, all, filterProviders(all, ""))
 	// No match returns empty.
 	assert.Empty(t, filterProviders(all, "zzz"))
+}
+
+func TestRuntimeErrorMessageReturnsTrimmedProviderText(t *testing.T) {
+	err := errors.New("  provider openai request failed: {\"error\":{\"code\":\"insufficient_quota\"}}  ")
+
+	got := runtimeErrorMessage(err)
+	want := "provider openai request failed: {\"error\":{\"code\":\"insufficient_quota\"}}"
+	if got != want {
+		t.Fatalf("runtimeErrorMessage() = %q, want %q", got, want)
+	}
+}
+
+func TestRuntimeErrorMessageSuppressesCancellation(t *testing.T) {
+	if got := runtimeErrorMessage(context.Canceled); got != "" {
+		t.Fatalf("runtimeErrorMessage(context.Canceled) = %q, want empty", got)
+	}
 }

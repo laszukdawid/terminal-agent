@@ -41,7 +41,7 @@ func (g *App) submit() {
 	if err != nil {
 		g.stopIndicatorAnimation()
 		g.state.clearRunning()
-		g.state.errorText = err.Error()
+		g.state.errorText = runtimeErrorMessage(err)
 		g.render()
 		return
 	}
@@ -56,10 +56,7 @@ func (g *App) cancel() {
 }
 
 func (g *App) copyOutput() {
-	text := g.state.output
-	if text == "" {
-		text = g.state.question
-	}
+	text := responseCopyText(g.state)
 	if text != "" {
 		g.fyneApp.Clipboard().SetContent(text)
 	}

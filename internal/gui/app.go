@@ -192,7 +192,7 @@ func (g *App) render() {
 	g.popup.questionLabel.Text = g.state.question
 	g.popup.questionLabel.Refresh()
 	if !g.state.isRunning {
-		g.renderOutput()
+		g.renderResponse()
 	}
 	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
@@ -212,6 +212,11 @@ func (g *App) render() {
 	} else {
 		g.popup.answerHeader.Hide()
 	}
+	if g.state.errorText != "" {
+		g.popup.answerHeading.SetText("Error")
+	} else {
+		g.popup.answerHeading.SetText("Response")
+	}
 	if g.state.showRequest {
 		g.popup.requestHeading.Show()
 		g.popup.questionCard.Show()
@@ -220,11 +225,7 @@ func (g *App) render() {
 		g.popup.questionCard.Hide()
 	}
 
-	status := g.state.status
-	if g.state.errorText != "" {
-		status = g.state.errorText
-	}
-	g.popup.setStatus(status, g.state.isRunning, g.state.spinnerFrame)
+	g.popup.setStatus(displayStatus(g.state), g.state.isRunning, g.state.spinnerFrame)
 
 	if g.state.isRunning {
 		g.popup.actionButton.SetText("Cancel")
@@ -234,7 +235,7 @@ func (g *App) render() {
 		g.popup.actionButton.Enable()
 	}
 
-	if g.state.output != "" {
+	if hasCopyableResponse(g.state) {
 		g.popup.copyButton.Enable()
 	} else {
 		g.popup.copyButton.Disable()
@@ -271,36 +272,39 @@ func (g *App) openSettings() {
 	})
 }
 
-// openTestMenu shows the dev-only test dialog. Each entry injects a canned
-// response so rendering can be exercised without a live model call.
-func (g *App) openTestMenu() {
-	g.popup.showTestDialog([]devTest{
-		{
-			name: "Exhaustive markdown",
-			run: func() {
-				g.showCannedOutput("Markdown feature test", exhaustiveMarkdown)
-			},
-		},
-	})
-}
-
-// showCannedOutput places static content in the response area as if a run had
-// completed, without contacting any provider.
-func (g *App) showCannedOutput(question, output string) {
-	if g.state.isRunning {
-		g.cancel()
+// renderResponse pushes the current response or error into the view.
+func (g *App) renderResponse() {
+	if g.state.errorText != "" {
+		g.popup.setError(g.state.errorText)
+		return
 	}
-	g.state.resetOutput()
-	g.state.question = question
-	g.state.output = output
-	g.state.showRequest = true
-	g.renderOutput()
-	g.render()
+	g.popup.setOutput(g.state.output)
 }
 
 // renderOutput pushes the current response into the view.
 func (g *App) renderOutput() {
 	g.popup.setOutput(g.state.output)
+}
+
+func displayStatus(s *state) string {
+	if s.errorText != "" {
+		return "Error"
+	}
+	return s.status
+}
+
+func hasCopyableResponse(s *state) bool {
+	return s.errorText != "" || s.output != ""
+}
+
+func responseCopyText(s *state) string {
+	if s.errorText != "" {
+		return s.errorText
+	}
+	if s.output != "" {
+		return s.output
+	}
+	return s.question
 }
 
 func memoryPath() string {
