@@ -129,7 +129,7 @@ func (m *Manager) LoginOpenAIBrowser(cfg BrowserLoginConfig) (*OAuthResult, erro
 
 	expiresAt := time.Now().UnixMilli() + result.ExpiresIn*1000
 
-	if err := m.SaveProvider(ProviderOpenAI, Credential{
+	if err := m.SaveProvider(ProviderCodex, Credential{
 		Type:      CredentialTypeOAuth,
 		Access:    result.AccessToken,
 		Refresh:   result.RefreshToken,

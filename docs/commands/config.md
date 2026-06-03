@@ -38,7 +38,7 @@ agent config set <key> <value>
 
 | Key | Description | Example Values |
 |-----|-------------|---------------|
-| `provider` | The LLM provider to use | `openai`, `anthropic`, `bedrock`, `google`, `ollama`, `llama` |
+| `provider` | The LLM provider to use | `openai`, `codex`, `anthropic`, `bedrock`, `google`, `ollama`, `llama` |
 | `model` | The model ID to use | `gpt-4o-mini`, `claude-3-haiku-20240307`, etc. |
 | `device` | Runtime device preference for direct `llama` provider | `auto`, `cpu`, `gpu` |
 | `mcp-path` | Path to MCP JSON file | `/path/to/mcp.json` |

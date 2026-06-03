@@ -47,6 +47,12 @@ func authLoginCommand() *cobra.Command {
 			if device && apiKeyMode {
 				return fmt.Errorf("use only one auth mode flag")
 			}
+			if apiKeyMode && provider != auth.ProviderOpenAI {
+				return fmt.Errorf("%s does not support API-key auth; use 'agent auth login openai --api-key'", provider)
+			}
+			if !apiKeyMode && provider != auth.ProviderCodex {
+				return fmt.Errorf("%s does not support OAuth auth; use 'agent auth login codex'", provider)
+			}
 
 			manager := auth.NewManager()
 
@@ -58,7 +64,7 @@ func authLoginCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				cmd.Printf("Successfully authenticated with OpenAI.\n")
+				cmd.Printf("Successfully authenticated with Codex.\n")
 				cmd.Printf("Account ID: %s\n", result.AccountID)
 				cmd.Printf("Credentials stored in %s\n", manager.Path())
 				return nil
@@ -84,7 +90,7 @@ func authLoginCommand() *cobra.Command {
 				return err
 			}
 
-			cmd.Printf("Successfully authenticated with OpenAI.\n")
+			cmd.Printf("Successfully authenticated with Codex.\n")
 			cmd.Printf("Account ID: %s\n", result.AccountID)
 			cmd.Printf("Credentials stored in %s\n", manager.Path())
 			return nil

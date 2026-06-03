@@ -22,6 +22,13 @@ func TestNewConnectorUsesProviderDefaultModelWhenModelIDEmpty(t *testing.T) {
 	assert.IsType(t, &OpenAIConnector{}, conn)
 }
 
+func TestNewConnectorCreatesCodexConnector(t *testing.T) {
+	conn, err := NewConnector(CodexProvider, "", nil)
+
+	require.NoError(t, err)
+	assert.IsType(t, &CodexConnector{}, conn)
+}
+
 func TestNewConnectorCreatesMistralConnector(t *testing.T) {
 	t.Setenv("MISTRAL_API_KEY", "test-key")
 

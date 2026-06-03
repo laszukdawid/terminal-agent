@@ -82,6 +82,7 @@ func NewDefaultConfig() *config {
 		Providers: map[string]string{
 			"anthropic": "claude-3-5-haiku-latest",
 			"bedrock":   "anthropic.claude-3-haiku-20240307-v1:0",
+			"codex":     "gpt-4o-mini",
 			"google":    "gemini-3.1-flash-lite",
 			"llama":     "llama3.2",
 			"mimo":      "mimo-v2.5-pro",

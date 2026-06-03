@@ -33,8 +33,14 @@ func providerSetupHint(provider string) string {
 			return ""
 		}
 		if os.Getenv("OPENAI_API_KEY") == "" {
-			return "OpenAI requires OPENAI_API_KEY or 'agent auth login openai'."
+			return "OpenAI requires OPENAI_API_KEY or 'agent auth login openai --api-key'."
 		}
+	case connector.CodexProvider:
+		status, err := auth.NewManager().Status(provider)
+		if err == nil && status.Configured {
+			return ""
+		}
+		return "Codex requires 'agent auth login codex'."
 	case connector.AnthropicProvider:
 		if os.Getenv("ANTHROPIC_API_KEY") == "" {
 			return "Anthropic requires ANTHROPIC_API_KEY to be set."
@@ -76,9 +82,15 @@ func providerReadinessStatus(provider string) providerReadiness {
 		}
 		status, err := auth.NewManager().Status(provider)
 		if err == nil && status.Configured {
-			return providerReadiness{Available: true, Message: "Available: stored OpenAI auth is configured."}
+			return providerReadiness{Available: true, Message: "Available: stored OpenAI API key is configured."}
 		}
-		return providerReadiness{Message: "Unavailable: OPENAI_API_KEY is not visible to the GUI process, and no stored OpenAI auth is configured."}
+		return providerReadiness{Message: "Unavailable: OPENAI_API_KEY is not visible to the GUI process, and no stored OpenAI API key is configured."}
+	case connector.CodexProvider:
+		status, err := auth.NewManager().Status(provider)
+		if err == nil && status.Configured {
+			return providerReadiness{Available: true, Message: "Available: stored Codex OAuth login is configured."}
+		}
+		return providerReadiness{Message: "Unavailable: no stored Codex OAuth login is configured."}
 	case connector.AnthropicProvider:
 		return envProviderReadiness("Anthropic", "ANTHROPIC_API_KEY")
 	case connector.GoogleProvider:
@@ -136,9 +148,9 @@ func explainRuntimeError(provider string, err error) string {
 		if hint != "" {
 			return hint
 		}
-	case strings.Contains(lower, "oauth login has expired"), strings.Contains(lower, "agent auth login openai' again"):
-		if provider == connector.OpenaiProvider {
-			return "Stored OpenAI login has expired. Run 'agent auth login openai' again or set OPENAI_API_KEY."
+	case strings.Contains(lower, "oauth login has expired"), strings.Contains(lower, "agent auth login codex' again"):
+		if provider == connector.CodexProvider {
+			return "Stored Codex login has expired. Run 'agent auth login codex' again."
 		}
 	case strings.Contains(lower, "status code: 401"), strings.Contains(lower, "status code 401"):
 		if hint != "" {

@@ -16,6 +16,7 @@ import (
 
 const (
 	OpenaiProvider = "openai"
+	CodexProvider  = "codex"
 
 	DefaultOpenAIModel = openai.ChatModelGPT4oMini
 )
@@ -62,6 +63,10 @@ type OpenAIConnector struct {
 	authErr error
 }
 
+type CodexConnector struct {
+	*OpenAIConnector
+}
+
 func computePriceOpenai(modelId string, usage *openai.CompletionUsage) *LLMPrice {
 	prices, exists := ModelPricesOpenai[modelId]
 	if !exists {
@@ -101,27 +106,16 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 		model := DefaultOpenAIModel
 		modelID = &model
 	}
-	manager := auth.NewManager()
-	resolvedAuth, err := manager.ResolveOpenAIAuth()
+	resolvedAuth, err := auth.NewManager().ResolveOpenAIAPIKeyAuth()
 	var authErr error
 	clientOptions := []option.RequestOption{}
 	if err != nil {
 		authErr = err
 	} else {
 		clientOptions = append(clientOptions, option.WithAPIKey(resolvedAuth.Token))
-		switch resolvedAuth.Type {
-		case auth.CredentialTypeOAuth:
-			clientOptions = append(clientOptions,
-				option.WithBaseURL(auth.OpenAICodexBaseURL),
-				option.WithHeader("ChatGPT-Account-ID", resolvedAuth.AccountID),
-				option.WithHeader("originator", auth.OpenAIOriginator()),
-				option.WithHeader("OpenAI-Beta", auth.OpenAIResponsesBetaHeader),
-			)
-		default:
-			if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
-				clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
-				logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
-			}
+		if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+			clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+			logger.Debug("Using custom OpenAI base URL", zap.String("baseURL", baseURL))
 		}
 	}
 
@@ -136,6 +130,39 @@ func NewOpenAIConnector(modelID *string) *OpenAIConnector {
 	}
 
 	return connector
+}
+
+func NewCodexConnector(modelID *string) *CodexConnector {
+	logger := *utils.GetLogger()
+	logger.Debug("NewCodexConnector")
+
+	if modelID == nil || *modelID == "" {
+		model := DefaultOpenAIModel
+		modelID = &model
+	}
+	resolvedAuth, err := auth.NewManager().ResolveCodexAuth()
+	var authErr error
+	clientOptions := []option.RequestOption{}
+	if err != nil {
+		authErr = err
+	} else {
+		clientOptions = append(clientOptions,
+			option.WithAPIKey(resolvedAuth.Token),
+			option.WithBaseURL(auth.OpenAICodexBaseURL),
+			option.WithHeader("ChatGPT-Account-ID", resolvedAuth.AccountID),
+			option.WithHeader("originator", auth.OpenAIOriginator()),
+			option.WithHeader("OpenAI-Beta", auth.OpenAIResponsesBetaHeader),
+		)
+	}
+
+	client := openai.NewClient(clientOptions...)
+	return &CodexConnector{OpenAIConnector: &OpenAIConnector{
+		client:  &client,
+		logger:  logger,
+		modelID: *modelID,
+		auth:    resolvedAuth,
+		authErr: authErr,
+	}}
 }
 
 func (oc *OpenAIConnector) streamQuery(ctx context.Context, qParams *QueryParams, params openai.ChatCompletionNewParams) (*string, error) {
@@ -197,9 +224,6 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	if oc.authErr != nil {
 		return "", oc.authErr
 	}
-	if oc.auth.Type == auth.CredentialTypeOAuth {
-		return oc.queryOAuth(ctx, qParams)
-	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(*qParams.SysPrompt)}
 	for _, msg := range qParams.Messages {
@@ -248,9 +272,6 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	response := LlmResponseWithTools{}
 	if oc.authErr != nil {
 		return response, oc.authErr
-	}
-	if oc.auth.Type == auth.CredentialTypeOAuth {
-		return oc.queryWithToolOAuth(ctx, qParams, tools)
 	}
 
 	oParams := openai.ChatCompletionNewParams{

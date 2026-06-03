@@ -111,9 +111,9 @@ func TestResolveOpenAIAPIKeyAuthReturnsOAuthNotSupported(t *testing.T) {
 	}
 }
 
-func TestResolveOpenAIAuthReturnsStoredOAuth(t *testing.T) {
+func TestResolveCodexAuthReturnsStoredOAuth(t *testing.T) {
 	mgr := newTestManager(t)
-	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+	if err := mgr.SaveProvider(ProviderCodex, Credential{
 		Type:      CredentialTypeOAuth,
 		Access:    "access-token",
 		Refresh:   "refresh-token",
@@ -124,21 +124,24 @@ func TestResolveOpenAIAuthReturnsStoredOAuth(t *testing.T) {
 		t.Fatalf("SaveProvider() error = %v", err)
 	}
 
-	resolved, err := mgr.ResolveOpenAIAuth()
+	resolved, err := mgr.ResolveCodexAuth()
 	if err != nil {
-		t.Fatalf("ResolveOpenAIAuth() error = %v", err)
+		t.Fatalf("ResolveCodexAuth() error = %v", err)
 	}
 	if resolved.Type != CredentialTypeOAuth {
 		t.Fatalf("resolved.Type = %q, want %q", resolved.Type, CredentialTypeOAuth)
+	}
+	if resolved.Provider != ProviderCodex {
+		t.Fatalf("resolved.Provider = %q, want %q", resolved.Provider, ProviderCodex)
 	}
 	if resolved.AccountID != "workspace-1" {
 		t.Fatalf("resolved.AccountID = %q, want %q", resolved.AccountID, "workspace-1")
 	}
 }
 
-func TestResolveOpenAIAuthPrefersStoredOAuthOverEnvironment(t *testing.T) {
+func TestResolveOpenAIAuthIgnoresCodexOAuthAndUsesEnvironment(t *testing.T) {
 	mgr := newTestManager(t)
-	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+	if err := mgr.SaveProvider(ProviderCodex, Credential{
 		Type:      CredentialTypeOAuth,
 		Access:    "access-token",
 		Refresh:   "refresh-token",
@@ -154,6 +157,35 @@ func TestResolveOpenAIAuthPrefersStoredOAuthOverEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveOpenAIAuth() error = %v", err)
 	}
+	if resolved.Type != CredentialTypeAPIKey {
+		t.Fatalf("resolved.Type = %q, want %q", resolved.Type, CredentialTypeAPIKey)
+	}
+	if resolved.Source != SourceEnvironment {
+		t.Fatalf("resolved.Source = %q, want %q", resolved.Source, SourceEnvironment)
+	}
+	if resolved.Token != "sk-env" {
+		t.Fatalf("resolved.Token = %q, want environment API key", resolved.Token)
+	}
+}
+
+func TestResolveCodexAuthIgnoresEnvironmentAPIKey(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.SaveProvider(ProviderCodex, Credential{
+		Type:      CredentialTypeOAuth,
+		Access:    "access-token",
+		Refresh:   "refresh-token",
+		Expires:   time.Now().Add(time.Hour).UnixMilli(),
+		AccountID: "workspace-1",
+	}); err != nil {
+		t.Fatalf("SaveProvider() error = %v", err)
+	}
+
+	t.Setenv("OPENAI_API_KEY", "sk-env")
+
+	resolved, err := mgr.ResolveCodexAuth()
+	if err != nil {
+		t.Fatalf("ResolveCodexAuth() error = %v", err)
+	}
 	if resolved.Type != CredentialTypeOAuth {
 		t.Fatalf("resolved.Type = %q, want %q", resolved.Type, CredentialTypeOAuth)
 	}
@@ -165,9 +197,9 @@ func TestResolveOpenAIAuthPrefersStoredOAuthOverEnvironment(t *testing.T) {
 	}
 }
 
-func TestResolveOpenAIAuthRejectsExpiredStoredOAuth(t *testing.T) {
+func TestResolveCodexAuthRejectsExpiredStoredOAuth(t *testing.T) {
 	mgr := newTestManager(t)
-	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+	if err := mgr.SaveProvider(ProviderCodex, Credential{
 		Type:      CredentialTypeOAuth,
 		Access:    "access-token",
 		Refresh:   "refresh-token",
@@ -181,9 +213,40 @@ func TestResolveOpenAIAuthRejectsExpiredStoredOAuth(t *testing.T) {
 	openAITokenEndpoint = "http://127.0.0.1:1"
 	defer func() { openAITokenEndpoint = originalTokenEndpoint }()
 
-	_, err := mgr.ResolveOpenAIAuth()
+	_, err := mgr.ResolveCodexAuth()
 	if err == nil {
 		t.Fatal("expected refresh failure for expired stored OAuth")
+	}
+}
+
+func TestResolveCodexAuthMigratesLegacyOpenAIOAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+		Type:      CredentialTypeOAuth,
+		Access:    "access-token",
+		Refresh:   "refresh-token",
+		Expires:   time.Now().Add(time.Hour).UnixMilli(),
+		AccountID: "workspace-1",
+	}); err != nil {
+		t.Fatalf("SaveProvider() error = %v", err)
+	}
+
+	resolved, err := mgr.ResolveCodexAuth()
+	if err != nil {
+		t.Fatalf("ResolveCodexAuth() error = %v", err)
+	}
+	if resolved.Token != "access-token" {
+		t.Fatalf("resolved.Token = %q, want legacy access token", resolved.Token)
+	}
+	authFile, err := mgr.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if _, exists := authFile[ProviderOpenAI]; exists {
+		t.Fatal("expected legacy OpenAI OAuth credential to be removed")
+	}
+	if _, exists := authFile[ProviderCodex]; !exists {
+		t.Fatal("expected Codex credential to be written")
 	}
 }
 
@@ -207,6 +270,35 @@ func TestDeleteProvider(t *testing.T) {
 	}
 	if status.Configured {
 		t.Fatalf("expected provider to be unconfigured after delete, got %#v", status)
+	}
+}
+
+func TestDeleteCodexProviderRemovesLegacyOpenAIOAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.SaveProvider(ProviderOpenAI, Credential{
+		Type:      CredentialTypeOAuth,
+		Access:    "access-token",
+		Refresh:   "refresh-token",
+		Expires:   time.Now().Add(time.Hour).UnixMilli(),
+		AccountID: "workspace-1",
+	}); err != nil {
+		t.Fatalf("SaveProvider() error = %v", err)
+	}
+
+	deleted, err := mgr.DeleteProvider(ProviderCodex)
+	if err != nil {
+		t.Fatalf("DeleteProvider() error = %v", err)
+	}
+	if !deleted {
+		t.Fatal("expected legacy Codex credential to be deleted")
+	}
+
+	authFile, err := mgr.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if _, exists := authFile[ProviderOpenAI]; exists {
+		t.Fatal("expected legacy OpenAI OAuth credential to be removed")
 	}
 }
 

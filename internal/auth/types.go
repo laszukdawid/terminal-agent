@@ -7,6 +7,7 @@ const (
 	CredentialTypeOAuth  = "oauth"
 
 	ProviderOpenAI = "openai"
+	ProviderCodex  = "codex"
 
 	SourceEnvironment = "environment"
 	SourceStored      = "stored"

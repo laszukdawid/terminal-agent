@@ -108,7 +108,7 @@ func (m *Manager) LoginOpenAIDevice(cfg BrowserLoginConfig) (*OAuthResult, error
 
 	expiresAt := time.Now().UnixMilli() + result.ExpiresIn*1000
 
-	if err := m.SaveProvider(ProviderOpenAI, Credential{
+	if err := m.SaveProvider(ProviderCodex, Credential{
 		Type:      CredentialTypeOAuth,
 		Access:    result.AccessToken,
 		Refresh:   result.RefreshToken,

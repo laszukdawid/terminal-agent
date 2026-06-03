@@ -11,6 +11,14 @@ import (
 )
 
 func (m *Manager) refreshOpenAIOAuthIfNeeded() (Credential, bool, error) {
+	return m.refreshOAuthIfNeeded(ProviderOpenAI)
+}
+
+func (m *Manager) refreshCodexOAuthIfNeeded() (Credential, bool, error) {
+	return m.refreshOAuthIfNeeded(ProviderCodex)
+}
+
+func (m *Manager) refreshOAuthIfNeeded(provider string) (Credential, bool, error) {
 	var refreshed bool
 	var resolved Credential
 	err := m.withLock(func() error {
@@ -19,7 +27,12 @@ func (m *Manager) refreshOpenAIOAuthIfNeeded() (Credential, bool, error) {
 			return err
 		}
 
-		credential, exists := authFile[ProviderOpenAI]
+		credential, exists := authFile[provider]
+		legacyCodexCredential := false
+		if !exists && provider == ProviderCodex {
+			credential, exists = authFile[ProviderOpenAI]
+			legacyCodexCredential = exists && credential.Type == CredentialTypeOAuth
+		}
 		if !exists {
 			return ErrAuthNotConfigured
 		}
@@ -29,6 +42,13 @@ func (m *Manager) refreshOpenAIOAuthIfNeeded() (Credential, bool, error) {
 		}
 
 		if !openAIOAuthNeedsRefresh(credential, time.Now()) {
+			if legacyCodexCredential {
+				authFile[ProviderCodex] = credential
+				delete(authFile, ProviderOpenAI)
+				if err := m.saveUnlocked(authFile); err != nil {
+					return err
+				}
+			}
 			resolved = credential
 			return nil
 		}
@@ -41,7 +61,12 @@ func (m *Manager) refreshOpenAIOAuthIfNeeded() (Credential, bool, error) {
 			return err
 		}
 
-		authFile[ProviderOpenAI] = updated
+		authFile[provider] = updated
+		if provider == ProviderCodex {
+			if legacy, exists := authFile[ProviderOpenAI]; exists && legacy.Type == CredentialTypeOAuth {
+				delete(authFile, ProviderOpenAI)
+			}
+		}
 		if err := m.saveUnlocked(authFile); err != nil {
 			return err
 		}

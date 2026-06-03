@@ -62,7 +62,7 @@ func TestRefreshOpenAIOAuthCredentialSuccess(t *testing.T) {
 	}
 }
 
-func TestResolveOpenAIAuthRefreshesNearExpiryAndPersists(t *testing.T) {
+func TestResolveCodexAuthRefreshesNearExpiryAndPersists(t *testing.T) {
 	manager := newTestManager(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(OpenAITokenResponse{
@@ -77,7 +77,7 @@ func TestResolveOpenAIAuthRefreshesNearExpiryAndPersists(t *testing.T) {
 	openAITokenEndpoint = server.URL
 	defer func() { openAITokenEndpoint = originalTokenEndpoint }()
 
-	if err := manager.SaveProvider(ProviderOpenAI, Credential{
+	if err := manager.SaveProvider(ProviderCodex, Credential{
 		Type:      CredentialTypeOAuth,
 		Access:    "old-access",
 		Refresh:   "old-refresh",
@@ -88,9 +88,9 @@ func TestResolveOpenAIAuthRefreshesNearExpiryAndPersists(t *testing.T) {
 		t.Fatalf("SaveProvider() error = %v", err)
 	}
 
-	resolved, err := manager.ResolveOpenAIAuth()
+	resolved, err := manager.ResolveCodexAuth()
 	if err != nil {
-		t.Fatalf("ResolveOpenAIAuth() error = %v", err)
+		t.Fatalf("ResolveCodexAuth() error = %v", err)
 	}
 	if resolved.Token == "old-access" {
 		t.Fatal("expected refreshed access token")
@@ -103,7 +103,7 @@ func TestResolveOpenAIAuthRefreshesNearExpiryAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	stored := authFile[ProviderOpenAI]
+	stored := authFile[ProviderCodex]
 	if stored.Refresh != "rotated-refresh" {
 		t.Fatalf("stored refresh token = %q, want %q", stored.Refresh, "rotated-refresh")
 	}
@@ -112,7 +112,7 @@ func TestResolveOpenAIAuthRefreshesNearExpiryAndPersists(t *testing.T) {
 	}
 }
 
-func TestResolveOpenAIAuthRefreshFailureLeavesStoredCredentialIntact(t *testing.T) {
+func TestResolveCodexAuthRefreshFailureLeavesStoredCredentialIntact(t *testing.T) {
 	manager := newTestManager(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "nope", http.StatusUnauthorized)
@@ -131,11 +131,11 @@ func TestResolveOpenAIAuthRefreshFailureLeavesStoredCredentialIntact(t *testing.
 		AccountID: "workspace-1",
 		PlanType:  "plus",
 	}
-	if err := manager.SaveProvider(ProviderOpenAI, original); err != nil {
+	if err := manager.SaveProvider(ProviderCodex, original); err != nil {
 		t.Fatalf("SaveProvider() error = %v", err)
 	}
 
-	_, err := manager.ResolveOpenAIAuth()
+	_, err := manager.ResolveCodexAuth()
 	if err == nil {
 		t.Fatal("expected refresh failure")
 	}
@@ -144,7 +144,7 @@ func TestResolveOpenAIAuthRefreshFailureLeavesStoredCredentialIntact(t *testing.
 	if loadErr != nil {
 		t.Fatalf("Load() error = %v", loadErr)
 	}
-	stored := authFile[ProviderOpenAI]
+	stored := authFile[ProviderCodex]
 	if stored.Access != original.Access || stored.Refresh != original.Refresh || stored.AccountID != original.AccountID {
 		t.Fatalf("stored credential changed after failed refresh: %#v", stored)
 	}
