@@ -64,6 +64,7 @@ type popupWindow struct {
 	onSettings   func()
 	onTest       func()
 	onInput      func(string)
+	onQuit       func()
 }
 
 type popupEntry struct {
@@ -359,6 +360,11 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 
 	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyL, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
 		p.window.Canvas().Focus(p.input)
+	})
+	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyQ, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
+		if p.onQuit != nil {
+			p.onQuit()
+		}
 	})
 
 	return p

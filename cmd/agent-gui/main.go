@@ -145,7 +145,7 @@ func main() {
 	go func() {
 		<-sigCtx.Done()
 		server.Close()
-		fyne.Do(guiApp.Hide)
+		fyne.Do(guiApp.Quit)
 	}()
 
 	if *show {

@@ -93,6 +93,14 @@ func (g *App) Hide() {
 	g.popup.window.Hide()
 }
 
+func (g *App) Quit() {
+	if g.state.cancelFunc != nil {
+		g.state.cancelFunc()
+		g.state.clearRunning()
+	}
+	g.quit()
+}
+
 func (g *App) startIndicator() {
 	stop := make(chan struct{})
 	g.stopIndicator = stop
@@ -143,6 +151,7 @@ func (g *App) wire() {
 	g.popup.onEscape = func() {
 		g.Hide()
 	}
+	g.popup.onQuit = g.Quit
 	g.popup.onInput = func(value string) {
 		g.state.input = value
 		g.state.showRequest = g.state.question != "" && value != g.state.question
@@ -168,7 +177,7 @@ func (g *App) wire() {
 			}),
 			fyne.NewMenuItemSeparator(),
 			fyne.NewMenuItem("Quit", func() {
-				g.quit()
+				g.Quit()
 			}),
 		)
 		desk.SetSystemTrayMenu(trayMenu)
