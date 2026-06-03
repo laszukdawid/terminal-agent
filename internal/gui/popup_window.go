@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	defaultWindowWidth    float32 = 720
-	defaultWindowHeight   float32 = 280
-	minWindowHeight       float32 = 240
-	maxWindowHeight       float32 = 760
+	defaultWindowWidth   float32 = 720
+	defaultWindowHeight  float32 = 280
+	minWindowHeight      float32 = 240
+	maxWindowHeight      float32 = 760
 	maxInputRows                 = 3
 	compactOutputHeight  float32 = 110
 	statusMinWidth       float32 = 130
@@ -78,6 +78,15 @@ type providerStatusIcon struct {
 	icon    *canvas.Text
 	message string
 	popup   *widget.PopUp
+}
+
+type settingsDialogOptions struct {
+	InitialProvider string
+	InitialModel    string
+	Version         string
+	EnvResult       EnvironmentLoadResult
+	OnReloadEnv     func() EnvironmentLoadResult
+	OnSave          func(provider, model string) error
 }
 
 func newProviderStatusIcon(c fyne.Canvas) *providerStatusIcon {
@@ -441,9 +450,10 @@ func (p *popupWindow) showTestDialog(tests []devTest) {
 	dlg.Show()
 }
 
-func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version string, onSave func(provider, model string) error) {
+func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
+	currentEnvResult := options.EnvResult
 	modelEntry := widget.NewEntry()
-	modelEntry.SetText(initialModel)
+	modelEntry.SetText(options.InitialModel)
 	errorLabel := widget.NewLabel("")
 	errorLabel.Wrapping = fyne.TextWrapWord
 	errorLabel.Importance = widget.DangerImportance
@@ -464,7 +474,7 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
-		providerStatus.setStatus(providerReadinessStatus(provider))
+		providerStatus.setStatus(providerReadinessStatusWithEnvironment(provider, currentEnvResult))
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 		} else {
@@ -472,7 +482,7 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 		}
 	}
 
-	providerInput := newProviderEntry(initialProvider, updateHints)
+	providerInput := newProviderEntry(options.InitialProvider, updateHints)
 
 	providerLabel := widget.NewLabelWithStyle("Provider", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	providerLabelBox := container.NewHBox(providerLabel, providerStatus)
@@ -486,6 +496,21 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)
+	environmentLabel := widget.NewLabel(environmentSummaryText(currentEnvResult))
+	environmentLabel.Wrapping = fyne.TextWrapWord
+	reloadEnvButton := widget.NewButton("Reload Environment", func() {
+		if options.OnReloadEnv == nil {
+			return
+		}
+		currentEnvResult = options.OnReloadEnv()
+		environmentLabel.SetText(environmentSummaryText(currentEnvResult))
+		updateHints(providerInput.Text)
+	})
+	environmentBox := container.NewVBox(
+		widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		environmentLabel,
+		container.NewHBox(reloadEnvButton, layout.NewSpacer()),
+	)
 	var dlg dialog.Dialog
 	saveButton := widget.NewButton("Save", func() {
 		provider := strings.TrimSpace(providerInput.Text)
@@ -498,7 +523,11 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 			errorLabel.SetText("Model cannot be empty.")
 			return
 		}
-		if err := onSave(provider, model); err != nil {
+		if options.OnSave == nil {
+			errorLabel.SetText("Settings cannot be saved.")
+			return
+		}
+		if err := options.OnSave(provider, model); err != nil {
 			errorLabel.SetText(err.Error())
 			return
 		}
@@ -508,14 +537,50 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 	cancelButton := widget.NewButton("Cancel", func() {
 		dlg.Hide()
 	})
-	versionLabel := widget.NewLabelWithStyle(version, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
+	versionLabel := widget.NewLabelWithStyle(options.Version, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
 	footer := container.NewHBox(versionLabel, layout.NewSpacer(), cancelButton, saveButton)
-	content := container.NewVBox(form, errorLabel, footer)
-	updateHints(initialProvider)
+	content := container.NewVBox(form, environmentBox, errorLabel, footer)
+	updateHints(options.InitialProvider)
 
 	dlg = dialog.NewCustomWithoutButtons("Settings", content, p.window)
 	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
+}
+
+func environmentSummaryText(result EnvironmentLoadResult) string {
+	lines := []string{}
+	fileStatus := "missing"
+	if result.EnvFileLoaded {
+		fileStatus = "loaded"
+	}
+	if result.EnvFileError != nil {
+		fileStatus = "error: " + result.EnvFileError.Error()
+	}
+	lines = append(lines, "App env file: "+fileStatus+" ("+envFileDisplayPath(result.EnvFilePath)+")")
+	if result.EnvFileWarning != nil {
+		lines = append(lines, "App env file warning: "+result.EnvFileWarning.Error())
+	}
+
+	switch {
+	case !result.ShellEnabled:
+		lines = append(lines, "Shell import: disabled")
+	case result.ShellLoaded:
+		lines = append(lines, "Shell import: loaded from "+result.Shell+" in "+result.ShellDuration.Truncate(10_000_000).String())
+	case result.ShellError != nil:
+		lines = append(lines, "Shell import: failed: "+result.ShellError.Error())
+	default:
+		lines = append(lines, "Shell import: not loaded")
+	}
+
+	visible := visibleEnvKeysBySource(result.Sources)
+	for _, source := range []string{envSourceProcess, envSourceFile, envSourceShell} {
+		keys := visible[source]
+		if len(keys) == 0 {
+			continue
+		}
+		lines = append(lines, source+": "+strings.Join(keys, ", "))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (p *popupWindow) resizeInput(value string) {

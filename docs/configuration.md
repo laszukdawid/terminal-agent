@@ -231,8 +231,39 @@ export YZMA_LIB=$HOME/.local/share/yzma/lib
 ```
 
 For persistent CLI configuration, add this to your shell profile (`.bashrc`, `.zshrc`, etc.).
-Desktop-launched GUI processes usually do not source shell startup files, so variables set only there may not be visible to `agent-gui`.
-If the GUI reports a provider key as unavailable, export it through your desktop/session environment or start `agent-gui` from a shell that already has the variable.
+
+### GUI Environment Loading
+
+Desktop-launched GUI processes usually do not source shell startup files directly. On startup, `agent-gui` resolves supported environment variables in this order:
+
+1. Existing process environment from the launcher/session
+2. GUI env file at `~/.config/terminal-agent/.gui.env`
+3. Interactive shell import, when enabled
+4. Stored OpenAI auth, when no `OPENAI_API_KEY` is visible
+
+Use `.gui.env` when you want app-specific tokens that are separate from personal shell tokens:
+
+```sh
+OPENAI_API_KEY=your_gui_api_key_here
+GEMINI_API_KEY=your_gui_api_key_here
+TAVILY_KEY=your_gui_api_key_here
+```
+
+The GUI env file supports simple `KEY=value` lines and optional `export KEY=value` lines. It is parsed as data, not executed as a shell script. Keep it private with `chmod 600 ~/.config/terminal-agent/.gui.env`.
+
+Shell import is enabled by default and fills only missing supported variables. Configure the behavior in `~/.config/terminal-agent/config.json`:
+
+```json
+{
+  "gui": {
+    "env_file": "~/.config/terminal-agent/.gui.env",
+    "load_shell_environment": true,
+    "shell_environment_timeout": "2s"
+  }
+}
+```
+
+The Settings dialog reports where visible variables came from and includes `Reload Environment`. Manual reload updates values previously loaded from the app env file or shell import, while preserving values that came from the original process environment.
 
 ## Model Context Protocol (MCP)
 

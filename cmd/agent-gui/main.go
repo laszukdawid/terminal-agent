@@ -115,7 +115,11 @@ func main() {
 	}
 	defer os.Remove(instance.SocketPath)
 
-	guiApp := gui.NewApp(service, cfg, windowAppID, *devMode, displayVersion())
+	guiApp := gui.NewApp(service, cfg, gui.AppOptions{
+		AppID:   windowAppID,
+		DevMode: *devMode,
+		Version: displayVersion(),
+	})
 	server, err := platform.Listen(instance.SocketPath, func(command string) error {
 		switch command {
 		case platform.CommandShow:

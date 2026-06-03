@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -158,6 +159,45 @@ func TestDeviceDefaultsToAuto(t *testing.T) {
 
 	cfg.Device = "invalid"
 	assert.Equal(t, "auto", cfg.GetDevice())
+}
+
+func TestGUIConfigDefaults(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	cfg := NewDefaultConfig()
+
+	assert.Equal(t, filepath.Join(homeDir, ".config", "terminal-agent", ".gui.env"), cfg.GetGUIEnvFile())
+	assert.True(t, cfg.GetGUILoadShellEnvironment())
+	assert.Equal(t, 2*time.Second, cfg.GetGUIShellEnvironmentTimeout())
+}
+
+func TestLoadConfigGUIOverrides(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	configDir := filepath.Join(homeDir, ".config", "terminal-agent")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	loadShell := false
+	content, err := json.Marshal(map[string]any{
+		"default_provider": "openai",
+		"providers": map[string]string{
+			"openai": "gpt-4o-mini",
+		},
+		"gui": GUIConfig{
+			EnvFile:                 "~/custom-gui.env",
+			LoadShellEnvironment:    &loadShell,
+			ShellEnvironmentTimeout: "500ms",
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.json"), content, 0o600))
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, filepath.Join(homeDir, "custom-gui.env"), cfg.GetGUIEnvFile())
+	assert.False(t, cfg.GetGUILoadShellEnvironment())
+	assert.Equal(t, 500*time.Millisecond, cfg.GetGUIShellEnvironmentTimeout())
 }
 
 func TestSetDevice(t *testing.T) {

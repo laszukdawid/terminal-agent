@@ -21,12 +21,18 @@ type App struct {
 	popup         *popupWindow
 	quit          func()
 	stopIndicator chan struct{}
-	devMode       bool
 	version       string
+	envResult     EnvironmentLoadResult
 }
 
-func NewApp(service appservice.Service, cfg config.Config, appID string, devMode bool, version string) *App {
-	fyneApp := app.NewWithID(appID)
+type AppOptions struct {
+	AppID   string
+	DevMode bool
+	Version string
+}
+
+func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *App {
+	fyneApp := app.NewWithID(options.AppID)
 	gui := &App{
 		fyneApp:       fyneApp,
 		service:       service,
@@ -34,13 +40,13 @@ func NewApp(service appservice.Service, cfg config.Config, appID string, devMode
 		state:         &state{},
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
-		devMode:       devMode,
-		version:       version,
+		version:       options.Version,
+		envResult:     LoadEnvironment(cfg, nil),
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
 	}
-	gui.popup = newPopupWindow(fyneApp, devMode)
+	gui.popup = newPopupWindow(fyneApp, options.DevMode)
 	gui.wire()
 	gui.render()
 	return gui
@@ -225,22 +231,32 @@ func (g *App) render() {
 }
 
 func (g *App) openSettings() {
-	g.popup.showSettingsDialog(g.cfg.GetDefaultProvider(), g.cfg.GetDefaultModelId(), g.version, func(provider, model string) error {
-		provider = strings.TrimSpace(provider)
-		model = strings.TrimSpace(model)
-		if err := validateProviderModel(provider, model); err != nil {
-			return err
-		}
-		if err := g.cfg.SetDefaultProvider(provider); err != nil {
-			return err
-		}
-		if err := g.cfg.SetDefaultModelId(model); err != nil {
-			return err
-		}
-		g.state.status = "Settings saved."
-		g.state.errorText = ""
-		g.render()
-		return nil
+	g.popup.showSettingsDialog(settingsDialogOptions{
+		InitialProvider: g.cfg.GetDefaultProvider(),
+		InitialModel:    g.cfg.GetDefaultModelId(),
+		Version:         g.version,
+		EnvResult:       g.envResult,
+		OnReloadEnv: func() EnvironmentLoadResult {
+			g.envResult = LoadEnvironment(g.cfg, g.envResult.Sources)
+			return g.envResult
+		},
+		OnSave: func(provider, model string) error {
+			provider = strings.TrimSpace(provider)
+			model = strings.TrimSpace(model)
+			if err := validateProviderModel(provider, model); err != nil {
+				return err
+			}
+			if err := g.cfg.SetDefaultProvider(provider); err != nil {
+				return err
+			}
+			if err := g.cfg.SetDefaultModelId(model); err != nil {
+				return err
+			}
+			g.state.status = "Settings saved."
+			g.state.errorText = ""
+			g.render()
+			return nil
+		},
 	})
 }
 

@@ -21,6 +21,9 @@ type Config interface {
 	GetDefaultModelId() string
 	GetLlamaModels() map[string]string
 	GetDevice() string
+	GetGUIEnvFile() string
+	GetGUILoadShellEnvironment() bool
+	GetGUIShellEnvironmentTimeout() time.Duration
 	SetDefaultProvider(string) error
 	SetDefaultModelId(string) error
 	SetDevice(string) error
@@ -42,6 +45,7 @@ type config struct {
 	DefaultProvider string            `json:"default_provider"`
 	Providers       map[string]string `json:"providers"`
 	LlamaModels     map[string]string `json:"llama_models,omitempty"`
+	GUI             GUIConfig         `json:"gui,omitempty"`
 	Device          string            `json:"device,omitempty"`
 	McpFilePath     string            `json:"mcp_file_path"`
 	WorkingDir      string            `json:"working_dir"`
@@ -50,6 +54,12 @@ type config struct {
 	Memory          bool              `json:"memory"`
 	ProjectContext  *bool             `json:"project_context,omitempty"`
 	Permissions     Permissions       `json:"permissions,omitempty"`
+}
+
+type GUIConfig struct {
+	EnvFile                 string `json:"env_file,omitempty"`
+	LoadShellEnvironment    *bool  `json:"load_shell_environment,omitempty"`
+	ShellEnvironmentTimeout string `json:"shell_environment_timeout,omitempty"`
 }
 
 func ensurePathExists(path string) error {
@@ -74,6 +84,10 @@ func ensurePathExists(path string) error {
 
 func getDefaultWorkingDir() string {
 	return filepath.Dir(getConfigPath())
+}
+
+func getDefaultGUIEnvFile() string {
+	return filepath.Join(filepath.Dir(getConfigPath()), ".gui.env")
 }
 
 func NewDefaultConfig() *config {
@@ -183,6 +197,42 @@ func (config *config) GetDevice() string {
 		return "auto"
 	}
 	return device
+}
+
+func (config *config) GetGUIEnvFile() string {
+	if config.GUI.EnvFile == "" {
+		return getDefaultGUIEnvFile()
+	}
+	return expandHome(config.GUI.EnvFile)
+}
+
+func (config *config) GetGUILoadShellEnvironment() bool {
+	if config.GUI.LoadShellEnvironment == nil {
+		return true
+	}
+	return *config.GUI.LoadShellEnvironment
+}
+
+func (config *config) GetGUIShellEnvironmentTimeout() time.Duration {
+	if config.GUI.ShellEnvironmentTimeout == "" {
+		return 2 * time.Second
+	}
+	d, err := time.ParseDuration(config.GUI.ShellEnvironmentTimeout)
+	if err != nil || d <= 0 {
+		log.Warnw("Invalid gui.shell_environment_timeout in config, using default", "value", config.GUI.ShellEnvironmentTimeout, "error", err)
+		return 2 * time.Second
+	}
+	return d
+}
+
+func expandHome(path string) string {
+	if path == "~" {
+		return os.Getenv("HOME")
+	}
+	if len(path) > 2 && path[:2] == "~/" {
+		return filepath.Join(os.Getenv("HOME"), path[2:])
+	}
+	return path
 }
 
 func (config *config) SetDefaultModelId(modelId string) error {
