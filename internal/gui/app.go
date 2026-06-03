@@ -41,7 +41,6 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
 		version:       options.Version,
-		envResult:     LoadEnvironment(cfg, nil),
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
@@ -55,6 +54,10 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 func (g *App) Run() {
 	g.Show()
 	g.fyneApp.Run()
+}
+
+func (g *App) LoadInitialEnvironment() {
+	g.envResult = LoadEnvironment(g.cfg, nil)
 }
 
 func (g *App) Show() {
