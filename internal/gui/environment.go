@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -237,20 +236,6 @@ func parseNullSeparatedEnv(output []byte) map[string]string {
 		values[key] = value
 	}
 	return values
-}
-
-func visibleEnvKeysBySource(sources map[string]string) map[string][]string {
-	bySource := map[string][]string{}
-	for key, source := range sources {
-		if !isAllowedGUIEnv(key) || strings.TrimSpace(os.Getenv(key)) == "" {
-			continue
-		}
-		bySource[source] = append(bySource[source], key)
-	}
-	for source := range bySource {
-		sort.Strings(bySource[source])
-	}
-	return bySource
 }
 
 func envFileDisplayPath(path string) string {

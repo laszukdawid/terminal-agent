@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"os"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -471,10 +472,14 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	}
 	modelHint := newHint()
 	providerStatus := newProviderStatusIcon(p.window.Canvas())
+	var environmentLabel *widget.Label
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
 		providerStatus.setStatus(providerReadinessStatusWithEnvironment(provider, currentEnvResult))
+		if environmentLabel != nil {
+			environmentLabel.SetText(environmentSummaryText(currentEnvResult, provider))
+		}
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 		} else {
@@ -496,14 +501,13 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)
-	environmentLabel := widget.NewLabel(environmentSummaryText(currentEnvResult))
+	environmentLabel = widget.NewLabel(environmentSummaryText(currentEnvResult, options.InitialProvider))
 	environmentLabel.Wrapping = fyne.TextWrapWord
-	reloadEnvButton := widget.NewButton("Reload Environment", func() {
+	reloadEnvButton := widget.NewButton("Reload", func() {
 		if options.OnReloadEnv == nil {
 			return
 		}
 		currentEnvResult = options.OnReloadEnv()
-		environmentLabel.SetText(environmentSummaryText(currentEnvResult))
 		updateHints(providerInput.Text)
 	})
 	environmentBox := container.NewVBox(
@@ -547,7 +551,7 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	dlg.Show()
 }
 
-func environmentSummaryText(result EnvironmentLoadResult) string {
+func environmentSummaryText(result EnvironmentLoadResult, provider string) string {
 	lines := []string{}
 	fileStatus := "missing"
 	if result.EnvFileLoaded {
@@ -565,22 +569,48 @@ func environmentSummaryText(result EnvironmentLoadResult) string {
 	case !result.ShellEnabled:
 		lines = append(lines, "Shell import: disabled")
 	case result.ShellLoaded:
-		lines = append(lines, "Shell import: loaded from "+result.Shell+" in "+result.ShellDuration.Truncate(10_000_000).String())
+		lines = append(lines, "Shell import: loaded ("+result.Shell+", "+result.ShellDuration.Truncate(10_000_000).String()+")")
 	case result.ShellError != nil:
 		lines = append(lines, "Shell import: failed: "+result.ShellError.Error())
 	default:
 		lines = append(lines, "Shell import: not loaded")
 	}
 
-	visible := visibleEnvKeysBySource(result.Sources)
-	for _, source := range []string{envSourceProcess, envSourceFile, envSourceShell} {
-		keys := visible[source]
-		if len(keys) == 0 {
-			continue
+	if key := providerEnvironmentKey(strings.TrimSpace(provider)); key != "" {
+		source := result.SourceFor(key)
+		if source == "" {
+			source = "GUI process"
 		}
-		lines = append(lines, source+": "+strings.Join(keys, ", "))
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			lines = append(lines, key+": visible from "+source)
+		} else {
+			lines = append(lines, key+": not visible")
+		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func providerEnvironmentKey(provider string) string {
+	switch provider {
+	case connector.OpenaiProvider:
+		return "OPENAI_API_KEY"
+	case connector.AnthropicProvider:
+		return "ANTHROPIC_API_KEY"
+	case connector.GoogleProvider:
+		return "GEMINI_API_KEY"
+	case connector.MistralProvider:
+		return "MISTRAL_API_KEY"
+	case connector.MiMoProvider:
+		return "MIMO_API_KEY"
+	case connector.LlamaProvider:
+		return "YZMA_LIB"
+	case connector.OllamaProvider:
+		return "OLLAMA_HOST"
+	case connector.BedrockProvider:
+		return "AWS_REGION"
+	default:
+		return ""
+	}
 }
 
 func (p *popupWindow) resizeInput(value string) {
