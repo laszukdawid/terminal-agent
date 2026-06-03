@@ -32,7 +32,7 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 					g.state.errorText = ""
 					g.state.status = "Canceled."
 				} else {
-					g.state.errorText = explainRuntimeError(g.cfg.GetDefaultProvider(), eventCopy.Err)
+					g.state.errorText = runtimeErrorMessage(eventCopy.Err)
 				}
 				g.state.clearRunning()
 			}

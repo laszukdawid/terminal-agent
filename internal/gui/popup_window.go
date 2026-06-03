@@ -43,8 +43,12 @@ type popupWindow struct {
 	questionCard    fyne.CanvasObject
 	questionLabel   *canvas.Text
 	outputField     *widget.RichText
+	outputBody      fyne.CanvasObject
+	errorLabel      *widget.Label
+	errorBody       fyne.CanvasObject
 	outputScroll    *container.Scroll
 	lastRendered    string
+	lastError       string
 	headerStatus    *widget.Label
 	headerBrain     *canvas.Text
 	headerSpinner   *canvas.Text
@@ -225,7 +229,13 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	outputField := widget.NewRichText()
 	outputField.Wrapping = fyne.TextWrapWord
 	outputBody := withBackground(outputField, color.NRGBA{R: 248, G: 249, B: 251, A: 255})
-	outputScroll := container.NewVScroll(outputBody)
+	errorLabel := widget.NewLabel("")
+	errorLabel.Wrapping = fyne.TextWrapBreak
+	errorLabel.Importance = widget.DangerImportance
+	errorBody := withBackground(errorLabel, color.NRGBA{R: 255, G: 245, B: 245, A: 255})
+	errorBody.Hide()
+	outputStack := container.NewStack(outputBody, errorBody)
+	outputScroll := container.NewVScroll(outputStack)
 	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 
 	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
@@ -307,6 +317,9 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 		answerMeta:      answerMeta,
 		questionLabel:   questionLabel,
 		outputField:     outputField,
+		outputBody:      outputBody,
+		errorLabel:      errorLabel,
+		errorBody:       errorBody,
 		outputScroll:    outputScroll,
 		headerStatus:    headerStatus,
 		headerBrain:     headerBrain,
@@ -371,12 +384,24 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 }
 
 func (p *popupWindow) setOutput(content string) {
+	p.errorBody.Hide()
+	p.outputBody.Show()
 	if p.lastRendered == content {
 		return
 	}
 	p.lastRendered = content
 	p.outputField.Segments = renderMarkdown(unwrapMarkdownFence(content))
 	p.outputField.Refresh()
+}
+
+func (p *popupWindow) setError(content string) {
+	p.outputBody.Hide()
+	p.errorBody.Show()
+	if p.lastError == content {
+		return
+	}
+	p.lastError = content
+	p.errorLabel.SetText(content)
 }
 
 // unwrapMarkdownFence strips an outer ```markdown or ```md code fence so

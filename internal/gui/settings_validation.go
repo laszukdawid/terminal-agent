@@ -141,7 +141,7 @@ func availableEnvMessage(envVar string, envResult EnvironmentLoadResult) string 
 	return fmt.Sprintf("Available: %s is visible to the GUI process.", envVar)
 }
 
-func explainRuntimeError(provider string, err error) string {
+func runtimeErrorMessage(err error) string {
 	if err == nil {
 		return ""
 	}
@@ -153,30 +153,6 @@ func explainRuntimeError(provider string, err error) string {
 	if message == "" {
 		return ""
 	}
-
-	hint := providerSetupHint(provider)
-	lower := strings.ToLower(message)
-	switch {
-	case strings.Contains(lower, "unsupported provider"):
-		return fmt.Sprintf("%s Supported providers: %s.", message, strings.Join(connector.SupportedProviders(), ", "))
-	case strings.Contains(lower, "api key"), strings.Contains(lower, "authenticate"), strings.Contains(lower, "authentication"):
-		if hint != "" {
-			return hint
-		}
-	case strings.Contains(lower, "oauth login has expired"), strings.Contains(lower, "agent auth login codex' again"):
-		if provider == connector.CodexProvider {
-			return "Stored Codex login has expired. Run 'agent auth login codex' again."
-		}
-	case strings.Contains(lower, "status code: 401"), strings.Contains(lower, "status code 401"):
-		if hint != "" {
-			return hint
-		}
-	case strings.Contains(lower, "no such host"), strings.Contains(lower, "connection refused"):
-		if provider == connector.OllamaProvider {
-			return "Could not reach Ollama. Start Ollama locally or set OLLAMA_HOST to the correct server URL."
-		}
-	}
-
 	return message
 }
 
