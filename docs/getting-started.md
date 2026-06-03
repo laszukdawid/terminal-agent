@@ -107,7 +107,7 @@ GEMINI_API_KEY=your_gui_api_key_here
 TAVILY_KEY=your_gui_api_key_here
 ```
 
-The Settings dialog reports whether provider variables such as `MIMO_API_KEY` are visible to the GUI process and includes a `Reload Environment` button for token changes while the GUI is running.
+The Settings dialog reports whether provider variables such as `MIMO_API_KEY` are visible to the GUI process. Restart `agent-gui` after changing `.gui.env` or shell startup files.
 
 If you want to use the direct local `llama` provider instead of an API-backed provider:
 

@@ -68,20 +68,19 @@ func (r EnvironmentLoadResult) SourceFor(key string) string {
 	return r.Sources[key]
 }
 
-func LoadEnvironment(cfg environmentConfig, previousSources map[string]string) EnvironmentLoadResult {
+func LoadEnvironment(cfg environmentConfig) EnvironmentLoadResult {
 	result := EnvironmentLoadResult{
 		EnvFilePath:  cfg.GetGUIEnvFile(),
 		ShellEnabled: cfg.GetGUILoadShellEnvironment(),
 		Shell:        os.Getenv("SHELL"),
-		Sources:      processEnvironmentSources(previousSources),
+		Sources:      processEnvironmentSources(),
 	}
 
-	importedThisRun := map[string]string{}
 	fileEnv, loaded, warning, err := readEnvFile(result.EnvFilePath)
 	result.EnvFileLoaded = loaded
 	result.EnvFileWarning = warning
 	result.EnvFileError = err
-	mergeEnvironment(fileEnv, envSourceFile, previousSources, result.Sources, importedThisRun)
+	mergeEnvironment(fileEnv, envSourceFile, result.Sources)
 
 	if result.ShellEnabled {
 		start := time.Now()
@@ -90,45 +89,34 @@ func LoadEnvironment(cfg environmentConfig, previousSources map[string]string) E
 		result.ShellError = err
 		if err == nil {
 			result.ShellLoaded = true
-			mergeEnvironment(shellEnv, envSourceShell, previousSources, result.Sources, importedThisRun)
+			mergeEnvironment(shellEnv, envSourceShell, result.Sources)
 		}
 	}
 
 	return result
 }
 
-func processEnvironmentSources(previousSources map[string]string) map[string]string {
+func processEnvironmentSources() map[string]string {
 	sources := map[string]string{}
 	for key := range guiEnvironmentAllowlist {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			if previousSources[key] == envSourceFile || previousSources[key] == envSourceShell {
-				sources[key] = previousSources[key]
-			} else {
-				sources[key] = envSourceProcess
-			}
+			sources[key] = envSourceProcess
 		}
 	}
 	return sources
 }
 
-func mergeEnvironment(values map[string]string, source string, previousSources map[string]string, sources map[string]string, importedThisRun map[string]string) {
+func mergeEnvironment(values map[string]string, source string, sources map[string]string) {
 	for key, rawValue := range values {
 		value := strings.TrimSpace(rawValue)
 		if value == "" || !isAllowedGUIEnv(key) {
 			continue
 		}
-		current := strings.TrimSpace(os.Getenv(key))
-		previous := previousSources[key]
-		canOverwrite := previous == envSourceFile || previous == envSourceShell
-		if source == envSourceShell && importedThisRun[key] == envSourceFile {
-			canOverwrite = false
-		}
-		if current != "" && !canOverwrite {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
 			continue
 		}
 		if err := os.Setenv(key, value); err == nil {
 			sources[key] = source
-			importedThisRun[key] = source
 		}
 	}
 }

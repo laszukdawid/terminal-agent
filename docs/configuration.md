@@ -263,7 +263,7 @@ Shell import is enabled by default and fills only missing supported variables. C
 }
 ```
 
-The Settings dialog reports where visible variables came from and includes `Reload Environment`. Manual reload updates values previously loaded from the app env file or shell import, while preserving values that came from the original process environment.
+The Settings dialog reports whether the GUI environment was loaded. Restart `agent-gui` after changing `.gui.env` or shell startup files.
 
 ## Model Context Protocol (MCP)
 

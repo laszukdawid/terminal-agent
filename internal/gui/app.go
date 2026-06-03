@@ -57,7 +57,7 @@ func (g *App) Run() {
 }
 
 func (g *App) LoadInitialEnvironment() {
-	g.envResult = LoadEnvironment(g.cfg, nil)
+	g.envResult = LoadEnvironment(g.cfg)
 }
 
 func (g *App) Show() {
@@ -239,10 +239,6 @@ func (g *App) openSettings() {
 		InitialModel:    g.cfg.GetDefaultModelId(),
 		Version:         g.version,
 		EnvResult:       g.envResult,
-		OnReloadEnv: func() EnvironmentLoadResult {
-			g.envResult = LoadEnvironment(g.cfg, g.envResult.Sources)
-			return g.envResult
-		},
 		OnSave: func(provider, model string) error {
 			provider = strings.TrimSpace(provider)
 			model = strings.TrimSpace(model)

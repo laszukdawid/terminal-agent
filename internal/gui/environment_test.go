@@ -54,7 +54,7 @@ func TestLoadEnvironmentUsesEnvFileBeforeShell(t *testing.T) {
 	shell := writeShellEnvScript(t, "OPENAI_API_KEY=shell-openai", "GEMINI_API_KEY=shell-gemini", "DISPLAY=bad")
 	t.Setenv("SHELL", shell)
 
-	result := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: true}, nil)
+	result := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: true})
 
 	if result.EnvFileError != nil {
 		t.Fatalf("EnvFileError = %v", result.EnvFileError)
@@ -84,7 +84,7 @@ func TestLoadEnvironmentDoesNotOverwriteProcessEnv(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "process-openai")
 	envFile := writeTestEnvFile(t, "OPENAI_API_KEY=file-openai\n")
 
-	result := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: false}, nil)
+	result := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: false})
 
 	if got := os.Getenv("OPENAI_API_KEY"); got != "process-openai" {
 		t.Fatalf("OPENAI_API_KEY = %q, want process-openai", got)
@@ -104,7 +104,7 @@ func TestLoadEnvironmentReportsEnvFilePermissionWarningWithoutBlockingLoad(t *te
 		t.Fatal(err)
 	}
 
-	result := LoadEnvironment(envTestConfig{envFile: path, loadShell: false}, nil)
+	result := LoadEnvironment(envTestConfig{envFile: path, loadShell: false})
 
 	if !result.EnvFileLoaded {
 		t.Fatal("env file should be loaded")
@@ -117,63 +117,6 @@ func TestLoadEnvironmentReportsEnvFilePermissionWarningWithoutBlockingLoad(t *te
 	}
 	if got := os.Getenv("OPENAI_API_KEY"); got != "file-openai" {
 		t.Fatalf("OPENAI_API_KEY = %q, want file-openai", got)
-	}
-}
-
-func TestLoadEnvironmentReloadOverwritesImportedValues(t *testing.T) {
-	clearTestEnv(t, "OPENAI_API_KEY", "GEMINI_API_KEY")
-	dir := t.TempDir()
-	envFile := filepath.Join(dir, "gui.env")
-	if err := os.WriteFile(envFile, []byte("OPENAI_API_KEY=file-one\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	shell := writeShellEnvScript(t, "GEMINI_API_KEY=shell-one")
-	t.Setenv("SHELL", shell)
-
-	first := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: true}, nil)
-	if err := os.WriteFile(envFile, []byte("OPENAI_API_KEY=file-two\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	shell = writeShellEnvScript(t, "GEMINI_API_KEY=shell-two", "OPENAI_API_KEY=shell-two")
-	t.Setenv("SHELL", shell)
-
-	second := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: true}, first.Sources)
-
-	if got := os.Getenv("OPENAI_API_KEY"); got != "file-two" {
-		t.Fatalf("OPENAI_API_KEY = %q, want file-two", got)
-	}
-	if got := os.Getenv("GEMINI_API_KEY"); got != "shell-two" {
-		t.Fatalf("GEMINI_API_KEY = %q, want shell-two", got)
-	}
-	if second.SourceFor("OPENAI_API_KEY") != envSourceFile {
-		t.Fatalf("OPENAI_API_KEY source = %q, want %q", second.SourceFor("OPENAI_API_KEY"), envSourceFile)
-	}
-}
-
-func TestLoadEnvironmentReloadLetsShellFillRemovedEnvFileValue(t *testing.T) {
-	clearTestEnv(t, "OPENAI_API_KEY")
-	dir := t.TempDir()
-	envFile := filepath.Join(dir, "gui.env")
-	if err := os.WriteFile(envFile, []byte("OPENAI_API_KEY=file-one\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	shell := writeShellEnvScript(t, "OPENAI_API_KEY=shell-one")
-	t.Setenv("SHELL", shell)
-
-	first := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: true}, nil)
-	if err := os.WriteFile(envFile, []byte(""), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	shell = writeShellEnvScript(t, "OPENAI_API_KEY=shell-two")
-	t.Setenv("SHELL", shell)
-
-	second := LoadEnvironment(envTestConfig{envFile: envFile, loadShell: true}, first.Sources)
-
-	if got := os.Getenv("OPENAI_API_KEY"); got != "shell-two" {
-		t.Fatalf("OPENAI_API_KEY = %q, want shell-two", got)
-	}
-	if second.SourceFor("OPENAI_API_KEY") != envSourceShell {
-		t.Fatalf("OPENAI_API_KEY source = %q, want %q", second.SourceFor("OPENAI_API_KEY"), envSourceShell)
 	}
 }
 

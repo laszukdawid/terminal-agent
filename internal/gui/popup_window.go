@@ -2,7 +2,6 @@ package gui
 
 import (
 	"image/color"
-	"os"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -86,7 +85,6 @@ type settingsDialogOptions struct {
 	InitialModel    string
 	Version         string
 	EnvResult       EnvironmentLoadResult
-	OnReloadEnv     func() EnvironmentLoadResult
 	OnSave          func(provider, model string) error
 }
 
@@ -472,14 +470,10 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	}
 	modelHint := newHint()
 	providerStatus := newProviderStatusIcon(p.window.Canvas())
-	var environmentLabel *widget.Label
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
 		providerStatus.setStatus(providerReadinessStatusWithEnvironment(provider, currentEnvResult))
-		if environmentLabel != nil {
-			environmentLabel.SetText(environmentSummaryText(currentEnvResult, provider))
-		}
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 		} else {
@@ -501,28 +495,11 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)
-	environmentLabel = widget.NewLabel(environmentSummaryText(currentEnvResult, options.InitialProvider))
+	environmentLabel := widget.NewLabel(environmentSummaryText(currentEnvResult))
 	environmentLabel.Wrapping = fyne.TextWrapWord
-	var reloadEnvButton *widget.Button
-	reloadEnvButton = widget.NewButton("Reload", func() {
-		if options.OnReloadEnv == nil {
-			return
-		}
-		reloadEnvButton.Disable()
-		environmentLabel.SetText("Reloading environment...")
-		go func() {
-			reloaded := options.OnReloadEnv()
-			fyne.Do(func() {
-				currentEnvResult = reloaded
-				updateHints(providerInput.Text)
-				reloadEnvButton.Enable()
-			})
-		}()
-	})
 	environmentBox := container.NewVBox(
 		widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		environmentLabel,
-		container.NewHBox(reloadEnvButton, layout.NewSpacer()),
 	)
 	var dlg dialog.Dialog
 	saveButton := widget.NewButton("Save", func() {
@@ -560,7 +537,7 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	dlg.Show()
 }
 
-func environmentSummaryText(result EnvironmentLoadResult, provider string) string {
+func environmentSummaryText(result EnvironmentLoadResult) string {
 	lines := []string{}
 	fileStatus := "missing"
 	if result.EnvFileLoaded {
@@ -578,48 +555,13 @@ func environmentSummaryText(result EnvironmentLoadResult, provider string) strin
 	case !result.ShellEnabled:
 		lines = append(lines, "Shell import: disabled")
 	case result.ShellLoaded:
-		lines = append(lines, "Shell import: loaded ("+result.Shell+", "+result.ShellDuration.Truncate(10_000_000).String()+")")
+		lines = append(lines, "Shell import: loaded")
 	case result.ShellError != nil:
 		lines = append(lines, "Shell import: failed: "+result.ShellError.Error())
 	default:
 		lines = append(lines, "Shell import: not loaded")
 	}
-
-	if key := providerEnvironmentKey(strings.TrimSpace(provider)); key != "" {
-		source := result.SourceFor(key)
-		if source == "" {
-			source = "GUI process"
-		}
-		if strings.TrimSpace(os.Getenv(key)) != "" {
-			lines = append(lines, key+": visible from "+source)
-		} else {
-			lines = append(lines, key+": not visible")
-		}
-	}
 	return strings.Join(lines, "\n")
-}
-
-func providerEnvironmentKey(provider string) string {
-	switch provider {
-	case connector.OpenaiProvider:
-		return "OPENAI_API_KEY"
-	case connector.AnthropicProvider:
-		return "ANTHROPIC_API_KEY"
-	case connector.GoogleProvider:
-		return "GEMINI_API_KEY"
-	case connector.MistralProvider:
-		return "MISTRAL_API_KEY"
-	case connector.MiMoProvider:
-		return "MIMO_API_KEY"
-	case connector.LlamaProvider:
-		return "YZMA_LIB"
-	case connector.OllamaProvider:
-		return "OLLAMA_HOST"
-	case connector.BedrockProvider:
-		return "AWS_REGION"
-	default:
-		return ""
-	}
 }
 
 func (p *popupWindow) resizeInput(value string) {
