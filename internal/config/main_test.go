@@ -73,6 +73,7 @@ func TestLoadConfig(t *testing.T) {
 		// Verify that default providers included
 		assert.Equal(t, "claude-3-5-haiku-latest", config.Providers["anthropic"])
 		assert.Equal(t, "anthropic.claude-3-haiku-20240307-v1:0", config.Providers["bedrock"])
+		assert.Equal(t, "gpt-4o-mini", config.Providers["codex"])
 		assert.Equal(t, "llama3.2", config.Providers["llama"])
 		assert.Equal(t, "mimo-v2.5-pro", config.Providers["mimo"])
 		assert.Equal(t, "mistral-small-latest", config.Providers["mistral"])

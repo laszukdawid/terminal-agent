@@ -2,7 +2,7 @@
 
 The `auth` command manages provider credentials. It stores API keys and OAuth tokens separately from the main config file, in `~/.config/terminal-agent/auth.json`.
 
-Currently, only the `openai` provider is supported.
+Currently, `openai` API-key auth and `codex` OAuth auth are supported.
 
 ## Usage
 
@@ -17,13 +17,13 @@ agent auth <subcommand> [args]
 Authenticate with a provider:
 
 ```sh
-agent auth login openai
-agent auth login openai --device
+agent auth login codex
+agent auth login codex --device
 agent auth login openai --api-key
 ```
 
-- `agent auth login openai` starts the browser OAuth flow. Opens the system browser by default, then listens on a local callback server to receive the authorization code.
-- `agent auth login openai --device` starts the terminal-friendly device-code flow. Prints a URL and a one-time code to paste in your browser. Polls for authorization for up to 15 minutes (5 second default interval).
+- `agent auth login codex` starts the browser OAuth flow. Opens the system browser by default, then listens on a local callback server to receive the authorization code.
+- `agent auth login codex --device` starts the terminal-friendly device-code flow. Prints a URL and a one-time code to paste in your browser. Polls for authorization for up to 15 minutes (5 second default interval).
 - `agent auth login openai --api-key` stores an API key without using OAuth.
 
 Browser login supports a pasted-code fallback. If the localhost callback does not complete automatically, paste either:
@@ -52,6 +52,7 @@ Show auth status for a provider:
 
 ```sh
 agent auth status openai
+agent auth status codex
 ```
 
 Example output:
@@ -66,7 +67,7 @@ Source: stored
 
 If `OPENAI_API_KEY` is set in the environment, `Source` will show `environment` instead.
 
-For OAuth logins, status also shows `Account ID`, `Plan type`, `Expires`, and `Expired` when that metadata is available.
+For Codex OAuth logins, status also shows `Account ID`, `Plan type`, `Expires`, and `Expired` when that metadata is available.
 
 ### logout
 
@@ -74,6 +75,7 @@ Remove stored credentials for a provider:
 
 ```sh
 agent auth logout openai
+agent auth logout codex
 ```
 
 This removes the entry from `~/.config/terminal-agent/auth.json`. It does not unset environment variables.
@@ -88,15 +90,14 @@ Credentials are stored in:
 
 The file is created with `0600` permissions and uses atomic writes (write to temp file, sync, rename) to avoid data corruption. File operations are protected by advisory file locks to prevent corruption from concurrent `agent auth` processes.
 
-For stored OAuth logins, Terminal Agent refreshes access tokens automatically while a valid refresh token is still present. If a refresh fails (e.g., the refresh token expired), you will need to run `agent auth login openai` again.
+For stored Codex OAuth logins, Terminal Agent refreshes access tokens automatically while a valid refresh token is still present. If a refresh fails (e.g., the refresh token expired), you will need to run `agent auth login codex` again.
 
 ## Auth Resolution
 
-When the agent needs an OpenAI credential at runtime, it resolves in this order:
+When the agent uses the `openai` provider, it resolves API-key credentials in this order:
 
 1. `OPENAI_API_KEY` environment variable — highest priority
 2. Stored API key in `auth.json`
-3. Stored OAuth credential in `auth.json`
-4. Error: authentication not configured
+3. Error: authentication not configured
 
-This means you can have stored credentials as a default and temporarily override them by setting `OPENAI_API_KEY`.
+When the agent uses the `codex` provider, it uses stored OAuth credentials from `auth.json`. Legacy OAuth credentials previously stored under `openai` are migrated to `codex` automatically on successful use.

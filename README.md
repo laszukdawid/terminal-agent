@@ -176,7 +176,7 @@ $ agent config set anthropic.claude-3-haiku-20240307-v1:0
 
 ### OpenAI
 
-OpenAI supports two authentication methods:
+The `openai` provider uses API-key authentication for OpenAI API services. Use the separate `codex` provider for OAuth-backed ChatGPT/Codex access.
 
 **Option 1: API key** (traditional)
 Set the key as an environment variable:
@@ -184,15 +184,11 @@ Set the key as an environment variable:
 export OPENAI_API_KEY=your_api_key_here
 ```
 
-**Option 2: Stored credentials** (recommended)
-Use the `agent auth` command to store your API key or authenticate with your ChatGPT account:
+**Option 2: Stored API key**
+Use the `agent auth` command to store your API key:
 ```sh
-agent auth login openai               # browser OAuth login
-agent auth login openai --device      # terminal-friendly device login
 agent auth login openai --api-key     # store an API key
 ```
-
-If the browser callback does not return automatically, the browser login flow also accepts a pasted authorization code or full redirect URL as a fallback.
 
 Setting `openai` provider with `gpt-4o-mini` model can be done with `task run:set:openai` or directly
 
@@ -208,6 +204,28 @@ agent auth status openai
 ```
 
 See `agent auth --help` for more authentication options.
+
+### Codex
+
+The `codex` provider uses OAuth-backed ChatGPT/Codex access:
+
+```sh
+agent auth login codex               # browser OAuth login
+agent auth login codex --device      # terminal-friendly device login
+```
+
+If the browser callback does not return automatically, the browser login flow also accepts a pasted authorization code or full redirect URL as a fallback.
+
+```sh
+$ agent config set provider codex
+$ agent config set model gpt-4o-mini
+```
+
+Check the current Codex auth state with:
+
+```sh
+agent auth status codex
+```
 
 ### Xiaomi MiMo
 

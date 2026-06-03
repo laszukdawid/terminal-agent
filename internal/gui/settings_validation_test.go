@@ -16,6 +16,17 @@ func TestProviderSetupHintMiMo(t *testing.T) {
 	assert.Contains(t, providerSetupHint(connector.MiMoProvider), "MIMO_API_KEY")
 }
 
+func TestProviderSetupHintOpenAIUsesAPIKeyOnly(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("OPENAI_API_KEY", "")
+	assert.Contains(t, providerSetupHint(connector.OpenaiProvider), "agent auth login openai --api-key")
+}
+
+func TestProviderSetupHintCodexUsesOAuth(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	assert.Contains(t, providerSetupHint(connector.CodexProvider), "agent auth login codex")
+}
+
 func TestProviderReadinessMiMoMissing(t *testing.T) {
 	t.Setenv("MIMO_API_KEY", "")
 
@@ -69,7 +80,7 @@ func TestFilterProviders(t *testing.T) {
 
 	// "o" matches every provider whose name contains the letter o.
 	assert.ElementsMatch(t,
-		[]string{"anthropic", "bedrock", "google", "mimo", "ollama", "openai"},
+		[]string{"anthropic", "bedrock", "codex", "google", "mimo", "ollama", "openai"},
 		filterProviders(all, "o"),
 	)
 	// Case-insensitive.

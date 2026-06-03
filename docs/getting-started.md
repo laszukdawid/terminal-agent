@@ -76,7 +76,7 @@ Inside the popup:
 Before using Terminal Agent, you'll need to configure it with your preferred LLM provider:
 
 ```sh
-# Set your provider (e.g., "openai", "anthropic", "bedrock", "google", "ollama", "llama")
+# Set your provider (e.g., "openai", "codex", "anthropic", "bedrock", "google", "ollama", "llama")
 agent config set provider openai
 
 # Set your preferred model

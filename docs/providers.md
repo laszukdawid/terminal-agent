@@ -80,7 +80,7 @@ Example config:
 
 ### OpenAI
 
-OpenAI supports two methods to set up authentication: an API key (traditional), or stored credentials via `agent auth`.
+The `openai` provider uses API-key authentication for OpenAI API services. Use the separate `codex` provider for OAuth-backed ChatGPT/Codex access.
 
 **Option 1: API key via environment variable**
 
@@ -91,18 +91,14 @@ OpenAI supports two methods to set up authentication: an API key (traditional), 
    export OPENAI_API_KEY=your_api_key_here
    ```
 
-**Option 2: Stored credentials via agent auth**
+**Option 2: Stored API key via agent auth**
 
-Store your API key or authenticate with your ChatGPT subscription:
+Store your API key:
 ```sh
-agent auth login openai               # browser OAuth login
-agent auth login openai --device      # terminal-friendly device login
-agent auth login openai --api-key     # store an API key
+agent auth login openai --api-key
 ```
 
-Credentials are persisted in `~/.config/terminal-agent/auth.json`. They are used automatically for `ask`, `chat`, and `task` commands when no `OPENAI_API_KEY` environment variable is present. Stored OAuth tokens refresh automatically while a valid refresh token is still available.
-
-If the browser callback does not complete automatically, `agent auth login openai` also accepts a pasted authorization code or full redirect URL as a fallback.
+Credentials are persisted in `~/.config/terminal-agent/auth.json`. They are used automatically for `ask`, `chat`, and `task` commands when no `OPENAI_API_KEY` environment variable is present.
 
 Check your auth status at any time:
 ```sh
@@ -136,7 +132,37 @@ export OPENAI_BASE_URL=https://your-custom-endpoint.com/v1
 - Tool usage capability for the `task` command
 - Compatible with OpenAI-compatible endpoints via `OPENAI_BASE_URL`
 
-**Auth resolution order:** When both a stored credential and `OPENAI_API_KEY` exist, the environment variable takes precedence.
+**Auth resolution order:** When both a stored OpenAI API key and `OPENAI_API_KEY` exist, the environment variable takes precedence.
+
+### Codex
+
+The `codex` provider uses OAuth-backed ChatGPT/Codex access through `agent auth`.
+
+Authenticate with your ChatGPT subscription:
+```sh
+agent auth login codex               # browser OAuth login
+agent auth login codex --device      # terminal-friendly device login
+```
+
+Stored OAuth tokens refresh automatically while a valid refresh token is still available. If the browser callback does not complete automatically, `agent auth login codex` also accepts a pasted authorization code or full redirect URL as a fallback.
+
+Check your auth status at any time:
+```sh
+agent auth status codex
+```
+
+Remove stored credentials:
+```sh
+agent auth logout codex
+```
+
+**Configuration:**
+```sh
+agent config set provider codex
+agent config set model gpt-4o-mini
+```
+
+Legacy OAuth credentials previously stored under `openai` are migrated to `codex` automatically on successful use.
 
 ### Xiaomi MiMo
 

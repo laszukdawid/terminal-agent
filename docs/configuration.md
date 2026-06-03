@@ -182,7 +182,8 @@ Stored credentials are managed with the `agent auth` command and take effect aut
 
 | Provider | Environment Variable | Auth File | Description |
 |----------|---------------------|-----------|-------------|
-| OpenAI | `OPENAI_API_KEY` | supported | API key or stored credential for OpenAI services |
+| OpenAI | `OPENAI_API_KEY` | supported | API key for OpenAI API services |
+| Codex | — | supported | OAuth login for ChatGPT/Codex services |
 | Anthropic | `ANTHROPIC_API_KEY` | — | API key for Anthropic Claude models |
 | Google | `GEMINI_API_KEY` | — | API key for Google AI (Gemini) |
 | Xiaomi MiMo | `MIMO_API_KEY` | — | API key for Xiaomi MiMo models |
@@ -203,14 +204,16 @@ Example of storing an API key with the auth command:
 agent auth login openai --api-key
 ```
 
-Example of using OAuth-based login instead:
+Example of using OAuth-based Codex login instead:
 
 ```sh
-agent auth login openai          # browser OAuth login
-agent auth login openai --device # device-code login
+agent auth login codex          # browser OAuth login
+agent auth login codex --device # device-code login
 ```
 
-**Auth resolution order for OpenAI:** `OPENAI_API_KEY` env var → stored API key in auth.json → stored OAuth credential → error.
+**Auth resolution order for OpenAI:** `OPENAI_API_KEY` env var → stored API key in auth.json → error.
+
+**Auth resolution for Codex:** stored OAuth credential in auth.json → legacy OpenAI OAuth credential migration → error.
 
 For the `llama` provider, example runtime setup is:
 

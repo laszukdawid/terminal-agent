@@ -151,6 +151,14 @@ func (oc *OpenAIConnector) queryOAuth(ctx context.Context, qParams *QueryParams)
 	return *result, nil
 }
 
+func (cc *CodexConnector) Query(ctx context.Context, qParams *QueryParams) (string, error) {
+	oc := cc.OpenAIConnector
+	if oc.authErr != nil {
+		return "", oc.authErr
+	}
+	return oc.queryOAuth(ctx, qParams)
+}
+
 func (oc *OpenAIConnector) queryWithToolOAuth(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error) {
 	response := LlmResponseWithTools{}
 	params := buildResponsesParams(oc.modelID, qParams)
@@ -195,4 +203,12 @@ func (oc *OpenAIConnector) queryWithToolOAuth(ctx context.Context, qParams *Quer
 	}
 
 	return response, nil
+}
+
+func (cc *CodexConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error) {
+	oc := cc.OpenAIConnector
+	if oc.authErr != nil {
+		return LlmResponseWithTools{}, oc.authErr
+	}
+	return oc.queryWithToolOAuth(ctx, qParams, tools)
 }

@@ -147,11 +147,23 @@ func (m *Manager) DeleteProvider(provider string) (bool, error) {
 		}
 
 		if _, exists := authFile[provider]; !exists {
+			if provider == ProviderCodex {
+				if legacy, legacyExists := authFile[ProviderOpenAI]; legacyExists && legacy.Type == CredentialTypeOAuth {
+					delete(authFile, ProviderOpenAI)
+					deleted = true
+					return m.saveUnlocked(authFile)
+				}
+			}
 			return nil
 		}
 
 		delete(authFile, provider)
 		deleted = true
+		if provider == ProviderCodex {
+			if legacy, exists := authFile[ProviderOpenAI]; exists && legacy.Type == CredentialTypeOAuth {
+				delete(authFile, ProviderOpenAI)
+			}
+		}
 		return m.saveUnlocked(authFile)
 	})
 	if err != nil {
