@@ -495,12 +495,7 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)
-	environmentLabel := widget.NewLabel(environmentSummaryText(currentEnvResult))
-	environmentLabel.Wrapping = fyne.TextWrapWord
-	environmentBox := container.NewVBox(
-		widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		environmentLabel,
-	)
+	environmentSummary := environmentSummaryText(currentEnvResult)
 	var dlg dialog.Dialog
 	saveButton := widget.NewButton("Save", func() {
 		provider := strings.TrimSpace(providerInput.Text)
@@ -529,7 +524,17 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	})
 	versionLabel := widget.NewLabelWithStyle(options.Version, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
 	footer := container.NewHBox(versionLabel, layout.NewSpacer(), cancelButton, saveButton)
-	content := container.NewVBox(form, environmentBox, errorLabel, footer)
+	contentObjects := []fyne.CanvasObject{form}
+	if environmentSummary != "" {
+		environmentLabel := widget.NewLabel(environmentSummary)
+		environmentLabel.Wrapping = fyne.TextWrapWord
+		contentObjects = append(contentObjects,
+			widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			environmentLabel,
+		)
+	}
+	contentObjects = append(contentObjects, errorLabel, footer)
+	content := container.NewVBox(contentObjects...)
 	updateHints(options.InitialProvider)
 
 	dlg = dialog.NewCustomWithoutButtons("Settings", content, p.window)
@@ -539,27 +544,14 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 
 func environmentSummaryText(result EnvironmentLoadResult) string {
 	lines := []string{}
-	fileStatus := "missing"
-	if result.EnvFileLoaded {
-		fileStatus = "loaded"
-	}
 	if result.EnvFileError != nil {
-		fileStatus = "error: " + result.EnvFileError.Error()
+		lines = append(lines, "App env file: "+result.EnvFileError.Error())
 	}
-	lines = append(lines, "App env file: "+fileStatus+" ("+envFileDisplayPath(result.EnvFilePath)+")")
 	if result.EnvFileWarning != nil {
 		lines = append(lines, "App env file warning: "+result.EnvFileWarning.Error())
 	}
-
-	switch {
-	case !result.ShellEnabled:
-		lines = append(lines, "Shell import: disabled")
-	case result.ShellLoaded:
-		lines = append(lines, "Shell import: loaded")
-	case result.ShellError != nil:
+	if result.ShellError != nil {
 		lines = append(lines, "Shell import: failed: "+result.ShellError.Error())
-	default:
-		lines = append(lines, "Shell import: not loaded")
 	}
 	return strings.Join(lines, "\n")
 }

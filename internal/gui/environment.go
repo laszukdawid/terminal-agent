@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -224,16 +223,4 @@ func parseNullSeparatedEnv(output []byte) map[string]string {
 		values[key] = value
 	}
 	return values
-}
-
-func envFileDisplayPath(path string) string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return path
-	}
-	rel, err := filepath.Rel(home, path)
-	if err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-		return filepath.Join("~", rel)
-	}
-	return path
 }
