@@ -564,7 +564,7 @@ func environmentSummaryText(result EnvironmentLoadResult) string {
 		lines = append(lines, "App env file warning: "+result.EnvFileWarning.Error())
 	}
 	if result.ShellError != nil {
-		lines = append(lines, "Shell import: failed: "+result.ShellError.Error())
+		lines = append(lines, "Shell import failed: "+result.ShellError.Error())
 	}
 	return strings.Join(lines, "\n")
 }

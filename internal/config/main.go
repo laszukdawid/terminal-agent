@@ -213,7 +213,7 @@ func (config *config) GetGUIEnvFile() string {
 
 func (config *config) GetGUILoadShellEnvironment() bool {
 	if config.GUI.LoadShellEnvironment == nil {
-		return true
+		return false
 	}
 	return *config.GUI.LoadShellEnvironment
 }

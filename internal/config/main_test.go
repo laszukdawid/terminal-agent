@@ -179,7 +179,7 @@ func TestGUIConfigDefaults(t *testing.T) {
 	cfg := NewDefaultConfig()
 
 	assert.Equal(t, filepath.Join(homeDir, ".config", "terminal-agent", ".gui.env"), cfg.GetGUIEnvFile())
-	assert.True(t, cfg.GetGUILoadShellEnvironment())
+	assert.False(t, cfg.GetGUILoadShellEnvironment())
 	assert.Equal(t, 2*time.Second, cfg.GetGUIShellEnvironmentTimeout())
 }
 

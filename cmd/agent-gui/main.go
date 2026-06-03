@@ -5,13 +5,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 
@@ -22,7 +20,6 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/platform"
 	u "github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
-	"golang.org/x/term"
 )
 
 var (
@@ -143,60 +140,18 @@ func main() {
 	defer server.Close()
 	guiApp.LoadInitialEnvironment()
 
-	stopTerminalQuit := watchTerminalQuit(guiApp, server)
-	defer stopTerminalQuit()
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-sigCtx.Done()
+		server.Close()
+		os.Exit(0)
+	}()
 
 	if *show {
 		logger.Debug("starting visible GUI from --show")
 	}
 	guiApp.Run()
-}
-
-func watchTerminalQuit(guiApp *gui.App, server *platform.IPCServer) func() {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	stop := make(chan struct{})
-	var quitOnce sync.Once
-	quit := func() {
-		quitOnce.Do(func() {
-			_ = server.Close()
-			guiApp.Quit()
-		})
-	}
-
-	go func() {
-		select {
-		case <-signals:
-			quit()
-		case <-stop:
-		}
-	}()
-
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		go func() {
-			buf := make([]byte, 1)
-			for {
-				_, err := os.Stdin.Read(buf)
-				if errors.Is(err, io.EOF) {
-					quit()
-					return
-				}
-				if err != nil {
-					return
-				}
-				select {
-				case <-stop:
-					return
-				default:
-				}
-			}
-		}()
-	}
-
-	return func() {
-		signal.Stop(signals)
-		close(stop)
-	}
 }
 
 func signalExistingGUI(ctx context.Context) error {

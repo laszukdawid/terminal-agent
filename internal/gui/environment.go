@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -200,6 +201,8 @@ func loadShellEnvironment(timeout time.Duration) (map[string]string, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, shell, "-ic", "env -0")
+	cmd.Stdin = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	output, err := cmd.Output()
 	if ctx.Err() != nil {
 		return map[string]string{}, ctx.Err()

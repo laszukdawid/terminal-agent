@@ -251,13 +251,13 @@ TAVILY_KEY=your_gui_api_key_here
 
 The GUI env file supports simple `KEY=value` lines and optional `export KEY=value` lines. It is parsed as data, not executed as a shell script. Keep it private with `chmod 600 ~/.config/terminal-agent/.gui.env`.
 
-Shell import is enabled by default and fills only missing supported variables. Configure the behavior in `~/.config/terminal-agent/config.json`:
+Shell import is disabled by default because shell startup files can be slow or interactive. Enable it only if you want `agent-gui` to fill missing supported variables from your shell environment:
 
 ```json
 {
   "gui": {
     "env_file": "~/.config/terminal-agent/.gui.env",
-    "load_shell_environment": true,
+    "load_shell_environment": false,
     "shell_environment_timeout": "2s"
   }
 }

@@ -98,7 +98,7 @@ export GEMINI_API_KEY=your_api_key_here
 # For Amazon Bedrock, configure your AWS credentials as usual
 ```
 
-If you use the popup GUI from a desktop launcher or global shortcut, `agent-gui` loads GUI credentials from `~/.config/terminal-agent/.gui.env` and then imports missing supported variables from your interactive shell environment.
+If you use the popup GUI from a desktop launcher or global shortcut, `agent-gui` loads GUI credentials from `~/.config/terminal-agent/.gui.env`.
 Use `.gui.env` when you want app-specific tokens that are separate from personal shell tokens:
 
 ```sh
