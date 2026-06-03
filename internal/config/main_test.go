@@ -150,6 +150,17 @@ func TestLoadConfig(t *testing.T) {
 	})
 }
 
+func TestGetModelIdForProvider(t *testing.T) {
+	cfg := NewDefaultConfig()
+	cfg.Providers["google"] = "gemini-custom"
+	cfg.Providers["anthropic"] = "claude-custom"
+	cfg.DefaultProvider = "google"
+
+	assert.Equal(t, "gemini-custom", cfg.GetDefaultModelId())
+	assert.Equal(t, "gemini-custom", cfg.GetModelIdForProvider("google"))
+	assert.Equal(t, "claude-custom", cfg.GetModelIdForProvider("anthropic"))
+}
+
 func TestDeviceDefaultsToAuto(t *testing.T) {
 	cfg := NewDefaultConfig()
 	assert.Equal(t, "auto", cfg.GetDevice())

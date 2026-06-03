@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"slices"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -81,11 +82,12 @@ type providerStatusIcon struct {
 }
 
 type settingsDialogOptions struct {
-	InitialProvider string
-	InitialModel    string
-	Version         string
-	EnvResult       EnvironmentLoadResult
-	OnSave          func(provider, model string) error
+	InitialProvider  string
+	InitialModel     string
+	Version          string
+	EnvResult        EnvironmentLoadResult
+	ModelForProvider func(provider string) string
+	OnSave           func(provider, model string) error
 }
 
 func newProviderStatusIcon(c fyne.Canvas) *providerStatusIcon {
@@ -474,6 +476,11 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
 		providerStatus.setStatus(providerReadinessStatusWithEnvironment(provider, currentEnvResult))
+		if options.ModelForProvider != nil && slices.Contains(connector.SupportedProviders(), provider) {
+			if model := strings.TrimSpace(options.ModelForProvider(provider)); model != "" {
+				modelEntry.SetText(model)
+			}
+		}
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 		} else {

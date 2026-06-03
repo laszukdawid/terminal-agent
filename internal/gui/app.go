@@ -239,6 +239,9 @@ func (g *App) openSettings() {
 		InitialModel:    g.cfg.GetDefaultModelId(),
 		Version:         g.version,
 		EnvResult:       g.envResult,
+		ModelForProvider: func(provider string) string {
+			return g.cfg.GetModelIdForProvider(provider)
+		},
 		OnSave: func(provider, model string) error {
 			provider = strings.TrimSpace(provider)
 			model = strings.TrimSpace(model)

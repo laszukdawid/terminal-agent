@@ -19,6 +19,7 @@ func getConfigPath() string {
 type Config interface {
 	GetDefaultProvider() string
 	GetDefaultModelId() string
+	GetModelIdForProvider(string) string
 	GetLlamaModels() map[string]string
 	GetDevice() string
 	GetGUIEnvFile() string
@@ -170,7 +171,11 @@ func (config *config) SetDefaultProvider(provider string) error {
 }
 
 func (config *config) GetDefaultModelId() string {
-	return config.Providers[config.DefaultProvider]
+	return config.GetModelIdForProvider(config.DefaultProvider)
+}
+
+func (config *config) GetModelIdForProvider(provider string) string {
+	return config.Providers[provider]
 }
 
 func (config *config) GetLlamaModels() map[string]string {
