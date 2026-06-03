@@ -503,12 +503,21 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	)
 	environmentLabel = widget.NewLabel(environmentSummaryText(currentEnvResult, options.InitialProvider))
 	environmentLabel.Wrapping = fyne.TextWrapWord
-	reloadEnvButton := widget.NewButton("Reload", func() {
+	var reloadEnvButton *widget.Button
+	reloadEnvButton = widget.NewButton("Reload", func() {
 		if options.OnReloadEnv == nil {
 			return
 		}
-		currentEnvResult = options.OnReloadEnv()
-		updateHints(providerInput.Text)
+		reloadEnvButton.Disable()
+		environmentLabel.SetText("Reloading environment...")
+		go func() {
+			reloaded := options.OnReloadEnv()
+			fyne.Do(func() {
+				currentEnvResult = reloaded
+				updateHints(providerInput.Text)
+				reloadEnvButton.Enable()
+			})
+		}()
 	})
 	environmentBox := container.NewVBox(
 		widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
