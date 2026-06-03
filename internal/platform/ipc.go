@@ -87,6 +87,9 @@ func Send(ctx context.Context, socketPath, command string) error {
 		return err
 	}
 	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
 
 	if _, err := fmt.Fprintf(conn, "%s\n", command); err != nil {
 		return err

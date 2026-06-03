@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"slices"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -17,10 +18,10 @@ import (
 )
 
 const (
-	defaultWindowWidth    float32 = 720
-	defaultWindowHeight   float32 = 280
-	minWindowHeight       float32 = 240
-	maxWindowHeight       float32 = 760
+	defaultWindowWidth   float32 = 720
+	defaultWindowHeight  float32 = 280
+	minWindowHeight      float32 = 240
+	maxWindowHeight      float32 = 760
 	maxInputRows                 = 3
 	compactOutputHeight  float32 = 110
 	statusMinWidth       float32 = 130
@@ -63,6 +64,7 @@ type popupWindow struct {
 	onSettings   func()
 	onTest       func()
 	onInput      func(string)
+	onQuit       func()
 }
 
 type popupEntry struct {
@@ -78,6 +80,15 @@ type providerStatusIcon struct {
 	icon    *canvas.Text
 	message string
 	popup   *widget.PopUp
+}
+
+type settingsDialogOptions struct {
+	InitialProvider  string
+	InitialModel     string
+	Version          string
+	EnvResult        EnvironmentLoadResult
+	ModelForProvider func(provider string) string
+	OnSave           func(provider, model string) error
 }
 
 func newProviderStatusIcon(c fyne.Canvas) *providerStatusIcon {
@@ -350,6 +361,11 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyL, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
 		p.window.Canvas().Focus(p.input)
 	})
+	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyQ, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
+		if p.onQuit != nil {
+			p.onQuit()
+		}
+	})
 
 	return p
 }
@@ -441,9 +457,10 @@ func (p *popupWindow) showTestDialog(tests []devTest) {
 	dlg.Show()
 }
 
-func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version string, onSave func(provider, model string) error) {
+func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
+	currentEnvResult := options.EnvResult
 	modelEntry := widget.NewEntry()
-	modelEntry.SetText(initialModel)
+	modelEntry.SetText(options.InitialModel)
 	errorLabel := widget.NewLabel("")
 	errorLabel.Wrapping = fyne.TextWrapWord
 	errorLabel.Importance = widget.DangerImportance
@@ -464,7 +481,12 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
-		providerStatus.setStatus(providerReadinessStatus(provider))
+		providerStatus.setStatus(providerReadinessStatusWithEnvironment(provider, currentEnvResult))
+		if options.ModelForProvider != nil && slices.Contains(connector.SupportedProviders(), provider) {
+			if model := strings.TrimSpace(options.ModelForProvider(provider)); model != "" {
+				modelEntry.SetText(model)
+			}
+		}
 		if def := connector.DefaultModelFor(provider); def != "" {
 			modelHint.SetText("Default model: " + def)
 		} else {
@@ -472,7 +494,7 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 		}
 	}
 
-	providerInput := newProviderEntry(initialProvider, updateHints)
+	providerInput := newProviderEntry(options.InitialProvider, updateHints)
 
 	providerLabel := widget.NewLabelWithStyle("Provider", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	providerLabelBox := container.NewHBox(providerLabel, providerStatus)
@@ -486,6 +508,7 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 		modelLabel, modelEntry,
 		widget.NewLabel(""), modelHint,
 	)
+	environmentSummary := environmentSummaryText(currentEnvResult)
 	var dlg dialog.Dialog
 	saveButton := widget.NewButton("Save", func() {
 		provider := strings.TrimSpace(providerInput.Text)
@@ -498,7 +521,11 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 			errorLabel.SetText("Model cannot be empty.")
 			return
 		}
-		if err := onSave(provider, model); err != nil {
+		if options.OnSave == nil {
+			errorLabel.SetText("Settings cannot be saved.")
+			return
+		}
+		if err := options.OnSave(provider, model); err != nil {
 			errorLabel.SetText(err.Error())
 			return
 		}
@@ -508,14 +535,38 @@ func (p *popupWindow) showSettingsDialog(initialProvider, initialModel, version 
 	cancelButton := widget.NewButton("Cancel", func() {
 		dlg.Hide()
 	})
-	versionLabel := widget.NewLabelWithStyle(version, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
+	versionLabel := widget.NewLabelWithStyle(options.Version, fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
 	footer := container.NewHBox(versionLabel, layout.NewSpacer(), cancelButton, saveButton)
-	content := container.NewVBox(form, errorLabel, footer)
-	updateHints(initialProvider)
+	contentObjects := []fyne.CanvasObject{form}
+	if environmentSummary != "" {
+		environmentLabel := widget.NewLabel(environmentSummary)
+		environmentLabel.Wrapping = fyne.TextWrapWord
+		contentObjects = append(contentObjects,
+			widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			environmentLabel,
+		)
+	}
+	contentObjects = append(contentObjects, errorLabel, footer)
+	content := container.NewVBox(contentObjects...)
+	updateHints(options.InitialProvider)
 
 	dlg = dialog.NewCustomWithoutButtons("Settings", content, p.window)
 	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
+}
+
+func environmentSummaryText(result EnvironmentLoadResult) string {
+	lines := []string{}
+	if result.EnvFileError != nil {
+		lines = append(lines, "App env file: "+result.EnvFileError.Error())
+	}
+	if result.EnvFileWarning != nil {
+		lines = append(lines, "App env file warning: "+result.EnvFileWarning.Error())
+	}
+	if result.ShellError != nil {
+		lines = append(lines, "Shell import failed: "+result.ShellError.Error())
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (p *popupWindow) resizeInput(value string) {

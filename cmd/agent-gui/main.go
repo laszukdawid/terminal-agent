@@ -95,7 +95,7 @@ func main() {
 		if errors.Is(err, platform.ErrAlreadyRunning) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			if err := platform.Send(ctx, filepath.Join(platform.RuntimeDir(guiAppID), "ipc.sock"), platform.CommandShow); err != nil {
+			if err := signalExistingGUI(ctx); err != nil {
 				logger.Error("failed to signal existing GUI instance", zap.Error(err))
 				fmt.Println("Failed to signal existing GUI instance")
 				os.Exit(1)
@@ -115,7 +115,11 @@ func main() {
 	}
 	defer os.Remove(instance.SocketPath)
 
-	guiApp := gui.NewApp(service, cfg, windowAppID, *devMode, displayVersion())
+	guiApp := gui.NewApp(service, cfg, gui.AppOptions{
+		AppID:   windowAppID,
+		DevMode: *devMode,
+		Version: displayVersion(),
+	})
 	server, err := platform.Listen(instance.SocketPath, func(command string) error {
 		switch command {
 		case platform.CommandShow:
@@ -134,17 +138,36 @@ func main() {
 		os.Exit(1)
 	}
 	defer server.Close()
+	guiApp.LoadInitialEnvironment()
 
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
 		<-sigCtx.Done()
 		server.Close()
-		fyne.Do(guiApp.Hide)
+		os.Exit(0)
 	}()
 
 	if *show {
 		logger.Debug("starting visible GUI from --show")
 	}
 	guiApp.Run()
+}
+
+func signalExistingGUI(ctx context.Context) error {
+	socketPath := filepath.Join(platform.RuntimeDir(guiAppID), "ipc.sock")
+	for {
+		err := platform.Send(ctx, socketPath, platform.CommandShow)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }

@@ -75,10 +75,14 @@ type providerReadiness struct {
 }
 
 func providerReadinessStatus(provider string) providerReadiness {
+	return providerReadinessStatusWithEnvironment(provider, EnvironmentLoadResult{})
+}
+
+func providerReadinessStatusWithEnvironment(provider string, envResult EnvironmentLoadResult) providerReadiness {
 	switch provider {
 	case connector.OpenaiProvider:
 		if os.Getenv("OPENAI_API_KEY") != "" {
-			return providerReadiness{Available: true, Message: "Available: OPENAI_API_KEY is visible to the GUI process."}
+			return providerReadiness{Available: true, Message: availableEnvMessage("OPENAI_API_KEY", envResult)}
 		}
 		status, err := auth.NewManager().Status(provider)
 		if err == nil && status.Configured {
@@ -92,16 +96,16 @@ func providerReadinessStatus(provider string) providerReadiness {
 		}
 		return providerReadiness{Message: "Unavailable: no stored Codex OAuth login is configured."}
 	case connector.AnthropicProvider:
-		return envProviderReadiness("Anthropic", "ANTHROPIC_API_KEY")
+		return envProviderReadinessWithEnvironment("Anthropic", "ANTHROPIC_API_KEY", envResult)
 	case connector.GoogleProvider:
-		return envProviderReadiness("Google", "GEMINI_API_KEY")
+		return envProviderReadinessWithEnvironment("Google", "GEMINI_API_KEY", envResult)
 	case connector.MistralProvider:
-		return envProviderReadiness("Mistral", "MISTRAL_API_KEY")
+		return envProviderReadinessWithEnvironment("Mistral", "MISTRAL_API_KEY", envResult)
 	case connector.MiMoProvider:
-		return envProviderReadiness("MiMo", "MIMO_API_KEY")
+		return envProviderReadinessWithEnvironment("MiMo", "MIMO_API_KEY", envResult)
 	case connector.LlamaProvider:
 		if os.Getenv("YZMA_LIB") != "" {
-			return providerReadiness{Available: true, Message: "Available: YZMA_LIB is visible to the GUI process."}
+			return providerReadiness{Available: true, Message: availableEnvMessage("YZMA_LIB", envResult)}
 		}
 		return providerReadiness{Message: "Unavailable: YZMA_LIB is not visible to the GUI process."}
 	case connector.OllamaProvider:
@@ -120,10 +124,21 @@ func providerReadinessStatus(provider string) providerReadiness {
 }
 
 func envProviderReadiness(displayName, envVar string) providerReadiness {
+	return envProviderReadinessWithEnvironment(displayName, envVar, EnvironmentLoadResult{})
+}
+
+func envProviderReadinessWithEnvironment(displayName, envVar string, envResult EnvironmentLoadResult) providerReadiness {
 	if os.Getenv(envVar) != "" {
-		return providerReadiness{Available: true, Message: fmt.Sprintf("Available: %s is visible to the GUI process.", envVar)}
+		return providerReadiness{Available: true, Message: availableEnvMessage(envVar, envResult)}
 	}
 	return providerReadiness{Message: fmt.Sprintf("Unavailable: %s is not visible to the GUI process. %s requires it.", envVar, displayName)}
+}
+
+func availableEnvMessage(envVar string, envResult EnvironmentLoadResult) string {
+	if source := envResult.SourceFor(envVar); source != "" {
+		return fmt.Sprintf("Available: %s is visible from %s.", envVar, source)
+	}
+	return fmt.Sprintf("Available: %s is visible to the GUI process.", envVar)
 }
 
 func explainRuntimeError(provider string, err error) string {

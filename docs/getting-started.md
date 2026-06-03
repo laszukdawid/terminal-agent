@@ -98,8 +98,16 @@ export GEMINI_API_KEY=your_api_key_here
 # For Amazon Bedrock, configure your AWS credentials as usual
 ```
 
-If you use the popup GUI from a desktop launcher or global shortcut, remember that it may not inherit variables from shell startup files like `~/.bashrc`.
-The Settings dialog reports whether provider variables such as `MIMO_API_KEY` are visible to the GUI process.
+If you use the popup GUI from a desktop launcher or global shortcut, `agent-gui` loads GUI credentials from `~/.config/terminal-agent/.gui.env`.
+Use `.gui.env` when you want app-specific tokens that are separate from personal shell tokens:
+
+```sh
+OPENAI_API_KEY=your_gui_api_key_here
+GEMINI_API_KEY=your_gui_api_key_here
+TAVILY_KEY=your_gui_api_key_here
+```
+
+The Settings dialog reports whether provider variables such as `MIMO_API_KEY` are visible to the GUI process. Restart `agent-gui` after changing `.gui.env` or shell startup files.
 
 If you want to use the direct local `llama` provider instead of an API-backed provider:
 
