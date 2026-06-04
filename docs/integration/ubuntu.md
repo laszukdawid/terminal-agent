@@ -2,7 +2,32 @@
 
 This guide covers the supported Ubuntu desktop integration path for the Terminal Agent popup GUI.
 
-## What this does
+## Install the released GUI
+
+For normal use, install a released `agent-gui` binary first instead of building it from the repository. If you use Homebrew on Linux:
+
+```sh
+brew install terminal-agent
+```
+
+If Homebrew cannot find the formula directly, install it from the project tap:
+
+```sh
+brew install laszukdawid/tap/terminal-agent
+```
+
+You can also download the matching release archive from [GitHub Releases](https://github.com/laszukdawid/terminal-agent/releases), extract `agent-gui`, and place it in a directory on your `PATH`, such as `~/.local/bin/agent-gui`.
+
+Verify the installed binary with:
+
+```sh
+agent-gui --help
+agent-gui --show
+```
+
+Use the source-tree integration below when you want the repo script to build `agent-gui`, install it to `~/.local/bin/agent-gui`, create the desktop entry, and configure the supported shortcut path.
+
+## Source-tree integration
 
 Running `task integration:ubuntu` installs the popup GUI for the current user and configures the desktop launcher path around `~/.local/bin/agent-gui`.
 
@@ -19,7 +44,7 @@ The integration script performs these steps automatically:
 - detects GNOME or KDE Plasma and prepares the supported shortcut path for that desktop
 - supports `--uninstall` to remove the installed user-scoped integration files and shortcut configuration
 
-## Run the integration
+## Run the source-tree integration
 
 ```sh
 task integration:ubuntu

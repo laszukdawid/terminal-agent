@@ -20,6 +20,12 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 - Do **not** include design specs or implementation plans in pull requests or git commits. Keep them local only (e.g. under `docs/superpowers/`, which is git-ignored); a PR should contain only the production code, tests, and user-facing docs for the change.
 - Do **not** commit build artifacts (the `agent` / `agent-gui` binaries produced by `task build`). They are git-ignored; never `git add` them into a commit.
 
+## Development Philosophy
+
+- Optimize for the best durable solution, not the smallest or quickest implementation path. Prefer designs that make the idea clear, robust, and future-proof even when they require more code.
+- Avoid shortcuts, temporary workarounds, and narrowly scoped fixes unless the user explicitly asks for them. If a shortcut is unavoidable, call it out clearly and explain the tradeoff.
+- Treat coding as the easy part. Spend the necessary effort on understanding the product idea, long-term architecture, edge cases, and future maintenance before choosing an implementation.
+
 ## Architecture Notes
 
 `internal/app` is the shared application-service layer used by both the CLI and the GUI.

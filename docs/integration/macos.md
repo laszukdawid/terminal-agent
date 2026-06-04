@@ -2,7 +2,30 @@
 
 This guide covers the supported macOS desktop integration path for the Terminal Agent popup GUI.
 
-## What this does
+## Install the released GUI
+
+For normal use, install the released Terminal Agent package instead of building `agent-gui` from the repository:
+
+```sh
+brew install terminal-agent
+```
+
+If Homebrew cannot find the formula directly, install it from the project tap:
+
+```sh
+brew install laszukdawid/tap/terminal-agent
+```
+
+This installs `agent-gui` on your `PATH`. Verify it with:
+
+```sh
+agent-gui --help
+agent-gui --show
+```
+
+Use the source-tree integration below only when you want the repo script to build a local `Terminal Agent.app` bundle in `~/Applications/` and create the `~/.local/bin/agent-gui` symlink.
+
+## Source-tree integration
 
 Running `task integration:macos` installs the popup GUI as a native `.app` bundle in `~/Applications/` and creates a CLI symlink at `~/.local/bin/agent-gui`.
 
@@ -19,7 +42,7 @@ The integration script performs these steps automatically:
 - validates the bundle structure and `Info.plist`
 - supports `--uninstall` to remove the app bundle and CLI symlink
 
-## Run the integration
+## Run the source-tree integration
 
 ```sh
 task integration:macos
@@ -48,6 +71,10 @@ After setup:
 
 macOS does not provide a scriptable global shortcut API, so shortcut setup is a manual step.
 
+If you installed `agent-gui` with Homebrew, use the absolute path reported by `which agent-gui` in the shortcut command. This is usually `/opt/homebrew/bin/agent-gui --show` on Apple Silicon or `/usr/local/bin/agent-gui --show` on Intel Macs.
+
+If you ran `task integration:macos`, use `~/.local/bin/agent-gui --show`.
+
 Suggested shortcut:
 
 ```text
@@ -58,7 +85,7 @@ Ctrl+Shift+Space
 
 1. Open Shortcuts.app.
 2. Create a new shortcut.
-3. Add a **Run Shell Script** action with: `~/.local/bin/agent-gui --show`
+3. Add a **Run Shell Script** action with your `agent-gui --show` path.
 4. Name it **Terminal Agent Popup**.
 5. Right-click the shortcut (or open its details).
 6. Click **Add Keyboard Shortcut** and press `Ctrl+Shift+Space`.
@@ -66,7 +93,7 @@ Ctrl+Shift+Space
 ### Option B: Automator Quick Action
 
 1. Open Automator and create a new **Quick Action**.
-2. Add **Run Shell Script** with: `~/.local/bin/agent-gui --show`
+2. Add **Run Shell Script** with your `agent-gui --show` path.
 3. Save as **Terminal Agent Popup**.
 4. Open **System Settings** > **Keyboard** > **Keyboard Shortcuts** > **Services**.
 5. Find **Terminal Agent Popup** and assign `Ctrl+Shift+Space`.
