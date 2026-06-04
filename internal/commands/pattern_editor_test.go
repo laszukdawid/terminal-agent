@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,4 +92,19 @@ func TestPatternEditorSingleLevel(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, `unix("ls")`, result)
 	})
+}
+
+func TestInteractiveConfirmationRenderMultilineCommand(t *testing.T) {
+	var output bytes.Buffer
+	ic := newInteractiveConfirmation("", os.Stdin, &output)
+	ic.command = "first line\n  second line\nthird line"
+	ic.termWidth = 200
+
+	ic.render()
+
+	text := output.String()
+	assert.Contains(t, text, "  first line\r\n  ")
+	assert.Contains(t, text, "  second line\r\n  third line")
+	assert.NotContains(t, text, "first line\n  second")
+	assert.Equal(t, 7, ic.lastVisualLines)
 }

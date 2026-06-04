@@ -163,7 +163,9 @@ func (c *interactiveConfirmation) render() {
 	var lines []string
 	lines = append(lines, c.headerText())
 	lines = append(lines, "")
-	lines = append(lines, "  "+c.currentDisplayCommand())
+	for _, commandLine := range splitDisplayLines(c.currentDisplayCommand()) {
+		lines = append(lines, "  "+commandLine)
+	}
 	lines = append(lines, "")
 	if c.hasMultipleLevels() {
 		lines = append(lines, "  Use arrows: ← broader  narrower →")
@@ -195,6 +197,12 @@ func (c *interactiveConfirmation) visualLineCount(s string) int {
 		return 1
 	}
 	return (len(s) + c.termWidth - 1) / c.termWidth
+}
+
+func splitDisplayLines(s string) []string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return strings.Split(s, "\n")
 }
 
 func (c *interactiveConfirmation) cleanup() {
