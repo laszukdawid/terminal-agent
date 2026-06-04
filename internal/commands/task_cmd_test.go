@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,30 +135,282 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 }
 
 func TestTaskCommandStreamedOutput(t *testing.T) {
-	t.Run("suppresses streamed output when print disabled", func(t *testing.T) {
-		output := runTaskCommandWithEvents(t, []string{"--print=false", "inspect", "repo"}, func(req app.TaskRequest) []app.Event {
-			return []app.Event{
-				{Type: app.EventOutputDelta, Text: "live output"},
-				{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message},
+	tests := []struct {
+		name        string
+		cfg         config.Config
+		args        []string
+		events      []app.Event
+		want        string
+		contains    []string
+		notContains []string
+	}{
+		{
+			name:   "suppresses streamed output when print disabled",
+			args:   []string{"--print=false", "inspect", "repo"},
+			events: []app.Event{{Type: app.EventOutputDelta, Text: "live output"}},
+			want:   "",
+		},
+		{
+			name:   "separates streamed output from final response",
+			args:   []string{"--plain", "inspect", "repo"},
+			events: []app.Event{{Type: app.EventOutputDelta, Text: "live output"}},
+			want:   "live output\ndone",
+		},
+		{
+			name:        "limits streamed output by default",
+			args:        []string{"--plain", "inspect", "repo"},
+			events:      []app.Event{{Type: app.EventOutputDelta, Text: "1\n2\n3\n4\n5\n6\n7\n8\n"}},
+			contains:    []string{"1\n2\n3\n4\n5\n6\n", "[tool output truncated: 6 out of 8 lines]\n", "done"},
+			notContains: []string{"7\n"},
+		},
+		{
+			name:        "uses configured streamed output limit",
+			cfg:         taskLiveOutputLimitConfig(2),
+			args:        []string{"--plain", "inspect", "repo"},
+			events:      []app.Event{{Type: app.EventOutputDelta, Text: "1\n2\n3\n"}},
+			contains:    []string{"1\n2\n", "tool output truncated: 2 out of 3 lines"},
+			notContains: []string{"3\n"},
+		},
+		{
+			name:        "supports unlimited streamed output",
+			cfg:         taskLiveOutputLimitConfig(0),
+			args:        []string{"--plain", "inspect", "repo"},
+			events:      []app.Event{{Type: app.EventOutputDelta, Text: "1\n2\n3\n4\n5\n6\n7\n"}},
+			contains:    []string{"7\n"},
+			notContains: []string{"truncated"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := tt.cfg
+			if cfg == nil {
+				cfg = config.NewDefaultConfig()
+			}
+			output := runTaskCommandWithConfigAndEvents(t, cfg, tt.args, func(req app.TaskRequest) []app.Event {
+				events := append([]app.Event{}, tt.events...)
+				events = append(events, app.Event{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message})
+				return events
+			})
+
+			if tt.want != "" || len(tt.contains) == 0 && len(tt.notContains) == 0 {
+				assert.Equal(t, tt.want, output)
+			}
+			for _, want := range tt.contains {
+				assert.Contains(t, output, want)
+			}
+			for _, unwanted := range tt.notContains {
+				assert.NotContains(t, output, unwanted)
 			}
 		})
+	}
+}
 
-		assert.Empty(t, output)
-	})
+func TestTaskLiveOutputLimiter(t *testing.T) {
+	sourceFileOutput := strings.Join([]string{
+		"def create_bingo_board(entries):",
+		"    if len(entries) != 25:",
+		"        raise ValueError(\"The list must contain exactly 25 entries.\")",
+		"",
+		"    # Create a 5x5 bingo board",
+		"    bingo_board = [entries[i : i + 5] for i in range(0, 25, 5)]",
+		"    return bingo_board",
+	}, "\n") + "\n"
 
-	t.Run("separates streamed output from final response", func(t *testing.T) {
-		output := runTaskCommandWithEvents(t, []string{"--plain", "inspect", "repo"}, func(req app.TaskRequest) []app.Event {
-			return []app.Event{
-				{Type: app.EventOutputDelta, Text: "live output"},
-				{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message},
+	tests := []struct {
+		name         string
+		maxLines     int
+		maxLineChars int
+		chunks       []string
+		wantChunks   []string
+		contains     []string
+		notContains  []string
+	}{
+		{
+			name:         "limits long single line",
+			maxLines:     2,
+			maxLineChars: 4,
+			chunks:       []string{"abcdefghijkl", "more"},
+			wantChunks:   []string{"abcdefgh\n[tool output truncated: 2 lines shown]\n", ""},
+		},
+		{
+			name:         "spans chunks",
+			maxLines:     2,
+			maxLineChars: 120,
+			chunks:       []string{"1\n", "2\n3\n", "4\n"},
+			wantChunks:   []string{"1\n", "2\n[tool output truncated: 2 out of 3 lines]\n", ""},
+		},
+		{
+			name:         "shows configured lines for source file output",
+			maxLines:     6,
+			maxLineChars: 120,
+			chunks:       []string{sourceFileOutput},
+			contains: []string{
+				"def create_bingo_board(entries):\n",
+				"    if len(entries) != 25:\n",
+				"        raise ValueError",
+				"    # Create a 5x5 bingo board\n",
+				"    bingo_board = [entries[i : i + 5] for i in range(0, 25, 5)]\n",
+				"tool output truncated: 6 out of 7 lines",
+			},
+			notContains: []string{"    return bingo_board\n"},
+		},
+		{
+			name:         "uses character fallback only before newline",
+			maxLines:     2,
+			maxLineChars: 4,
+			chunks:       []string{"1234567\n", "abcdefghijk\nthird\n"},
+			wantChunks:   []string{"1234567\n", "abcdefghijk\n[tool output truncated: 2 out of 3 lines]\n"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			limiter := newTaskLiveOutputLimiter(tt.maxLines, tt.maxLineChars)
+			var output strings.Builder
+			for i, chunk := range tt.chunks {
+				got := limiter.Filter(chunk)
+				if len(tt.wantChunks) > 0 {
+					assert.Equal(t, tt.wantChunks[i], got)
+				}
+				output.WriteString(got)
+			}
+			for _, want := range tt.contains {
+				assert.Contains(t, output.String(), want)
+			}
+			for _, unwanted := range tt.notContains {
+				assert.NotContains(t, output.String(), unwanted)
 			}
 		})
+	}
+}
 
-		assert.Equal(t, "live output\ndone", output)
+func TestTaskCommandProgressOutput(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		contains    []string
+		notContains []string
+	}{
+		{
+			name:     "prints progress when always enabled",
+			args:     []string{"--progress=always", "--plain", "inspect", "repo"},
+			contains: []string{"Thinking...\n", "file_search: scanning\n", "done"},
+		},
+		{
+			name:        "suppresses progress when never enabled",
+			args:        []string{"--progress=never", "--plain", "inspect", "repo"},
+			contains:    []string{"done"},
+			notContains: []string{"Thinking...", "file_search: scanning"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := runTaskCommandWithEvents(t, tt.args, func(req app.TaskRequest) []app.Event {
+				return []app.Event{
+					{Type: app.EventTaskStatus, Text: "Thinking..."},
+					{Type: app.EventToolProgress, ToolName: "file_search", Text: "scanning"},
+					{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message},
+				}
+			})
+
+			for _, want := range tt.contains {
+				assert.Contains(t, output, want)
+			}
+			for _, unwanted := range tt.notContains {
+				assert.NotContains(t, output, unwanted)
+			}
+		})
+	}
+
+	t.Run("rejects invalid progress mode", func(t *testing.T) {
+		originalNewService := newService
+		defer func() { newService = originalNewService }()
+
+		newService = func() app.Service {
+			return &fakeTaskService{events: func(_ context.Context, req app.TaskRequest) (<-chan app.Event, error) {
+				ch := make(chan app.Event)
+				go func() {
+					defer close(ch)
+					ch <- app.Event{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message}
+				}()
+				return ch, nil
+			}}
+		}
+
+		cmd := NewTaskCommand(config.NewDefaultConfig())
+		cmd.SetIn(bytes.NewBufferString(""))
+		output := &bytes.Buffer{}
+		cmd.SetOut(output)
+		cmd.SetErr(output)
+		cmd.Flags().String("device", "", "")
+		cmd.SetArgs([]string{"--progress=nope", "inspect", "repo"})
+
+		err := cmd.ExecuteContext(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid --progress value")
 	})
 }
 
+func TestTaskProgressPrinterOutput(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      taskProgressConfig
+		messages    []string
+		want        string
+		contains    []string
+		notContains []string
+	}{
+		{
+			name:        "interactive replaces status line",
+			config:      taskProgressConfig{enabled: true, interactive: true},
+			messages:    []string{"Thinking...", "Running file_search..."},
+			contains:    []string{"\r\x1b[2K| Thinking...", "\r\x1b[2K| Running file_search...", "\r\x1b[2K"},
+			notContains: []string{"Thinking...\n"},
+		},
+		{
+			name:     "non-interactive prints unique progress lines",
+			config:   taskProgressConfig{enabled: true},
+			messages: []string{"Thinking...", "Thinking...", "Running file_search..."},
+			want:     "Thinking...\nRunning file_search...\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := &bytes.Buffer{}
+			progress := newTaskProgressPrinter(output, tt.config)
+			for _, message := range tt.messages {
+				progress.Print(message)
+			}
+			progress.Clear()
+
+			text := output.String()
+			if tt.want != "" {
+				assert.Equal(t, tt.want, text)
+			}
+			for _, want := range tt.contains {
+				assert.Contains(t, text, want)
+			}
+			for _, unwanted := range tt.notContains {
+				assert.NotContains(t, text, unwanted)
+			}
+		})
+	}
+}
+
+func taskLiveOutputLimitConfig(limit int) config.Config {
+	cfg := config.NewDefaultConfig()
+	cfg.TaskLiveOutputLimit = &limit
+	return cfg
+}
+
 func runTaskCommandWithEvents(t *testing.T, args []string, events func(app.TaskRequest) []app.Event) string {
+	return runTaskCommandWithConfigAndEvents(t, config.NewDefaultConfig(), args, events)
+}
+
+func runTaskCommandWithConfigAndEvents(t *testing.T, cfg config.Config, args []string, events func(app.TaskRequest) []app.Event) string {
 	t.Helper()
 	originalNewService := newService
 	defer func() { newService = originalNewService }()
@@ -175,7 +428,7 @@ func runTaskCommandWithEvents(t *testing.T, args []string, events func(app.TaskR
 		}}
 	}
 
-	cmd := NewTaskCommand(config.NewDefaultConfig())
+	cmd := NewTaskCommand(cfg)
 	output := &bytes.Buffer{}
 	cmd.SetIn(bytes.NewBufferString(""))
 	cmd.SetOut(output)

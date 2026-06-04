@@ -55,7 +55,7 @@ func TestRunTaskTool(t *testing.T) {
 		tool := &contextAwareTaskTool{}
 		dirs := TaskDirs{RootDir: "/repo", CurrentDir: "/repo/internal"}
 
-		output, err := runTaskTool(ctx, tool, input, dirs, nil)
+		output, err := runTaskTool(ctx, tool, input, dirs, nil, nil)
 
 		require.NoError(t, err)
 		assert.Equal(t, "context-aware", output)
@@ -75,7 +75,7 @@ func TestRunTaskTool(t *testing.T) {
 		dirs := TaskDirs{RootDir: "/repo", CurrentDir: "/repo/internal"}
 		var liveOutput bytes.Buffer
 
-		output, err := runTaskTool(context.Background(), tool, input, dirs, &liveOutput)
+		output, err := runTaskTool(context.Background(), tool, input, dirs, &liveOutput, nil)
 
 		require.NoError(t, err)
 		assert.Equal(t, "context-aware", output)
@@ -86,7 +86,7 @@ func TestRunTaskTool(t *testing.T) {
 		input := map[string]any{"value": "ok"}
 		tool := &legacyTaskTool{}
 
-		output, err := runTaskTool(context.Background(), tool, input, TaskDirs{}, nil)
+		output, err := runTaskTool(context.Background(), tool, input, TaskDirs{}, nil, nil)
 
 		require.NoError(t, err)
 		assert.Equal(t, "legacy", output)

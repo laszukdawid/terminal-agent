@@ -28,7 +28,7 @@ func selectTaskRawOutput(outputs []taskToolOutput) taskToolOutput {
 	return taskToolOutput{}
 }
 
-func runTaskTool(ctx context.Context, tool tools.Tool, input map[string]any, dirs TaskDirs, output io.Writer) (string, error) {
+func runTaskTool(ctx context.Context, tool tools.Tool, input map[string]any, dirs TaskDirs, output io.Writer, progress func(string)) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -36,6 +36,7 @@ func runTaskTool(ctx context.Context, tool tools.Tool, input map[string]any, dir
 		RootDir:    dirs.RootDir,
 		CurrentDir: dirs.CurrentDir,
 		Output:     output,
+		Progress:   progress,
 	}
 	if contextAwareTool, ok := tool.(tools.ContextAwareTool); ok {
 		return contextAwareTool.RunSchemaContext(ctx, input, execCtx)

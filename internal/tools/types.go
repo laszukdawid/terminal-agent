@@ -68,6 +68,9 @@ type ToolExecutionContext struct {
 	// return their captured result for agent reasoning; Output is only for
 	// incremental display and may be ignored by tools without useful live output.
 	Output io.Writer
+	// Progress is an optional semantic progress sink. It is separate from Output:
+	// progress is for user-facing status updates, not captured command output.
+	Progress func(string)
 }
 
 type ContextualTool interface {

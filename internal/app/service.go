@@ -26,6 +26,8 @@ type EventType string
 const (
 	EventStarted             EventType = "started"
 	EventOutputDelta         EventType = "output_delta"
+	EventTaskStatus          EventType = "task_status"
+	EventToolProgress        EventType = "tool_progress"
 	EventWarning             EventType = "warning"
 	EventConfirmationNeeded  EventType = "confirmation_needed"
 	EventClarificationNeeded EventType = "clarification_needed"

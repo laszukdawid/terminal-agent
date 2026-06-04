@@ -32,6 +32,7 @@ const (
 	RecordThought      RecordType = "thought"
 	RecordToolCall     RecordType = "tool_call"
 	RecordToolResult   RecordType = "tool_result"
+	RecordProgress     RecordType = "progress"
 	RecordConfirmation RecordType = "confirmation"
 	RecordDeclined     RecordType = "declined"
 	RecordCompleted    RecordType = "completed"
@@ -61,6 +62,7 @@ type Record struct {
 	Timestamp    time.Time      `json:"timestamp"`
 	Seq          int            `json:"seq"`
 	Iteration    int            `json:"iteration,omitempty"`
+	Status       string         `json:"status,omitempty"`
 	Meta         *Meta          `json:"meta,omitempty"`
 	Text         string         `json:"text,omitempty"`
 	ToolName     string         `json:"tool_name,omitempty"`

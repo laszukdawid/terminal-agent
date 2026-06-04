@@ -253,20 +253,46 @@ func TestGetProjectContext(t *testing.T) {
 }
 
 func TestGetTaskTimeout(t *testing.T) {
-	t.Run("defaults to zero (unlimited) when unset", func(t *testing.T) {
-		cfg := NewDefaultConfig()
-		assert.Equal(t, time.Duration(0), cfg.GetTaskTimeout())
-	})
+	tests := []struct {
+		name        string
+		taskTimeout string
+		want        time.Duration
+	}{
+		{name: "defaults to zero when unset", want: 0},
+		{name: "parses valid duration", taskTimeout: "15m", want: 15 * time.Minute},
+		{name: "returns zero on invalid duration", taskTimeout: "not-a-duration", want: 0},
+	}
 
-	t.Run("parses a valid duration string", func(t *testing.T) {
-		cfg := NewDefaultConfig()
-		cfg.TaskTimeout = "15m"
-		assert.Equal(t, 15*time.Minute, cfg.GetTaskTimeout())
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			cfg.TaskTimeout = tt.taskTimeout
+			assert.Equal(t, tt.want, cfg.GetTaskTimeout())
+		})
+	}
+}
 
-	t.Run("returns zero (unlimited) on invalid duration string", func(t *testing.T) {
-		cfg := NewDefaultConfig()
-		cfg.TaskTimeout = "not-a-duration"
-		assert.Equal(t, time.Duration(0), cfg.GetTaskTimeout())
-	})
+func TestGetTaskLiveOutputLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		value *int
+		want  int
+	}{
+		{name: "defaults to configured default when unset", want: DefaultTaskLiveOutputLimit},
+		{name: "returns configured positive value", value: intPtr(12), want: 12},
+		{name: "allows zero for unlimited", value: intPtr(0), want: 0},
+		{name: "defaults negative values", value: intPtr(-1), want: DefaultTaskLiveOutputLimit},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			cfg.TaskLiveOutputLimit = tt.value
+			assert.Equal(t, tt.want, cfg.GetTaskLiveOutputLimit())
+		})
+	}
+}
+
+func intPtr(v int) *int {
+	return &v
 }

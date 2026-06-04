@@ -35,26 +35,30 @@ type Config interface {
 	SetWorkingDir(string) error
 	GetMaxTokens() int
 	GetTaskTimeout() time.Duration
+	GetTaskLiveOutputLimit() int
 	GetMemory() bool
 	SetMemory(bool) error
 	GetPermissions() Permissions
 	GetProjectContext() bool
 }
 
+const DefaultTaskLiveOutputLimit = 6
+
 type config struct {
-	LogLevel        string
-	DefaultProvider string            `json:"default_provider"`
-	Providers       map[string]string `json:"providers"`
-	LlamaModels     map[string]string `json:"llama_models,omitempty"`
-	GUI             GUIConfig         `json:"gui,omitempty"`
-	Device          string            `json:"device,omitempty"`
-	McpFilePath     string            `json:"mcp_file_path"`
-	WorkingDir      string            `json:"working_dir"`
-	MaxTokens       int               `json:"max_tokens"`
-	TaskTimeout     string            `json:"task_timeout,omitempty"`
-	Memory          bool              `json:"memory"`
-	ProjectContext  *bool             `json:"project_context,omitempty"`
-	Permissions     Permissions       `json:"permissions,omitempty"`
+	LogLevel            string
+	DefaultProvider     string            `json:"default_provider"`
+	Providers           map[string]string `json:"providers"`
+	LlamaModels         map[string]string `json:"llama_models,omitempty"`
+	GUI                 GUIConfig         `json:"gui,omitempty"`
+	Device              string            `json:"device,omitempty"`
+	McpFilePath         string            `json:"mcp_file_path"`
+	WorkingDir          string            `json:"working_dir"`
+	MaxTokens           int               `json:"max_tokens"`
+	TaskTimeout         string            `json:"task_timeout,omitempty"`
+	TaskLiveOutputLimit *int              `json:"task_live_output_limit,omitempty"`
+	Memory              bool              `json:"memory"`
+	ProjectContext      *bool             `json:"project_context,omitempty"`
+	Permissions         Permissions       `json:"permissions,omitempty"`
 }
 
 type GUIConfig struct {
@@ -296,6 +300,17 @@ func (config *config) GetTaskTimeout() time.Duration {
 		return 0
 	}
 	return d
+}
+
+func (config *config) GetTaskLiveOutputLimit() int {
+	if config.TaskLiveOutputLimit == nil {
+		return DefaultTaskLiveOutputLimit
+	}
+	if *config.TaskLiveOutputLimit < 0 {
+		log.Warnw("Invalid task_live_output_limit in config, using default", "value", *config.TaskLiveOutputLimit)
+		return DefaultTaskLiveOutputLimit
+	}
+	return *config.TaskLiveOutputLimit
 }
 
 func (config *config) SetWorkingDir(path string) error {

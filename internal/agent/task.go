@@ -27,6 +27,8 @@ type TaskOptions struct {
 	Dirs         TaskDirs
 	Interaction  TaskInteraction
 	OnStep       func(TaskStep)
+	OnStatus     func(TaskStatusEvent)
+	OnProgress   func(TaskProgressEvent)
 	OnToolOutput func(TaskToolOutputEvent) error
 	// Timeout bounds the whole task run. A value of 0 means no task-level
 	// timeout (unlimited). Caller context cancellation always takes precedence.
@@ -38,6 +40,31 @@ type TaskToolOutputEvent struct {
 	ProcessID int
 	Output    string
 	Err       error
+}
+
+type TaskStatusPhase string
+
+const (
+	TaskStatusThinking             TaskStatusPhase = "thinking"
+	TaskStatusAwaitingConfirmation TaskStatusPhase = "awaiting_confirmation"
+	TaskStatusRunningTool          TaskStatusPhase = "running_tool"
+	TaskStatusFinalizing           TaskStatusPhase = "finalizing"
+	TaskStatusCompleted            TaskStatusPhase = "completed"
+	TaskStatusFailed               TaskStatusPhase = "failed"
+)
+
+type TaskStatusEvent struct {
+	Phase     TaskStatusPhase
+	Message   string
+	ToolName  string
+	ToolInput map[string]any
+	Timestamp time.Time
+}
+
+type TaskProgressEvent struct {
+	ToolName  string
+	Message   string
+	Timestamp time.Time
 }
 
 type TaskRunResult struct {
@@ -84,6 +111,8 @@ type taskExecutionState struct {
 	confirmations     *ConfirmationManager
 	successfulOutputs []taskToolOutput
 	onStep            func(TaskStep)
+	onStatus          func(TaskStatusEvent)
+	onProgress        func(TaskProgressEvent)
 	onToolOutput      func(TaskToolOutputEvent) error
 }
 
@@ -217,11 +246,14 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
 		onStep:            options.OnStep,
+		onStatus:          options.OnStatus,
+		onProgress:        options.OnProgress,
 		onToolOutput:      options.OnToolOutput,
 	}, nil
 }
 
 func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState) (TaskRunResult, bool, error) {
+	run.emitStatus(TaskStatusThinking, "Thinking...", "", nil)
 	response, err := a.queryTaskResponse(ctx, run)
 	if err != nil {
 		logger.Debugw("Error querying model", "iteration", run.state.Iterations, "error", err)
@@ -294,12 +326,14 @@ func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, 
 	if err := ctx.Err(); err != nil {
 		return TaskRunResult{}, false, err
 	}
-	toolResult, err := runTaskTool(ctx, tool, response.ToolInput, run.state.Dirs, newTaskToolOutputWriter(ctx, response.ToolName, run.onToolOutput))
+	run.emitStatus(TaskStatusRunningTool, fmt.Sprintf("Running %s...", response.ToolName), response.ToolName, response.ToolInput)
+	toolResult, err := runTaskTool(ctx, tool, response.ToolInput, run.state.Dirs, newTaskToolOutputWriter(ctx, response.ToolName, run.onToolOutput), run.progressReporter(response.ToolName))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return TaskRunResult{}, false, ctxErr
 		}
-		logger.Errorw("Tool execution failed", "tool", response.ToolName, "error", err)
+		run.emitStatus(TaskStatusFailed, fmt.Sprintf("%s failed: %v", response.ToolName, err), response.ToolName, response.ToolInput)
+		logger.Debugw("Tool execution failed", "tool", response.ToolName, "error", err)
 		run.recordFailure(response, err)
 		return TaskRunResult{}, false, nil
 	}
@@ -311,10 +345,12 @@ func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, 
 	run.recordSuccess(response, toolResult)
 	if response.ToolName == ToolNameFinalAnswer {
 		run.state.Phase = TaskPhaseCompleted
+		run.emitStatus(TaskStatusCompleted, "Task completed.", response.ToolName, response.ToolInput)
 		return run.finalAnswerResult(toolResult), true, nil
 	}
 	if toolInputRequestsFinal(response.ToolInput) && toolSupportsFinal(tool) {
 		run.state.Phase = TaskPhaseCompleted
+		run.emitStatus(TaskStatusCompleted, "Task completed.", response.ToolName, response.ToolInput)
 		return TaskRunResult{
 			Response:        toolResult,
 			RawOutput:       toolResult,
@@ -336,6 +372,7 @@ func (a *Agent) finalizeTaskRun(ctx context.Context, run *taskExecutionState) (T
 	}
 
 	run.state.Phase = TaskPhaseFinalizing
+	run.emitStatus(TaskStatusFinalizing, "Finalizing...", "", nil)
 	response, err := a.finalizeSummary(ctx, run.state)
 	if err != nil {
 		run.state.Phase = TaskPhaseFailed
@@ -343,13 +380,36 @@ func (a *Agent) finalizeTaskRun(ctx context.Context, run *taskExecutionState) (T
 	}
 
 	run.state.Phase = TaskPhaseCompleted
+	run.emitStatus(TaskStatusCompleted, "Task completed.", "", nil)
 	rawOutput := selectRawTaskOutput(run.successfulOutputs)
 	return TaskRunResult{Response: response, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}, nil
 }
 
 func (r *taskExecutionState) confirmTool(tool tools.Tool, response connector.LlmResponseWithTools) (bool, error) {
 	autoAllow := r.autoAllowsTool(tool, response.ToolInput)
+	if !autoAllow {
+		r.emitStatus(TaskStatusAwaitingConfirmation, fmt.Sprintf("Awaiting confirmation for %s...", response.ToolName), response.ToolName, response.ToolInput)
+	}
 	return r.confirmations.ConfirmWithDefault(BuildActionString(response.ToolName, response.ToolInput), autoAllow)
+}
+
+func (r *taskExecutionState) emitStatus(phase TaskStatusPhase, message string, toolName string, toolInput map[string]any) {
+	if r.onStatus == nil {
+		return
+	}
+	r.onStatus(TaskStatusEvent{Phase: phase, Message: message, ToolName: toolName, ToolInput: toolInput, Timestamp: time.Now().UTC()})
+}
+
+func (r *taskExecutionState) progressReporter(toolName string) func(string) {
+	if r.onProgress == nil {
+		return nil
+	}
+	return func(message string) {
+		if strings.TrimSpace(message) == "" {
+			return
+		}
+		r.onProgress(TaskProgressEvent{ToolName: toolName, Message: message, Timestamp: time.Now().UTC()})
+	}
 }
 
 // autoAllowsTool reports the default confirmation decision for a tool when no

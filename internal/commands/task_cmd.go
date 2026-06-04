@@ -3,13 +3,17 @@ package commands
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/history"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var newService = app.NewService
@@ -77,25 +81,44 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			if printFlagErr != nil {
 				printFlag = true
 			}
+			progressMode, err := flags.GetString("progress")
+			if err != nil {
+				progressMode = "auto"
+			}
+			progressConfig, err := resolveTaskProgress(progressMode, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+			progress := newTaskProgressPrinter(cmd.ErrOrStderr(), progressConfig)
+			defer progress.Clear()
+			liveOutput := newTaskLiveOutputLimiter(config.GetTaskLiveOutputLimit(), 120)
 
 			result := app.TaskResult{Request: userRequest}
 			printedStreamedToolOutput := false
 			lastStreamChunkEndedWithNewline := true
 			for event := range events {
 				switch event.Type {
+				case app.EventTaskStatus:
+					progress.Print(event.Text)
+				case app.EventToolProgress:
+					progress.Print(formatToolProgress(event))
 				case app.EventOutputDelta:
 					if printFlag {
-						printedStreamedToolOutput = true
-						if event.Text != "" {
-							lastStreamChunkEndedWithNewline = strings.HasSuffix(event.Text, "\n")
+						chunk := liveOutput.Filter(event.Text)
+						if chunk != "" {
+							progress.Clear()
+							printedStreamedToolOutput = true
+							lastStreamChunkEndedWithNewline = strings.HasSuffix(chunk, "\n")
+							cmd.Print(chunk)
 						}
-						cmd.Print(event.Text)
 					}
 				case app.EventWarning:
 					if event.Text != "" {
+						progress.Clear()
 						cmd.PrintErrf("Warning: %s\n", event.Text)
 					}
 				case app.EventConfirmationNeeded:
+					progress.Clear()
 					decision, promptErr := promptTaskConfirmation(cmd, inputReader, event.Confirmation)
 					if promptErr != nil {
 						return promptErr
@@ -104,6 +127,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 						return replyErr
 					}
 				case app.EventClarificationNeeded:
+					progress.Clear()
 					answer, promptErr := promptTaskClarification(cmd, inputReader, event.Clarification)
 					if promptErr != nil {
 						return promptErr
@@ -119,9 +143,11 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					result.RawOutputTool = event.RawOutputTool
 					result.DirectRawOutput = event.DirectRawOutput
 				case app.EventFailed:
+					progress.Clear()
 					return fmt.Errorf("failed to request a task: %w", event.Err)
 				}
 			}
+			progress.Clear()
 
 			response := result.Response
 
@@ -170,7 +196,211 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	// 'log' flag whether to log the input and output to a file (default: false)
 	cmd.Flags().BoolP("log", "l", false, "Log the input and output to a file")
 
+	cmd.Flags().String("progress", "auto", "Show task progress on stderr: auto, always, or never")
 	return cmd
+}
+
+type taskLiveOutputLimiter struct {
+	maxLines            int
+	maxLineChars        int
+	lines               int
+	charsWithoutNewline int
+	sawNewline          bool
+	truncated           bool
+	truncationAnnounced bool
+}
+
+func newTaskLiveOutputLimiter(maxLines int, maxLineChars int) *taskLiveOutputLimiter {
+	return &taskLiveOutputLimiter{maxLines: maxLines, maxLineChars: maxLineChars}
+}
+
+func (l *taskLiveOutputLimiter) Filter(chunk string) string {
+	if chunk == "" || l.truncationAnnounced {
+		return ""
+	}
+	if l.maxLines == 0 {
+		return chunk
+	}
+
+	var out strings.Builder
+	startLines := l.lines
+	knownChunkLines := countOutputLines(chunk)
+	for _, r := range chunk {
+		if l.lines >= l.maxLines || (!l.sawNewline && l.charsWithoutNewline >= l.maxLines*l.maxLineChars) {
+			l.truncated = true
+			break
+		}
+
+		out.WriteRune(r)
+		if r == '\n' {
+			l.sawNewline = true
+			l.lines++
+			continue
+		}
+		if !l.sawNewline {
+			l.charsWithoutNewline++
+		}
+	}
+
+	if l.truncated {
+		l.truncationAnnounced = true
+		if out.Len() > 0 && !strings.HasSuffix(out.String(), "\n") {
+			out.WriteByte('\n')
+		}
+		out.WriteString(formatLiveOutputTruncation(l.maxLines, startLines+knownChunkLines, l.sawNewline))
+	}
+
+	return out.String()
+}
+
+func countOutputLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	lines := strings.Count(s, "\n")
+	if !strings.HasSuffix(s, "\n") {
+		lines++
+	}
+	return lines
+}
+
+func formatLiveOutputTruncation(shown int, totalLines int, lineMode bool) string {
+	if lineMode && totalLines > shown {
+		return fmt.Sprintf("[tool output truncated: %d out of %d lines]\n", shown, totalLines)
+	}
+	return fmt.Sprintf("[tool output truncated: %d lines shown]\n", shown)
+}
+
+type taskProgressPrinter struct {
+	enabled     bool
+	interactive bool
+	out         io.Writer
+
+	mu      sync.Mutex
+	message string
+	frame   int
+	active  bool
+	stop    chan struct{}
+	done    chan struct{}
+}
+
+type taskProgressConfig struct {
+	enabled     bool
+	interactive bool
+}
+
+var taskProgressFrames = []string{"|", "/", "-", "\\"}
+
+func newTaskProgressPrinter(out io.Writer, config taskProgressConfig) *taskProgressPrinter {
+	return &taskProgressPrinter{enabled: config.enabled, interactive: config.interactive, out: out}
+}
+
+func (p *taskProgressPrinter) Print(message string) {
+	if !p.enabled || p.out == nil {
+		return
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return
+	}
+
+	p.mu.Lock()
+	if message == p.message {
+		p.mu.Unlock()
+		return
+	}
+	p.message = message
+	if !p.interactive {
+		p.mu.Unlock()
+		_, _ = fmt.Fprintln(p.out, message)
+		return
+	}
+	if !p.active {
+		p.active = true
+		p.stop = make(chan struct{})
+		p.done = make(chan struct{})
+		go p.animate(p.stop, p.done)
+	}
+	p.renderLocked()
+	p.mu.Unlock()
+}
+
+func (p *taskProgressPrinter) Clear() {
+	if !p.enabled || p.out == nil || !p.interactive {
+		return
+	}
+
+	p.mu.Lock()
+	if !p.active {
+		p.mu.Unlock()
+		return
+	}
+	stop := p.stop
+	done := p.done
+	p.active = false
+	p.stop = nil
+	p.done = nil
+	p.message = ""
+	close(stop)
+	p.clearLineLocked()
+	p.mu.Unlock()
+	<-done
+}
+
+func (p *taskProgressPrinter) animate(stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(120 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			p.mu.Lock()
+			if p.active && p.message != "" {
+				p.frame++
+				p.renderLocked()
+			}
+			p.mu.Unlock()
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (p *taskProgressPrinter) renderLocked() {
+	frame := taskProgressFrames[p.frame%len(taskProgressFrames)]
+	_, _ = fmt.Fprintf(p.out, "\r\033[2K%s %s", frame, p.message)
+}
+
+func (p *taskProgressPrinter) clearLineLocked() {
+	_, _ = fmt.Fprint(p.out, "\r\033[2K")
+}
+
+func formatToolProgress(event app.Event) string {
+	message := strings.TrimSpace(event.Text)
+	if message == "" {
+		return ""
+	}
+	if event.ToolName == "" {
+		return message
+	}
+	return fmt.Sprintf("%s: %s", event.ToolName, message)
+}
+
+func resolveTaskProgress(mode string, stderr io.Writer) (taskProgressConfig, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "auto":
+		file, ok := stderr.(*os.File)
+		interactive := ok && term.IsTerminal(int(file.Fd()))
+		return taskProgressConfig{enabled: interactive, interactive: interactive}, nil
+	case "always":
+		file, ok := stderr.(*os.File)
+		interactive := ok && term.IsTerminal(int(file.Fd()))
+		return taskProgressConfig{enabled: true, interactive: interactive}, nil
+	case "never":
+		return taskProgressConfig{}, nil
+	default:
+		return taskProgressConfig{}, fmt.Errorf("invalid --progress value %q; expected auto, always, or never", mode)
+	}
 }
 
 func formatTaskOutput(result app.TaskResult, plain bool) string {

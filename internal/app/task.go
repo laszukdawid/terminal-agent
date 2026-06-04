@@ -74,6 +74,24 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	onStep := func(step internalagent.TaskStep) {
 		recorder.Write(taskStepToRecord(step))
 	}
+	onStatus := func(status internalagent.TaskStatusEvent) {
+		recorder.Write(taskStatusToRecord(status))
+		event := newEvent(RunKindTask, EventTaskStatus)
+		event.Timestamp = status.Timestamp
+		event.Status = string(status.Phase)
+		event.Text = status.Message
+		event.ToolName = status.ToolName
+		event.ToolInput = status.ToolInput
+		_ = emitEvent(ctx, events, event)
+	}
+	onProgress := func(progress internalagent.TaskProgressEvent) {
+		recorder.Write(taskProgressToRecord(progress))
+		event := newEvent(RunKindTask, EventToolProgress)
+		event.Timestamp = progress.Timestamp
+		event.Text = progress.Message
+		event.ToolName = progress.ToolName
+		_ = emitEvent(ctx, events, event)
+	}
 	onToolOutput := func(output internalagent.TaskToolOutputEvent) error {
 		if output.Err != nil {
 			warning := newEvent(RunKindTask, EventWarning)
@@ -94,8 +112,9 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 		return emitEvent(ctx, events, event)
 	}
 
-	result, err := executeTask(ctx, req, interaction, onStep, onToolOutput)
+	result, err := executeTask(ctx, req, interaction, onStep, onStatus, onProgress, onToolOutput)
 	if err != nil {
+		onStatus(internalagent.TaskStatusEvent{Phase: internalagent.TaskStatusFailed, Message: "Task failed.", Timestamp: time.Now().UTC()})
 		failed := newEvent(RunKindTask, EventFailed)
 		failed.Err = err
 		recorder.Write(sessionlog.Record{Type: sessionlog.RecordFailed, Kind: string(RunKindTask), Error: err.Error()})
@@ -113,7 +132,7 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	_ = emitEvent(ctx, events, completed)
 }
 
-func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep), onToolOutput func(internalagent.TaskToolOutputEvent) error) (TaskResult, error) {
+func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep), onStatus func(internalagent.TaskStatusEvent), onProgress func(internalagent.TaskProgressEvent), onToolOutput func(internalagent.TaskToolOutputEvent) error) (TaskResult, error) {
 	if strings.TrimSpace(req.Message) == "" {
 		return TaskResult{}, internalagent.ErrEmptyQuery
 	}
@@ -149,6 +168,8 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 		Allow:        req.Allow,
 		Interaction:  interaction,
 		OnStep:       onStep,
+		OnStatus:     onStatus,
+		OnProgress:   onProgress,
 		OnToolOutput: onToolOutput,
 		Timeout:      req.Timeout,
 		Dirs: internalagent.TaskDirs{
@@ -167,6 +188,28 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 		RawOutputTool:   response.RawOutputTool,
 		DirectRawOutput: response.DirectRawOutput,
 	}, nil
+}
+
+func taskStatusToRecord(status internalagent.TaskStatusEvent) sessionlog.Record {
+	return sessionlog.Record{
+		Type:      sessionlog.RecordProgress,
+		Kind:      string(RunKindTask),
+		Timestamp: status.Timestamp,
+		Status:    string(status.Phase),
+		Text:      status.Message,
+		ToolName:  status.ToolName,
+		ToolInput: status.ToolInput,
+	}
+}
+
+func taskProgressToRecord(progress internalagent.TaskProgressEvent) sessionlog.Record {
+	return sessionlog.Record{
+		Type:      sessionlog.RecordProgress,
+		Kind:      string(RunKindTask),
+		Timestamp: progress.Timestamp,
+		Text:      progress.Message,
+		ToolName:  progress.ToolName,
+	}
 }
 
 func formatToolOutputWarning(processID int, err error) string {

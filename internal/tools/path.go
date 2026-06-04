@@ -37,7 +37,7 @@ func normalizeExecutionContext(ctx ToolExecutionContext, fallbackDir string) (To
 		return ToolExecutionContext{}, err
 	}
 
-	return ToolExecutionContext{RootDir: rootDir, CurrentDir: currentDir}, nil
+	return ToolExecutionContext{RootDir: rootDir, CurrentDir: currentDir, Output: ctx.Output, Progress: ctx.Progress}, nil
 }
 
 func ensureWithinRoot(path string, root string) error {

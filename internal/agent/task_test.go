@@ -82,6 +82,41 @@ func (t *sequentialOutputTool) Run(*string) (string, error) {
 	return t.RunSchema(nil)
 }
 
+type progressOutputTool struct {
+	name string
+}
+
+func (t *progressOutputTool) Name() string { return t.name }
+func (t *progressOutputTool) PermissionCategory() tools.PermissionCategory {
+	return tools.PermissionRead
+}
+func (t *progressOutputTool) Description() string                      { return "" }
+func (t *progressOutputTool) InputSchema() map[string]any              { return map[string]any{} }
+func (t *progressOutputTool) HelpText() string                         { return "" }
+func (t *progressOutputTool) RunSchema(map[string]any) (string, error) { return "done", nil }
+func (t *progressOutputTool) Run(*string) (string, error)              { return "done", nil }
+func (t *progressOutputTool) RunSchemaWithContext(input map[string]any, ctx tools.ToolExecutionContext) (string, error) {
+	if ctx.Progress != nil {
+		ctx.Progress("halfway")
+	}
+	return "tool done", nil
+}
+
+type failingOutputTool struct {
+	name string
+	err  error
+}
+
+func (t *failingOutputTool) Name() string { return t.name }
+func (t *failingOutputTool) PermissionCategory() tools.PermissionCategory {
+	return tools.PermissionRead
+}
+func (t *failingOutputTool) Description() string                      { return "" }
+func (t *failingOutputTool) InputSchema() map[string]any              { return map[string]any{} }
+func (t *failingOutputTool) HelpText() string                         { return "" }
+func (t *failingOutputTool) RunSchema(map[string]any) (string, error) { return "", t.err }
+func (t *failingOutputTool) Run(*string) (string, error)              { return "", t.err }
+
 type scriptedToolConnector struct {
 	responses      []connector.LlmResponseWithTools
 	queryCalls     int
@@ -421,6 +456,106 @@ func TestTaskUsesInjectedConfirmationInteraction(t *testing.T) {
 	assert.Equal(t, "done", result.Response)
 	require.Len(t, interaction.confirmations, 1)
 	assert.Equal(t, `unix("git status")`, interaction.confirmations[0].Action)
+}
+
+func TestTaskWithOptionsResultEmitsStatusAndProgress(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	tool := &progressOutputTool{name: "progress_tool"}
+	conn := &scriptedToolConnector{responses: []connector.LlmResponseWithTools{
+		{
+			ToolUse:   true,
+			ToolName:  "progress_tool",
+			ToolInput: map[string]any{},
+		},
+		{
+			ToolUse:  true,
+			ToolName: ToolNameFinalAnswer,
+			ToolInput: map[string]any{
+				"answer": "done",
+			},
+		},
+	}}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{"progress_tool": tool},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	var statuses []TaskStatusEvent
+	var progress []TaskProgressEvent
+	result, err := agent.TaskWithOptionsResult(context.Background(), "run progress tool", TaskOptions{
+		Dirs:       TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+		OnStatus:   func(event TaskStatusEvent) { statuses = append(statuses, event) },
+		OnProgress: func(event TaskProgressEvent) { progress = append(progress, event) },
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.NotEmpty(t, statuses)
+	assert.Equal(t, TaskStatusThinking, statuses[0].Phase)
+	assert.Contains(t, statusPhases(statuses), TaskStatusRunningTool)
+	assert.Contains(t, statusPhases(statuses), TaskStatusCompleted)
+	require.Len(t, progress, 1)
+	assert.Equal(t, "progress_tool", progress[0].ToolName)
+	assert.Equal(t, "halfway", progress[0].Message)
+}
+
+func TestTaskWithOptionsResultEmitsFailureStatusWithError(t *testing.T) {
+	utils.Logger = zap.NewNop()
+	t.Setenv("HOME", t.TempDir())
+	rootDir := t.TempDir()
+	tool := &failingOutputTool{name: "read", err: errors.New("path outside working directory: /repo/Makefile")}
+	conn := &scriptedToolConnector{responses: []connector.LlmResponseWithTools{
+		{
+			ToolUse:   true,
+			ToolName:  "read",
+			ToolInput: map[string]any{"path": "/repo/Makefile"},
+		},
+		{
+			ToolUse:  true,
+			ToolName: ToolNameFinalAnswer,
+			ToolInput: map[string]any{
+				"answer": "cannot read file",
+			},
+		},
+	}}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{"read": tool},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	var statuses []TaskStatusEvent
+	result, err := agent.TaskWithOptionsResult(context.Background(), "read file", TaskOptions{
+		Dirs:     TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+		OnStatus: func(event TaskStatusEvent) { statuses = append(statuses, event) },
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "cannot read file", result.Response)
+	require.Contains(t, statusMessages(statuses), "read failed: path outside working directory: /repo/Makefile")
+}
+
+func statusPhases(statuses []TaskStatusEvent) []TaskStatusPhase {
+	phases := make([]TaskStatusPhase, 0, len(statuses))
+	for _, status := range statuses {
+		phases = append(phases, status.Phase)
+	}
+	return phases
+}
+
+func statusMessages(statuses []TaskStatusEvent) []string {
+	messages := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		messages = append(messages, status.Message)
+	}
+	return messages
 }
 
 func TestTaskWithOptionsResultStopsWhenContextCanceled(t *testing.T) {

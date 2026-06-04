@@ -19,41 +19,40 @@ const (
 	CodexProvider  = "codex"
 
 	DefaultOpenAIModel = openai.ChatModelGPT4oMini
+	DefaultCodexModel  = "gpt-5.5"
 )
 
-var (
-	// https://openai.com/api/pricing/
-	ModelPricesOpenai = map[openai.ChatModel]map[string]float64{
-		openai.ChatModelGPT4o: {
-			"input":  0.00025,
-			"output": 0.01000,
-		},
-		openai.ChatModelGPT4o2024_08_06: {
-			"input":  0.00250,
-			"output": 0.01000,
-		},
-		openai.ChatModelGPT4o2024_05_13: {
-			"input":  0.00500,
-			"output": 0.01500,
-		},
-		openai.ChatModelGPT4oMini: {
-			"input":  0.000150,
-			"output": 0.000600,
-		},
-		openai.ChatModelGPT4oMini2024_07_18: {
-			"input":  0.000150,
-			"output": 0.000600,
-		},
-		openai.ChatModelO1Preview: {
-			"input":  0.015,
-			"output": 0.060,
-		},
-		openai.ChatModelO1Preview2024_09_12: {
-			"input":  0.015,
-			"output": 0.060,
-		},
-	}
-)
+// https://openai.com/api/pricing/
+var ModelPricesOpenai = map[openai.ChatModel]map[string]float64{
+	openai.ChatModelGPT4o: {
+		"input":  0.00025,
+		"output": 0.01000,
+	},
+	openai.ChatModelGPT4o2024_08_06: {
+		"input":  0.00250,
+		"output": 0.01000,
+	},
+	openai.ChatModelGPT4o2024_05_13: {
+		"input":  0.00500,
+		"output": 0.01500,
+	},
+	openai.ChatModelGPT4oMini: {
+		"input":  0.000150,
+		"output": 0.000600,
+	},
+	openai.ChatModelGPT4oMini2024_07_18: {
+		"input":  0.000150,
+		"output": 0.000600,
+	},
+	openai.ChatModelO1Preview: {
+		"input":  0.015,
+		"output": 0.060,
+	},
+	openai.ChatModelO1Preview2024_09_12: {
+		"input":  0.015,
+		"output": 0.060,
+	},
+}
 
 type OpenAIConnector struct {
 	client  *openai.Client

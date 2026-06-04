@@ -19,6 +19,7 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 
 - Do **not** include design specs or implementation plans in pull requests or git commits. Keep them local only (e.g. under `docs/superpowers/`, which is git-ignored); a PR should contain only the production code, tests, and user-facing docs for the change.
 - Do **not** commit build artifacts (the `agent` / `agent-gui` binaries produced by `task build`). They are git-ignored; never `git add` them into a commit.
+- Prefer named constants over magic strings and numbers. If a value has product meaning, is reused, or is part of configuration/default behavior, define it as a const and reference the const in production code and tests.
 
 ## Development Philosophy
 
@@ -74,6 +75,8 @@ Testing is orchestrated through [Taskfile](https://taskfile.dev/). Common flows:
 - `task test` – full suite (unit + integration) and what CI runs before tagging a release.
 - `task test:unit` – fast feedback loop for Go unit tests.
 - `task test:integration` – spins up the Docker-backed integration environment.
+
+Test code should prefer table-driven tests: define test case tables for related scenarios and iterate with `t.Run`. Use standalone test functions only when the setup or assertion flow is genuinely unique enough that a table would make the test less clear.
 
 Taskfile commands will install Go dependencies automatically, but if you need to drop into language-specific tooling remember the project preference: use `uv run python …` instead of bare `python`, and `bun …` instead of `node`. These help keep virtual environments and JavaScript runtimes consistent across contributors.
 

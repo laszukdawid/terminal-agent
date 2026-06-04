@@ -7,6 +7,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -96,5 +97,56 @@ func TestEmitEventReturnsContextErrorWhenCanceled(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for emitEvent to return")
+	}
+}
+
+func TestTaskProgressRecordsUseProgressType(t *testing.T) {
+	statusTime := time.Now().UTC()
+	progressTime := statusTime.Add(time.Second)
+	tests := []struct {
+		name string
+		got  sessionlog.Record
+		want sessionlog.Record
+	}{
+		{
+			name: "task status",
+			got: taskStatusToRecord(agent.TaskStatusEvent{
+				Phase:     agent.TaskStatusRunningTool,
+				Message:   "Running file_search...",
+				ToolName:  "file_search",
+				ToolInput: map[string]any{"name_pattern": "*.go"},
+				Timestamp: statusTime,
+			}),
+			want: sessionlog.Record{
+				Type:      sessionlog.RecordProgress,
+				Kind:      string(RunKindTask),
+				Status:    string(agent.TaskStatusRunningTool),
+				Text:      "Running file_search...",
+				ToolName:  "file_search",
+				ToolInput: map[string]any{"name_pattern": "*.go"},
+				Timestamp: statusTime,
+			},
+		},
+		{
+			name: "tool progress",
+			got: taskProgressToRecord(agent.TaskProgressEvent{
+				ToolName:  "file_search",
+				Message:   "scanning",
+				Timestamp: progressTime,
+			}),
+			want: sessionlog.Record{
+				Type:      sessionlog.RecordProgress,
+				Kind:      string(RunKindTask),
+				Text:      "scanning",
+				ToolName:  "file_search",
+				Timestamp: progressTime,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.got)
+		})
 	}
 }
