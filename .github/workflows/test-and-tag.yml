@@ -3,6 +3,10 @@ name: Test and Tag Release
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "mkdocs.yml"
   workflow_dispatch:
     inputs:
       version_bump:
