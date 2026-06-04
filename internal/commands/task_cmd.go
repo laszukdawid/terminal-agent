@@ -447,17 +447,17 @@ func promptTaskConfirmation(cmd *cobra.Command, reader *bufio.Reader, confirmati
 		return app.TaskConfirmationResponse{}, fmt.Errorf("missing confirmation request")
 	}
 
-	stdinFD := int(os.Stdin.Fd())
-	stderrFD := int(os.Stderr.Fd())
-	if term.IsTerminal(stdinFD) && term.IsTerminal(stderrFD) {
-		return promptTaskConfirmationInteractive(cmd, reader, confirmation)
+	stdinFile, stdinOk := cmd.InOrStdin().(*os.File)
+	stderrFile, stderrOk := cmd.ErrOrStderr().(*os.File)
+	if stdinOk && stderrOk && term.IsTerminal(int(stdinFile.Fd())) && term.IsTerminal(int(stderrFile.Fd())) {
+		return promptTaskConfirmationInteractive(stdinFile, stderrFile, confirmation)
 	}
 
 	return promptTaskConfirmationLine(cmd, reader, confirmation)
 }
 
-func promptTaskConfirmationInteractive(cmd *cobra.Command, reader *bufio.Reader, confirmation *app.TaskConfirmationEvent) (app.TaskConfirmationResponse, error) {
-	ic := newInteractiveConfirmation(confirmation.Action, os.Stderr)
+func promptTaskConfirmationInteractive(stdin *os.File, stderr *os.File, confirmation *app.TaskConfirmationEvent) (app.TaskConfirmationResponse, error) {
+	ic := newInteractiveConfirmation(confirmation.Action, stdin, stderr)
 	result, err := ic.run()
 	if err != nil {
 		return app.TaskConfirmationResponse{}, err
@@ -469,7 +469,11 @@ func promptTaskConfirmationInteractive(cmd *cobra.Command, reader *bufio.Reader,
 	}
 
 	if resp.Allowed {
-		fmt.Fprintf(os.Stderr, "Executing: %s\n", ic.command)
+		display := ic.command
+		if display == "" {
+			display = ic.action
+		}
+		fmt.Fprintf(stderr, "Executing: %s\n", display)
 	}
 
 	return resp, nil

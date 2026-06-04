@@ -24,13 +24,14 @@ type interactiveConfirmation struct {
 	action          string
 	levels          []string
 	pos             int
+	stdin           *os.File
 	writer          io.Writer
 	showHelp        bool
 	termWidth       int
 	lastVisualLines int
 }
 
-func newInteractiveConfirmation(action string, writer io.Writer) *interactiveConfirmation {
+func newInteractiveConfirmation(action string, stdin *os.File, writer io.Writer) *interactiveConfirmation {
 	toolName, command := agent.ParseToolAndCommand(action)
 
 	var levels []string
@@ -39,7 +40,7 @@ func newInteractiveConfirmation(action string, writer io.Writer) *interactiveCon
 		levels = agent.GeneratePatternLevels(groups)
 	}
 
-	width, _, _ := term.GetSize(int(os.Stdin.Fd()))
+	width, _, _ := term.GetSize(int(stdin.Fd()))
 	if width <= 0 {
 		width = 80
 	}
@@ -50,13 +51,14 @@ func newInteractiveConfirmation(action string, writer io.Writer) *interactiveCon
 		action:    action,
 		levels:    levels,
 		pos:       0,
+		stdin:     stdin,
 		writer:    writer,
 		termWidth: width,
 	}
 }
 
 func (c *interactiveConfirmation) run() (confirmationResult, error) {
-	fd := int(os.Stdin.Fd())
+	fd := int(c.stdin.Fd())
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		return confirmationResult{}, err
@@ -67,7 +69,7 @@ func (c *interactiveConfirmation) run() (confirmationResult, error) {
 
 	buf := make([]byte, 3)
 	for {
-		n, err := os.Stdin.Read(buf)
+		n, err := c.stdin.Read(buf)
 		if err != nil {
 			c.cleanup()
 			return confirmationResult{}, err
