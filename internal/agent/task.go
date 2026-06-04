@@ -137,15 +137,15 @@ func (r taskUserConfirmationRequester) RequestUserConfirmation(action string) (c
 		return confirmationDecision{}, err
 	}
 
-	return confirmationDecision{allowed: decision.Allowed, remember: decision.Remember}, nil
+	return confirmationDecision{allowed: decision.Allowed, remember: decision.Remember, patterns: decision.Patterns}, nil
 }
 
 type taskPermissionRememberer struct {
 	store config.PermissionStore
 }
 
-func (r taskPermissionRememberer) Remember(action string, allow bool) error {
-	return config.RememberPermission(r.store, action, allow)
+func (r taskPermissionRememberer) Remember(actions []string, allow bool) error {
+	return config.RememberPermissions(r.store, actions, allow)
 }
 
 func (a *Agent) Task(ctx context.Context, s string) (string, error) {

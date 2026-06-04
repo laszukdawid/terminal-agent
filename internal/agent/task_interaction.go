@@ -16,6 +16,7 @@ type TaskConfirmationRequest struct {
 type TaskConfirmationDecision struct {
 	Allowed  bool
 	Remember bool
+	Patterns []string
 }
 
 type TaskClarificationRequest struct {

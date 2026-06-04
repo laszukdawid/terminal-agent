@@ -286,7 +286,7 @@ func (i *taskEventInteraction) Confirm(req internalagent.TaskConfirmationRequest
 
 	select {
 	case response := <-replies:
-		return internalagent.TaskConfirmationDecision{Allowed: response.Allowed, Remember: response.Remember}, nil
+		return internalagent.TaskConfirmationDecision{Allowed: response.Allowed, Remember: response.Remember, Patterns: response.Patterns}, nil
 	case <-i.ctx.Done():
 		return internalagent.TaskConfirmationDecision{}, i.ctx.Err()
 	}
