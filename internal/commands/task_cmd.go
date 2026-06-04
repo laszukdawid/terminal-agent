@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/history"
@@ -446,7 +447,48 @@ func promptTaskConfirmation(cmd *cobra.Command, reader *bufio.Reader, confirmati
 		return app.TaskConfirmationResponse{}, fmt.Errorf("missing confirmation request")
 	}
 
-	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Execute the following action?\n > %s [y/N/yes!/no!]: ", confirmation.Action); err != nil {
+	stdinFD := int(os.Stdin.Fd())
+	stderrFD := int(os.Stderr.Fd())
+	if term.IsTerminal(stdinFD) && term.IsTerminal(stderrFD) {
+		return promptTaskConfirmationInteractive(cmd, reader, confirmation)
+	}
+
+	return promptTaskConfirmationLine(cmd, reader, confirmation)
+}
+
+func promptTaskConfirmationInteractive(cmd *cobra.Command, reader *bufio.Reader, confirmation *app.TaskConfirmationEvent) (app.TaskConfirmationResponse, error) {
+	ic := newInteractiveConfirmation(confirmation.Action, os.Stderr)
+	result, err := ic.run()
+	if err != nil {
+		return app.TaskConfirmationResponse{}, err
+	}
+
+	resp, err := processConfirmationResponse(result.response, result.pattern)
+	if err != nil {
+		return resp, err
+	}
+
+	if resp.Allowed {
+		fmt.Fprintf(os.Stderr, "Executing: %s\n", ic.command)
+	}
+
+	return resp, nil
+}
+
+func promptTaskConfirmationLine(cmd *cobra.Command, reader *bufio.Reader, confirmation *app.TaskConfirmationEvent) (app.TaskConfirmationResponse, error) {
+	toolName, command := agent.ParseToolAndCommand(confirmation.Action)
+	display := confirmation.Action
+	header := "Execute action?"
+	if command != "" {
+		display = command
+		switch toolName {
+		case "unix":
+			header = "Run shell command?"
+		case "python":
+			header = "Run Python script?"
+		}
+	}
+	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "%s\n  %s\n[y/N/a/b]: ", header, display); err != nil {
 		return app.TaskConfirmationResponse{}, err
 	}
 
@@ -455,17 +497,22 @@ func promptTaskConfirmation(cmd *cobra.Command, reader *bufio.Reader, confirmati
 		return app.TaskConfirmationResponse{}, err
 	}
 
+	return processConfirmationResponse(strings.TrimSpace(response), confirmation.Action)
+}
+
+func processConfirmationResponse(response string, actionPattern string) (app.TaskConfirmationResponse, error) {
 	switch strings.TrimSpace(strings.ToLower(response)) {
 	case "y", "yes":
 		return app.TaskConfirmationResponse{Allowed: true}, nil
-	case "y!", "yes!":
-		return app.TaskConfirmationResponse{Allowed: true, Remember: true}, nil
-	case "n!", "no!":
-		return app.TaskConfirmationResponse{Remember: true}, nil
+	case "a":
+		return app.TaskConfirmationResponse{Allowed: true, Remember: true, Patterns: []string{actionPattern}}, nil
+	case "b":
+		return app.TaskConfirmationResponse{Remember: true, Patterns: []string{actionPattern}}, nil
 	default:
 		return app.TaskConfirmationResponse{}, nil
 	}
 }
+
 
 func promptTaskClarification(cmd *cobra.Command, reader *bufio.Reader, clarification *app.TaskClarificationEvent) (string, error) {
 	if clarification == nil {

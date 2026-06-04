@@ -38,6 +38,7 @@ const (
 type TaskConfirmationResponse struct {
 	Allowed  bool
 	Remember bool
+	Patterns []string
 }
 
 type TaskConfirmationEvent struct {

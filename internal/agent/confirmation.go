@@ -19,9 +19,10 @@ type ConfirmationManager struct {
 	decisions       map[string]bool
 	confirmWithUser UserConfirmationFunc
 	rememberFunc    RememberDecisionFunc
+	maxPriority     int
 }
 
-type RememberDecisionFunc func(action string, allow bool) error
+type RememberDecisionFunc func(actions []string, allow bool) error
 
 type UserConfirmationFunc func(action string) (confirmationDecision, error)
 
@@ -69,6 +70,7 @@ func NewConfirmationManager(allow []string, ruleSets []config.PermissionRuleSet,
 		manager.appendPatterns(set.Permissions.Ask, ruleAsk, set.Priority)
 	}
 
+	manager.maxPriority = maxPriority
 	manager.appendPatterns(allow, ruleAllow, maxPriority+1)
 
 	return manager
@@ -163,8 +165,19 @@ func (cm *ConfirmationManager) confirmAndRemember(action string) (bool, error) {
 
 	cm.decisions[action] = decision.allowed
 	if decision.remember && cm.rememberFunc != nil {
-		if err := cm.rememberFunc(action, decision.allowed); err != nil {
+		actions := decision.patterns
+		if len(actions) == 0 {
+			actions = []string{action}
+		}
+		if err := cm.rememberFunc(actions, decision.allowed); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: unable to remember permission for %s: %v\n", action, err)
+		}
+
+		interactivePriority := cm.maxPriority + 1
+		if decision.allowed {
+			cm.appendPatterns(actions, ruleAllow, interactivePriority)
+		} else {
+			cm.appendPatterns(actions, ruleDeny, interactivePriority)
 		}
 	}
 
@@ -244,6 +257,7 @@ func normalizeList(values []string) []string {
 type confirmationDecision struct {
 	allowed  bool
 	remember bool
+	patterns []string
 }
 
 func BuildActionString(toolName string, input map[string]any) string {
@@ -410,6 +424,17 @@ func parseActionCall(input string) (actionCall, error) {
 		command: command,
 		args:    args,
 	}, nil
+}
+
+// ParseToolAndCommand extracts the tool name and positional command string
+// from an action expression like `unix("find . -type f")`. Returns empty
+// strings if the expression cannot be parsed.
+func ParseToolAndCommand(action string) (toolName, command string) {
+	tool, cmd, _, _, err := parseActionExpression(action)
+	if err != nil {
+		return "", ""
+	}
+	return tool, cmd
 }
 
 func parseActionExpression(input string) (string, string, map[string]string, []string, error) {

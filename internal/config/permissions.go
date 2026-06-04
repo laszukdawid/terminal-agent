@@ -128,6 +128,10 @@ func LoadLocalPermissions(path string) (Permissions, error) {
 }
 
 func RememberPermission(store PermissionStore, action string, allow bool) error {
+	return RememberPermissions(store, []string{action}, allow)
+}
+
+func RememberPermissions(store PermissionStore, actions []string, allow bool) error {
 	target := store.GlobalPath
 	if len(store.LocalPaths) > 0 {
 		target = store.LocalPaths[len(store.LocalPaths)-1]
@@ -138,11 +142,13 @@ func RememberPermission(store PermissionStore, action string, allow bool) error 
 		if err != nil {
 			return err
 		}
-		config.Permissions = applyRememberedPermission(config.Permissions, action, allow)
+		for _, action := range actions {
+			config.Permissions = applyRememberedPermission(config.Permissions, action, allow)
+		}
 		return SaveConfig(config)
 	}
 
-	return updateLocalPermissionsFile(target, action, allow)
+	return updateLocalPermissionsFileBatch(target, actions, allow)
 }
 
 func applyRememberedPermission(permissions Permissions, action string, allow bool) Permissions {
@@ -180,6 +186,10 @@ func removePermission(values []string, action string) []string {
 }
 
 func updateLocalPermissionsFile(path string, action string, allow bool) error {
+	return updateLocalPermissionsFileBatch(path, []string{action}, allow)
+}
+
+func updateLocalPermissionsFileBatch(path string, actions []string, allow bool) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -203,7 +213,9 @@ func updateLocalPermissionsFile(path string, action string, allow bool) error {
 		}
 	}
 
-	permissions = applyRememberedPermission(permissions, action, allow)
+	for _, action := range actions {
+		permissions = applyRememberedPermission(permissions, action, allow)
+	}
 	payload["permissions"] = permissions
 
 	file, err := os.Create(path)

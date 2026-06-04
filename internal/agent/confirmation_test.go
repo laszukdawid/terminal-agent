@@ -175,3 +175,75 @@ func TestWildcardPermissionMatchesMoreSpecificUnixPath(t *testing.T) {
 		t.Fatalf("expected broader unix wildcard permission to cover specific home path")
 	}
 }
+
+func TestMultiPatternRemember(t *testing.T) {
+	var remembered []string
+	var rememberedAllow bool
+
+	manager := NewConfirmationManager(nil, nil,
+		func(action string) (confirmationDecision, error) {
+			return confirmationDecision{
+				allowed:  true,
+				remember: true,
+				patterns: []string{"unix(\"find *\")", "unix(\"sort *\")"},
+			}, nil
+		},
+		func(actions []string, allow bool) error {
+			remembered = actions
+			rememberedAllow = allow
+			return nil
+		},
+	)
+
+	allowed, err := manager.Confirm("unix(\"find . -type f | sort\")")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected action to be allowed")
+	}
+	if len(remembered) != 2 || remembered[0] != "unix(\"find *\")" || remembered[1] != "unix(\"sort *\")" {
+		t.Fatalf("expected multi-pattern remember, got: %v", remembered)
+	}
+	if !rememberedAllow {
+		t.Fatal("expected remember to allow")
+	}
+}
+
+func TestRememberedPatternMatchesWithinSameSession(t *testing.T) {
+	promptCount := 0
+
+	manager := NewConfirmationManager(nil, nil,
+		func(action string) (confirmationDecision, error) {
+			promptCount++
+			return confirmationDecision{
+				allowed:  true,
+				remember: true,
+				patterns: []string{`unix("find *")`},
+			}, nil
+		},
+		func(actions []string, allow bool) error { return nil },
+	)
+
+	allowed, err := manager.Confirm(`unix("find . -type f")`)
+	if err != nil {
+		t.Fatalf("unexpected error on first confirm: %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected first action to be allowed")
+	}
+	if promptCount != 1 {
+		t.Fatalf("expected exactly one prompt, got %d", promptCount)
+	}
+
+	allowed, err = manager.Confirm(`unix("find /tmp -name '*.go'")`)
+	if err != nil {
+		t.Fatalf("unexpected error on second confirm: %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected second find command to match the remembered pattern")
+	}
+	if promptCount != 1 {
+		t.Fatalf("expected no additional prompt for matching pattern, got %d total", promptCount)
+	}
+}

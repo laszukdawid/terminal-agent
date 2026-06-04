@@ -117,7 +117,7 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	}
 
 	cmd := NewTaskCommand(config.NewDefaultConfig())
-	input := bytes.NewBufferString("yes!\ninternal\n")
+	input := bytes.NewBufferString("a\ninternal\n")
 	output := &bytes.Buffer{}
 	cmd.SetIn(input)
 	cmd.SetOut(output)
@@ -127,9 +127,9 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 
 	err := cmd.ExecuteContext(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, app.TaskConfirmationResponse{Allowed: true, Remember: true}, confirmation)
+	assert.Equal(t, app.TaskConfirmationResponse{Allowed: true, Remember: true, Patterns: []string{`unix("git status")`}}, confirmation)
 	assert.Equal(t, "internal", clarification)
-	assert.Contains(t, output.String(), "Execute the following action?")
+	assert.Contains(t, output.String(), "Run shell command?")
 	assert.Contains(t, output.String(), "Need clarification: Which directory?")
 	assert.Contains(t, output.String(), "done")
 }
