@@ -221,7 +221,11 @@ type taskProgressConfig struct {
 	interactive bool
 }
 
-var taskProgressFrames = []string{"|", "/", "-", "\\"}
+const (
+	taskProgressANSIRed   = "\x1b[31m"
+	taskProgressANSIWhite = "\x1b[37m"
+	taskProgressANSIReset = "\x1b[0m"
+)
 
 func newTaskProgressPrinter(out io.Writer, config taskProgressConfig) *taskProgressPrinter {
 	return &taskProgressPrinter{enabled: config.enabled, interactive: config.interactive, out: out}
@@ -299,8 +303,35 @@ func (p *taskProgressPrinter) animate(stop <-chan struct{}, done chan<- struct{}
 }
 
 func (p *taskProgressPrinter) renderLocked() {
-	frame := taskProgressFrames[p.frame%len(taskProgressFrames)]
-	_, _ = fmt.Fprintf(p.out, "\r\033[2K%s %s", frame, p.message)
+	_, _ = fmt.Fprintf(p.out, "\r\033[2K%s", formatTaskProgressAnimation(p.message, p.frame))
+}
+
+func formatTaskProgressAnimation(message string, frame int) string {
+	chars := []rune(message)
+	if len(chars) == 0 {
+		return ""
+	}
+	if len(chars) == 1 {
+		return taskProgressANSIRed + string(chars[0]) + taskProgressANSIReset
+	}
+
+	period := len(chars)*2 - 2
+	position := frame % period
+	if position >= len(chars) {
+		position = period - position
+	}
+
+	var out strings.Builder
+	for i, char := range chars {
+		if i == position {
+			out.WriteString(taskProgressANSIRed)
+		} else {
+			out.WriteString(taskProgressANSIWhite)
+		}
+		out.WriteRune(char)
+	}
+	out.WriteString(taskProgressANSIReset)
+	return out.String()
 }
 
 func (p *taskProgressPrinter) clearLineLocked() {
@@ -404,7 +435,7 @@ func promptTaskConfirmationInteractive(stdin *os.File, stderr *os.File, confirma
 		if display == "" {
 			display = ic.action
 		}
-		fmt.Fprintf(stderr, "Executing: %s\n", display)
+		fmt.Fprintln(stderr, formatTaskTrace("Executing", display, isTerminalWriter(stderr)))
 	}
 
 	return resp, nil

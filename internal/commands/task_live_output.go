@@ -17,6 +17,7 @@ type taskLiveOutputPrinter struct {
 	limiter               *taskLiveOutputLimiter
 	command               string
 	commandPrinted        bool
+	traceStyling          bool
 	printed               bool
 	lastChunkEndedNewline bool
 }
@@ -29,6 +30,7 @@ func newTaskLiveOutputPrinter(out io.Writer, progress *taskProgressPrinter, maxL
 		out:                   out,
 		progress:              progress,
 		limiter:               newTaskLiveOutputLimiter(maxLines, taskLiveOutputMaxLineChars),
+		traceStyling:          isTerminalWriter(out),
 		lastChunkEndedNewline: true,
 	}
 }
@@ -52,7 +54,7 @@ func (p *taskLiveOutputPrinter) PrintDelta(text string) {
 		if p.printed && !p.lastChunkEndedNewline {
 			_, _ = fmt.Fprint(p.out, "\n")
 		}
-		_, _ = fmt.Fprintf(p.out, "Command: %s\n", p.command)
+		_, _ = fmt.Fprintln(p.out, formatTaskTrace("Command", p.command, p.traceStyling))
 		p.commandPrinted = true
 	}
 	p.printed = true

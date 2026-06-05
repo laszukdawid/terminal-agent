@@ -412,6 +412,22 @@ func TestTaskLiveOutputPrinter(t *testing.T) {
 	assert.False(t, printer.NeedsNewlineBeforeFinal())
 }
 
+func TestTaskLiveOutputPrinterStylesCommandTrace(t *testing.T) {
+	output := &bytes.Buffer{}
+	printer := newTaskLiveOutputPrinter(output, nil, 2)
+	printer.traceStyling = true
+
+	printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "git diff --cached"}})
+	printer.PrintDelta("diff output\n")
+
+	assert.Equal(t, "\x1b[1;36mCommand:\x1b[0m \x1b[1mgit diff --cached\x1b[0m\ndiff output\n", output.String())
+}
+
+func TestFormatTaskTrace(t *testing.T) {
+	assert.Equal(t, "Executing: git diff --cached", formatTaskTrace("Executing", "git diff --cached", false))
+	assert.Equal(t, "\x1b[1;36mExecuting:\x1b[0m \x1b[1mgit diff --cached\x1b[0m", formatTaskTrace("Executing", "git diff --cached", true))
+}
+
 func TestTaskCommandProgressOutput(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -493,7 +509,7 @@ func TestTaskProgressPrinterOutput(t *testing.T) {
 			name:        "interactive replaces status line",
 			config:      taskProgressConfig{enabled: true, interactive: true},
 			messages:    []string{"Thinking...", "Running file_search..."},
-			contains:    []string{"\r\x1b[2K| Thinking...", "\r\x1b[2K| Running file_search...", "\r\x1b[2K"},
+			contains:    []string{"\r\x1b[2K\x1b[31mT\x1b[37mh", "\r\x1b[2K\x1b[31mR\x1b[37mu", "\r\x1b[2K"},
 			notContains: []string{"Thinking...\n"},
 		},
 		{
@@ -523,6 +539,40 @@ func TestTaskProgressPrinterOutput(t *testing.T) {
 			for _, unwanted := range tt.notContains {
 				assert.NotContains(t, text, unwanted)
 			}
+		})
+	}
+}
+
+func TestFormatTaskProgressAnimation(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		frame   int
+		want    string
+	}{
+		{
+			name:    "starts at first character",
+			message: "Think",
+			frame:   0,
+			want:    "\x1b[31mT\x1b[37mh\x1b[37mi\x1b[37mn\x1b[37mk\x1b[0m",
+		},
+		{
+			name:    "moves forward",
+			message: "Think",
+			frame:   2,
+			want:    "\x1b[37mT\x1b[37mh\x1b[31mi\x1b[37mn\x1b[37mk\x1b[0m",
+		},
+		{
+			name:    "bounces back from end",
+			message: "Think",
+			frame:   6,
+			want:    "\x1b[37mT\x1b[37mh\x1b[31mi\x1b[37mn\x1b[37mk\x1b[0m",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, formatTaskProgressAnimation(tt.message, tt.frame))
 		})
 	}
 }
