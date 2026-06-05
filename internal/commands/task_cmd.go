@@ -98,26 +98,21 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			}
 			progress := newTaskProgressPrinter(cmd.ErrOrStderr(), progressConfig)
 			defer progress.Clear()
-			liveOutput := newTaskLiveOutputLimiter(config.GetTaskLiveOutputLimit(), 120)
+			liveOutput := newTaskLiveOutputPrinter(cmd.OutOrStdout(), progress, config.GetTaskLiveOutputLimit())
 
 			result := app.TaskResult{Request: userRequest}
-			printedStreamedToolOutput := false
-			lastStreamChunkEndedWithNewline := true
 			for event := range events {
 				switch event.Type {
 				case app.EventTaskStatus:
+					if event.Status == string(agent.TaskStatusRunningTool) {
+						liveOutput.BeginTool(event)
+					}
 					progress.Print(event.Text)
 				case app.EventToolProgress:
 					progress.Print(formatToolProgress(event))
 				case app.EventOutputDelta:
 					if printFlag {
-						chunk := liveOutput.Filter(event.Text)
-						if chunk != "" {
-							progress.Clear()
-							printedStreamedToolOutput = true
-							lastStreamChunkEndedWithNewline = strings.HasSuffix(chunk, "\n")
-							cmd.Print(chunk)
-						}
+						liveOutput.PrintDelta(event.Text)
 					}
 				case app.EventWarning:
 					if event.Text != "" {
@@ -144,7 +139,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					}
 				case app.EventCompleted:
 					result.Response = event.FinalOutput
-					if !printedStreamedToolOutput {
+					if !liveOutput.Printed() {
 						result.RawOutput = event.RawOutput
 					}
 					result.RawOutputTool = event.RawOutputTool
@@ -158,12 +153,12 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 			response := result.Response
 
-			if printedStreamedToolOutput && result.DirectRawOutput {
+			if liveOutput.Printed() && result.DirectRawOutput {
 				response = ""
 			}
 
 			if printFlag && response != "" {
-				if printedStreamedToolOutput && !lastStreamChunkEndedWithNewline {
+				if liveOutput.NeedsNewlineBeforeFinal() {
 					cmd.Print("\n")
 				}
 				plain, _ := flags.GetBool("plain")
@@ -206,77 +201,6 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 	cmd.Flags().String("progress", "auto", "Show task progress on stderr: auto, always, or never")
 	return cmd
-}
-
-type taskLiveOutputLimiter struct {
-	maxLines            int
-	maxLineChars        int
-	lines               int
-	charsWithoutNewline int
-	sawNewline          bool
-	truncated           bool
-	truncationAnnounced bool
-}
-
-func newTaskLiveOutputLimiter(maxLines int, maxLineChars int) *taskLiveOutputLimiter {
-	return &taskLiveOutputLimiter{maxLines: maxLines, maxLineChars: maxLineChars}
-}
-
-func (l *taskLiveOutputLimiter) Filter(chunk string) string {
-	if chunk == "" || l.truncationAnnounced {
-		return ""
-	}
-	if l.maxLines == 0 {
-		return chunk
-	}
-
-	var out strings.Builder
-	startLines := l.lines
-	knownChunkLines := countOutputLines(chunk)
-	for _, r := range chunk {
-		if l.lines >= l.maxLines || (!l.sawNewline && l.charsWithoutNewline >= l.maxLines*l.maxLineChars) {
-			l.truncated = true
-			break
-		}
-
-		out.WriteRune(r)
-		if r == '\n' {
-			l.sawNewline = true
-			l.lines++
-			continue
-		}
-		if !l.sawNewline {
-			l.charsWithoutNewline++
-		}
-	}
-
-	if l.truncated {
-		l.truncationAnnounced = true
-		if out.Len() > 0 && !strings.HasSuffix(out.String(), "\n") {
-			out.WriteByte('\n')
-		}
-		out.WriteString(formatLiveOutputTruncation(l.maxLines, startLines+knownChunkLines, l.sawNewline))
-	}
-
-	return out.String()
-}
-
-func countOutputLines(s string) int {
-	if s == "" {
-		return 0
-	}
-	lines := strings.Count(s, "\n")
-	if !strings.HasSuffix(s, "\n") {
-		lines++
-	}
-	return lines
-}
-
-func formatLiveOutputTruncation(shown int, totalLines int, lineMode bool) string {
-	if lineMode && totalLines > shown {
-		return fmt.Sprintf("[tool output truncated: %d out of %d lines]\n", shown, totalLines)
-	}
-	return fmt.Sprintf("[tool output truncated: %d lines shown]\n", shown)
 }
 
 type taskProgressPrinter struct {
