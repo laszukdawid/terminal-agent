@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"strings"
@@ -68,6 +69,46 @@ func TestFormatTaskOutput(t *testing.T) {
 	})
 }
 
+func TestPromptTaskConfirmationLineDisplaysToolActions(t *testing.T) {
+	tests := []struct {
+		name        string
+		action      string
+		wantHeader  string
+		wantDisplay string
+	}{
+		{
+			name:        "python code",
+			action:      tools.ToolNamePython + `(code="print(\"hello\")\nprint(\"world\")")`,
+			wantHeader:  "Run Python script?",
+			wantDisplay: "  print(\"hello\")\n  print(\"world\")",
+		},
+		{
+			name:        "unix command",
+			action:      tools.ToolNameUnix + `("git status")`,
+			wantHeader:  "Run shell command?",
+			wantDisplay: "  git status",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewTaskCommand(config.NewDefaultConfig())
+			input := bytes.NewBufferString("y\n")
+			output := &bytes.Buffer{}
+			cmd.SetErr(output)
+
+			decision, err := promptTaskConfirmationLine(cmd, bufio.NewReader(input), &app.TaskConfirmationEvent{Action: tt.action})
+
+			require.NoError(t, err)
+			assert.True(t, decision.Allowed)
+			text := output.String()
+			assert.Contains(t, text, tt.wantHeader)
+			assert.Contains(t, text, tt.wantDisplay)
+			assert.NotContains(t, text, tools.ToolNamePython+`(code=`)
+		})
+	}
+}
+
 func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	originalNewService := newService
 	defer func() {
@@ -86,7 +127,7 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 				ch <- app.Event{
 					Type: app.EventConfirmationNeeded,
 					Confirmation: &app.TaskConfirmationEvent{
-						Action: `unix("git status")`,
+						Action: tools.ToolNameUnix + `("git status")`,
 						Reply: func(response app.TaskConfirmationResponse) error {
 							confirmation = response
 							close(confirmed)
@@ -127,7 +168,7 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 
 	err := cmd.ExecuteContext(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, app.TaskConfirmationResponse{Allowed: true, Remember: true, Patterns: []string{`unix("git status")`}}, confirmation)
+	assert.Equal(t, app.TaskConfirmationResponse{Allowed: true, Remember: true, Patterns: []string{tools.ToolNameUnix + `("git status")`}}, confirmation)
 	assert.Equal(t, "internal", clarification)
 	assert.Contains(t, output.String(), "Run shell command?")
 	assert.Contains(t, output.String(), "Need clarification: Which directory?")

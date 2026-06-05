@@ -13,6 +13,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/history"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -480,19 +481,19 @@ func promptTaskConfirmationInteractive(stdin *os.File, stderr *os.File, confirma
 }
 
 func promptTaskConfirmationLine(cmd *cobra.Command, reader *bufio.Reader, confirmation *app.TaskConfirmationEvent) (app.TaskConfirmationResponse, error) {
-	toolName, command := agent.ParseToolAndCommand(confirmation.Action)
+	toolName, command := agent.ParseToolAndDisplay(confirmation.Action)
 	display := confirmation.Action
 	header := "Execute action?"
 	if command != "" {
 		display = command
 		switch toolName {
-		case "unix":
+		case tools.ToolNameUnix:
 			header = "Run shell command?"
-		case "python":
+		case tools.ToolNamePython:
 			header = "Run Python script?"
 		}
 	}
-	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "%s\n  %s\n[y/N/a/b]: ", header, display); err != nil {
+	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "%s\n%s\n[y/N/a/b]: ", header, indentDisplayLines(display)); err != nil {
 		return app.TaskConfirmationResponse{}, err
 	}
 
@@ -502,6 +503,14 @@ func promptTaskConfirmationLine(cmd *cobra.Command, reader *bufio.Reader, confir
 	}
 
 	return processConfirmationResponse(strings.TrimSpace(response), confirmation.Action)
+}
+
+func indentDisplayLines(display string) string {
+	var lines []string
+	for _, line := range splitDisplayLines(display) {
+		lines = append(lines, "  "+line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func processConfirmationResponse(response string, actionPattern string) (app.TaskConfirmationResponse, error) {
@@ -516,7 +525,6 @@ func processConfirmationResponse(response string, actionPattern string) (app.Tas
 		return app.TaskConfirmationResponse{}, nil
 	}
 }
-
 
 func promptTaskClarification(cmd *cobra.Command, reader *bufio.Reader, clarification *app.TaskClarificationEvent) (string, error) {
 	if clarification == nil {

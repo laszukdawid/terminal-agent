@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func TestTaskToolOutputWriter(t *testing.T) {
 
 		writer := newTaskToolOutputWriter(
 			context.Background(),
-			"unix",
+			tools.ToolNameUnix,
 			func(event TaskToolOutputEvent) error {
 				if event.Err != nil {
 					warnedTool = event.ToolName
@@ -44,7 +45,7 @@ func TestTaskToolOutputWriter(t *testing.T) {
 		assert.Equal(t, 6, n)
 
 		assert.Equal(t, 1, writeCalls)
-		assert.Equal(t, "unix", warnedTool)
+		assert.Equal(t, tools.ToolNameUnix, warnedTool)
 		assert.Equal(t, 1234, warnedPID)
 		assert.ErrorIs(t, warnedErr, displayErr)
 	})
@@ -54,7 +55,7 @@ func TestTaskToolOutputWriter(t *testing.T) {
 		cancel()
 		writer := newTaskToolOutputWriter(
 			ctx,
-			"unix",
+			tools.ToolNameUnix,
 			func(TaskToolOutputEvent) error { return errors.New("display failed") },
 		)
 

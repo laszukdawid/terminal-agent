@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
 
 type ConfirmationManager struct {
@@ -435,6 +436,28 @@ func ParseToolAndCommand(action string) (toolName, command string) {
 		return "", ""
 	}
 	return tool, cmd
+}
+
+// ParseToolAndDisplay extracts the tool name and the most readable value for
+// confirmation prompts. Unix actions use the positional command, while Python
+// actions display inline code or script path instead of the full action syntax.
+func ParseToolAndDisplay(action string) (toolName, display string) {
+	tool, command, args, _, err := parseActionExpression(action)
+	if err != nil {
+		return "", ""
+	}
+	if command != "" {
+		return tool, command
+	}
+	if tool == tools.ToolNamePython {
+		if code := strings.TrimSpace(args["code"]); code != "" {
+			return tool, code
+		}
+		if path := strings.TrimSpace(args["path"]); path != "" {
+			return tool, path
+		}
+	}
+	return tool, ""
 }
 
 func parseActionExpression(input string) (string, string, map[string]string, []string, error) {

@@ -5,29 +5,30 @@ import (
 	"os"
 	"testing"
 
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPatternEditorBuildAction(t *testing.T) {
 	t.Run("wraps command in tool expression", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -type f", &bytes.Buffer{})
-		assert.Equal(t, `unix("find . -type f")`, editor.buildAction("find . -type f"))
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -type f", &bytes.Buffer{})
+		assert.Equal(t, tools.ToolNameUnix+`("find . -type f")`, editor.buildAction("find . -type f"))
 	})
 
 	t.Run("wildcarded pattern", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -type f", &bytes.Buffer{})
-		assert.Equal(t, `unix("find *")`, editor.buildAction("find *"))
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -type f", &bytes.Buffer{})
+		assert.Equal(t, tools.ToolNameUnix+`("find *")`, editor.buildAction("find *"))
 	})
 
 	t.Run("escapes quotes in command", func(t *testing.T) {
-		editor := NewPatternEditor("unix", `echo "hello"`, &bytes.Buffer{})
-		assert.Equal(t, `unix("echo \"hello\"")`, editor.buildAction(`echo "hello"`))
+		editor := NewPatternEditor(tools.ToolNameUnix, `echo "hello"`, &bytes.Buffer{})
+		assert.Equal(t, tools.ToolNameUnix+`("echo \"hello\"")`, editor.buildAction(`echo "hello"`))
 	})
 }
 
 func TestPatternEditorLevels(t *testing.T) {
 	t.Run("simple command levels", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -maxdepth 2 -type d", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -maxdepth 2 -type d", &bytes.Buffer{})
 		assert.Equal(t, []string{
 			"find . -maxdepth 2 -type d",
 			"find . -maxdepth 2 *",
@@ -37,7 +38,7 @@ func TestPatternEditorLevels(t *testing.T) {
 	})
 
 	t.Run("piped command levels", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -type f | sort | head -20", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -type f | sort | head -20", &bytes.Buffer{})
 		assert.Equal(t, []string{
 			"find . -type f | sort | head -20",
 			"find . -type f | sort | head *",
@@ -49,12 +50,12 @@ func TestPatternEditorLevels(t *testing.T) {
 	})
 
 	t.Run("single command has one level", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "ls", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "ls", &bytes.Buffer{})
 		assert.Equal(t, []string{"ls"}, editor.levels)
 	})
 
 	t.Run("starts at most specific", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -type d", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -type d", &bytes.Buffer{})
 		assert.Equal(t, 0, editor.pos)
 		assert.Equal(t, "find . -type d", editor.currentPattern())
 	})
@@ -62,7 +63,7 @@ func TestPatternEditorLevels(t *testing.T) {
 
 func TestPatternEditorNavigation(t *testing.T) {
 	t.Run("pos moves through levels", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -maxdepth 2 -type d", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -maxdepth 2 -type d", &bytes.Buffer{})
 
 		assert.Equal(t, "find . -maxdepth 2 -type d", editor.currentPattern())
 
@@ -77,7 +78,7 @@ func TestPatternEditorNavigation(t *testing.T) {
 	})
 
 	t.Run("out of bounds returns exact command", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "find . -type d", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "find . -type d", &bytes.Buffer{})
 		editor.pos = -1
 		assert.Equal(t, "find . -type d", editor.currentPattern())
 		editor.pos = 100
@@ -87,10 +88,10 @@ func TestPatternEditorNavigation(t *testing.T) {
 
 func TestPatternEditorSingleLevel(t *testing.T) {
 	t.Run("run returns exact for single-token command", func(t *testing.T) {
-		editor := NewPatternEditor("unix", "ls", &bytes.Buffer{})
+		editor := NewPatternEditor(tools.ToolNameUnix, "ls", &bytes.Buffer{})
 		result, err := editor.Run()
 		assert.NoError(t, err)
-		assert.Equal(t, `unix("ls")`, result)
+		assert.Equal(t, tools.ToolNameUnix+`("ls")`, result)
 	})
 }
 
@@ -107,4 +108,44 @@ func TestInteractiveConfirmationRenderMultilineCommand(t *testing.T) {
 	assert.Contains(t, text, "  second line\r\n  third line")
 	assert.NotContains(t, text, "first line\n  second")
 	assert.Equal(t, 7, ic.lastVisualLines)
+}
+
+func TestInteractiveConfirmationDisplaysToolActions(t *testing.T) {
+	tests := []struct {
+		name              string
+		action            string
+		wantHeader        string
+		wantDisplay       string
+		wantMultipleLevel bool
+	}{
+		{
+			name:        "python code",
+			action:      tools.ToolNamePython + `(code="print(\"hello\")\nprint(\"world\")")`,
+			wantHeader:  "Run Python script?",
+			wantDisplay: "  print(\"hello\")\r\n  print(\"world\")",
+		},
+		{
+			name:              "unix command",
+			action:            tools.ToolNameUnix + `("find . -type f | head -10")`,
+			wantHeader:        "Run shell command?",
+			wantDisplay:       "  find . -type f | head -10",
+			wantMultipleLevel: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			ic := newInteractiveConfirmation(tt.action, os.Stdin, &output)
+			ic.termWidth = 200
+
+			ic.render()
+
+			text := output.String()
+			assert.Contains(t, text, tt.wantHeader)
+			assert.Contains(t, text, tt.wantDisplay)
+			assert.NotContains(t, text, tools.ToolNamePython+`(code=`)
+			assert.Equal(t, tt.wantMultipleLevel, ic.hasMultipleLevels())
+		})
+	}
 }

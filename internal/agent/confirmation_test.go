@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
 
 func TestConfirmWithDefaultAutoAllowFallback(t *testing.T) {
@@ -53,14 +54,54 @@ func TestConfirmWithDefaultAskBeatsAutoAllow(t *testing.T) {
 }
 
 func TestBuildActionString(t *testing.T) {
-	action := BuildActionString("unix", map[string]any{
+	action := BuildActionString(tools.ToolNameUnix, map[string]any{
 		"command": "aws login sso",
 		"final":   true,
 		"flag":    "value",
 	})
 
-	if action != "unix(\"aws login sso\", flag=\"value\")" {
+	if action != tools.ToolNameUnix+"(\"aws login sso\", flag=\"value\")" {
 		t.Fatalf("unexpected action string: %s", action)
+	}
+}
+
+func TestParseToolAndDisplay(t *testing.T) {
+	tests := []struct {
+		name        string
+		action      string
+		wantTool    string
+		wantDisplay string
+	}{
+		{
+			name:        "python code",
+			action:      tools.ToolNamePython + `(code="print(\"hello\")\nprint(\"world\")")`,
+			wantTool:    tools.ToolNamePython,
+			wantDisplay: "print(\"hello\")\nprint(\"world\")",
+		},
+		{
+			name:        "python path",
+			action:      tools.ToolNamePython + `(path="scripts/report.py")`,
+			wantTool:    tools.ToolNamePython,
+			wantDisplay: "scripts/report.py",
+		},
+		{
+			name:        "unix command",
+			action:      tools.ToolNameUnix + `("git status")`,
+			wantTool:    tools.ToolNameUnix,
+			wantDisplay: "git status",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool, display := ParseToolAndDisplay(tt.action)
+			if tool != tt.wantTool {
+				t.Fatalf("unexpected tool: %s", tool)
+			}
+			if display != tt.wantDisplay {
+				t.Fatalf("unexpected display: %q", display)
+			}
+		})
 	}
 }
 
@@ -219,13 +260,13 @@ func TestRememberedPatternMatchesWithinSameSession(t *testing.T) {
 			return confirmationDecision{
 				allowed:  true,
 				remember: true,
-				patterns: []string{`unix("find *")`},
+				patterns: []string{tools.ToolNameUnix + `("find *")`},
 			}, nil
 		},
 		func(actions []string, allow bool) error { return nil },
 	)
 
-	allowed, err := manager.Confirm(`unix("find . -type f")`)
+	allowed, err := manager.Confirm(tools.ToolNameUnix + `("find . -type f")`)
 	if err != nil {
 		t.Fatalf("unexpected error on first confirm: %v", err)
 	}
@@ -236,7 +277,7 @@ func TestRememberedPatternMatchesWithinSameSession(t *testing.T) {
 		t.Fatalf("expected exactly one prompt, got %d", promptCount)
 	}
 
-	allowed, err = manager.Confirm(`unix("find /tmp -name '*.go'")`)
+	allowed, err = manager.Confirm(tools.ToolNameUnix + `("find /tmp -name '*.go'")`)
 	if err != nil {
 		t.Fatalf("unexpected error on second confirm: %v", err)
 	}

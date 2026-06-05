@@ -455,7 +455,7 @@ func TestTaskUsesInjectedConfirmationInteraction(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "done", result.Response)
 	require.Len(t, interaction.confirmations, 1)
-	assert.Equal(t, `unix("git status")`, interaction.confirmations[0].Action)
+	assert.Equal(t, tools.ToolNameUnix+`("git status")`, interaction.confirmations[0].Action)
 }
 
 func TestTaskWithOptionsResultEmitsStatusAndProgress(t *testing.T) {
@@ -669,7 +669,7 @@ func TestTaskWithOptionsResultCancelsActiveUnixCommand(t *testing.T) {
 	assert.Empty(t, steps)
 	assert.Equal(t, 1, conn.queryToolCalls)
 	require.Len(t, interaction.confirmations, 1)
-	assert.Equal(t, `unix("sleep 5")`, interaction.confirmations[0].Action)
+	assert.Equal(t, tools.ToolNameUnix+`("sleep 5")`, interaction.confirmations[0].Action)
 }
 
 // blockingTaskConnector blocks each query until the context is done, then

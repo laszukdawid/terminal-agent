@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"golang.org/x/term"
 )
 
@@ -32,10 +33,10 @@ type interactiveConfirmation struct {
 }
 
 func newInteractiveConfirmation(action string, stdin *os.File, writer io.Writer) *interactiveConfirmation {
-	toolName, command := agent.ParseToolAndCommand(action)
+	toolName, command := agent.ParseToolAndDisplay(action)
 
 	var levels []string
-	if toolName != "" && command != "" {
+	if toolName == tools.ToolNameUnix && command != "" {
 		groups := agent.TokenizeCommand(command)
 		levels = agent.GeneratePatternLevels(groups)
 	}
@@ -142,9 +143,9 @@ func (c *interactiveConfirmation) currentDisplayCommand() string {
 
 func (c *interactiveConfirmation) headerText() string {
 	switch c.toolName {
-	case "unix":
+	case tools.ToolNameUnix:
 		return "Run shell command?"
-	case "python":
+	case tools.ToolNamePython:
 		return "Run Python script?"
 	default:
 		return "Execute action?"
