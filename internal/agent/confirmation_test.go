@@ -53,6 +53,34 @@ func TestConfirmWithDefaultAskBeatsAutoAllow(t *testing.T) {
 	}
 }
 
+func TestConfirmWithPolicyAutoApproveSkipsAsk(t *testing.T) {
+	manager := NewConfirmationManager(nil, []config.PermissionRuleSet{{
+		Permissions: config.Permissions{Ask: []string{"unix(\"aws *\")"}},
+	}}, nil, nil)
+
+	allowed, err := manager.ConfirmWithPolicy("unix(\"aws sso login\")", false, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !allowed {
+		t.Fatal("autoApprove should allow when only ask rules match")
+	}
+}
+
+func TestConfirmWithPolicyAutoApproveRespectsDeny(t *testing.T) {
+	manager := NewConfirmationManager(nil, []config.PermissionRuleSet{{
+		Permissions: config.Permissions{Deny: []string{"unix(\"rm *\")"}},
+	}}, nil, nil)
+
+	allowed, err := manager.ConfirmWithPolicy("unix(\"rm file\")", false, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if allowed {
+		t.Fatal("autoApprove must not override deny rules")
+	}
+}
+
 func TestBuildActionString(t *testing.T) {
 	action := BuildActionString(tools.ToolNameUnix, map[string]any{
 		"command": "aws login sso",

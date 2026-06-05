@@ -24,6 +24,7 @@ const (
 
 type TaskOptions struct {
 	Allow        []string
+	AutoApprove  bool
 	Dirs         TaskDirs
 	Interaction  TaskInteraction
 	OnStep       func(TaskStep)
@@ -114,6 +115,7 @@ type taskExecutionState struct {
 	onStatus          func(TaskStatusEvent)
 	onProgress        func(TaskProgressEvent)
 	onToolOutput      func(TaskToolOutputEvent) error
+	autoApprove       bool
 }
 
 func (r *taskExecutionState) appendStep(step TaskStep) {
@@ -249,6 +251,7 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		onStatus:          options.OnStatus,
 		onProgress:        options.OnProgress,
 		onToolOutput:      options.OnToolOutput,
+		autoApprove:       options.AutoApprove,
 	}, nil
 }
 
@@ -387,10 +390,10 @@ func (a *Agent) finalizeTaskRun(ctx context.Context, run *taskExecutionState) (T
 
 func (r *taskExecutionState) confirmTool(tool tools.Tool, response connector.LlmResponseWithTools) (bool, error) {
 	autoAllow := r.autoAllowsTool(tool, response.ToolInput)
-	if !autoAllow {
+	if !autoAllow && !r.autoApprove {
 		r.emitStatus(TaskStatusAwaitingConfirmation, fmt.Sprintf("Awaiting confirmation for %s...", response.ToolName), response.ToolName, response.ToolInput)
 	}
-	return r.confirmations.ConfirmWithDefault(BuildActionString(response.ToolName, response.ToolInput), autoAllow)
+	return r.confirmations.ConfirmWithPolicy(BuildActionString(response.ToolName, response.ToolInput), autoAllow, r.autoApprove)
 }
 
 func (r *taskExecutionState) emitStatus(phase TaskStatusPhase, message string, toolName string, toolInput map[string]any) {
@@ -416,6 +419,11 @@ func (r *taskExecutionState) progressReporter(toolName string) func(string) {
 // explicit allow/deny/ask rule matches: read tools and in-workspace writes run
 // without prompting; arbitrary execution and undeclared tools are gated.
 func (r *taskExecutionState) autoAllowsTool(tool tools.Tool, input map[string]any) bool {
+	if tool.Name() == tools.ToolNameUnix {
+		command, _ := input["command"].(string)
+		return isReadOnlyUnixCommand(command)
+	}
+
 	switch permissionCategoryFor(tool) {
 	case tools.PermissionRead:
 		return true

@@ -83,18 +83,7 @@ Terminal Agent supports tool execution permissions via the `permissions` key in 
 unix("aws sso login", profile="dev")
 ```
 
-### Default Behavior by Tool Category
-
-When no `allow`, `deny`, or `ask` rule matches an action, whether Terminal Agent prompts is decided by the tool's **permission category**:
-
-| Category | Tools | Default when no rule matches |
-| --- | --- | --- |
-| `read` | `read`, `file_search`, `websearch` | Runs without prompting |
-| `write` | `file_edit` | Runs without prompting when the target path is inside the task workspace root; prompts otherwise |
-| `execute` | `unix`, `python` | Always prompts |
-| _undeclared_ | MCP tools and any third-party tool that does not declare a category | Treated as `execute` and prompts |
-
-The rules below always take precedence over these defaults — an `allow` rule lets an `execute` tool run without a prompt, and a `deny` rule blocks even a `read` tool.
+For the full approval decision order, `--auto-approve` behavior, and default tool policy, see [Approval Logic](approval-logic.md).
 
 ### Permission Sources and Priority
 
@@ -103,6 +92,8 @@ Permission rules come from three sources, listed from lowest to highest priority
 1. Global config: `$HOME/.config/terminal-agent/config.json`
 2. Local config: `.terminal-agent.json` files discovered by walking from the current working directory up to the filesystem root. The closest file to the current directory has the highest priority among local configs.
 3. CLI `--allow` flag (task command only): the highest priority rule set. Use it to temporarily allow an action without modifying config files.
+
+The task command also supports `--auto-approve`, which automatically approves confirmation prompts for the current run. It bypasses `ask` prompts but still respects `deny` rules.
 
 Between `allow` and `deny` rules at different priorities, the highest priority match wins. At the same priority, `deny` wins over `allow`.
 
@@ -129,10 +120,12 @@ When `yes!` or `no!` writes a remembered decision, it writes to the closest disc
 }
 ```
 
-Rules are evaluated in this order:
+Within configured permission rules, matching works this way:
 
 1. `ask` matches always prompt, even if `allow` or `deny` also match.
 2. Between `allow` and `deny`, the highest priority match wins; if both match at the same priority, `deny` wins.
+
+See [Approval Logic](approval-logic.md) for the full runtime order, including cached decisions, `--auto-approve`, and default tool policy.
 
 ### Action Expression Format
 

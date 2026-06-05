@@ -85,12 +85,28 @@ func (cm *ConfirmationManager) Confirm(action string) (bool, error) {
 // no rule matches, autoAllow decides the fallback: true allows without
 // prompting (e.g. read tools, in-workspace writes), false prompts the user.
 func (cm *ConfirmationManager) ConfirmWithDefault(action string, autoAllow bool) (bool, error) {
+	return cm.ConfirmWithPolicy(action, autoAllow, false)
+}
+
+// ConfirmWithPolicy resolves an action against permission rules and caller
+// policy. autoApprove is an explicit user request to approve prompts, so it
+// bypasses ask rules but still respects allow/deny resolution.
+func (cm *ConfirmationManager) ConfirmWithPolicy(action string, autoAllow bool, autoApprove bool) (bool, error) {
 	if action == "" {
 		return true, nil
 	}
 
 	if decision, ok := cm.decisions[action]; ok {
 		return decision, nil
+	}
+
+	if autoApprove {
+		if allowed, matched := cm.resolveAllowDeny(action); matched {
+			cm.decisions[action] = allowed
+			return allowed, nil
+		}
+		cm.decisions[action] = true
+		return true, nil
 	}
 
 	if cm.shouldAsk(action) {

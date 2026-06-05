@@ -46,5 +46,6 @@ nav:
   - Tools: tools.md
   - Providers: providers.md
   - Configuration: configuration.md
+  - Approval Logic: approval-logic.md
   - Examples: examples.md
   - Developers: developers.md

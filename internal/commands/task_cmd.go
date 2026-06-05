@@ -63,6 +63,10 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					taskTimeout = flagTimeout
 				}
 			}
+			autoApprove, err := flags.GetBool("auto-approve")
+			if err != nil {
+				autoApprove = false
+			}
 
 			events, err := service.TaskEvents(ctx, app.TaskRequest{
 				Message:        userRequest,
@@ -71,6 +75,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 				PromptOverride: *promptFlag,
 				WorkingDir:     taskWorkingDir,
 				Allow:          allow,
+				AutoApprove:    autoApprove,
 				Device:         device,
 				Timeout:        taskTimeout,
 				Config:         config,
@@ -184,6 +189,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 	modelID = cmd.Flags().StringP("model", "m", config.GetDefaultModelId(), "The model ID to use for the question")
 	promptFlag = cmd.Flags().String("prompt", "", "Custom system prompt (overrides file-based and default prompts)")
 	allowList = cmd.Flags().StringArray("allow", []string{}, "Allow exact action without confirmation (repeatable)")
+	cmd.Flags().Bool("auto-approve", false, "Automatically approve confirmation prompts except explicit denies")
 
 	// 'timeout' flag bounds the whole task run (Go duration, e.g. 15m). 0 means unlimited.
 	// Defaults to unlimited unless task_timeout is set in config.
