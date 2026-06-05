@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
@@ -198,6 +199,15 @@ func TestTaskCommandStreamedOutput(t *testing.T) {
 			want:   "live output\ndone",
 		},
 		{
+			name: "prints command before streamed output",
+			args: []string{"--plain", "inspect", "repo"},
+			events: []app.Event{
+				{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "git status --short"}},
+				{Type: app.EventOutputDelta, Text: "M file.go\n", ToolName: tools.ToolNameUnix},
+			},
+			want: "Command: git status --short\nM file.go\ndone",
+		},
+		{
 			name:        "limits streamed output by default",
 			args:        []string{"--plain", "inspect", "repo"},
 			events:      []app.Event{{Type: app.EventOutputDelta, Text: "1\n2\n3\n4\n5\n6\n7\n8\n"}},
@@ -219,6 +229,26 @@ func TestTaskCommandStreamedOutput(t *testing.T) {
 			events:      []app.Event{{Type: app.EventOutputDelta, Text: "1\n2\n3\n4\n5\n6\n7\n"}},
 			contains:    []string{"7\n"},
 			notContains: []string{"truncated"},
+		},
+		{
+			name: "resets streamed output limit for each tool execution",
+			cfg:  taskLiveOutputLimitConfig(2),
+			args: []string{"--plain", "inspect", "repo"},
+			events: []app.Event{
+				{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "printf '1\\n2\\n3\\n'"}},
+				{Type: app.EventOutputDelta, Text: "1\n2\n3\n", ToolName: tools.ToolNameUnix},
+				{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running python...", ToolName: tools.ToolNamePython, ToolInput: map[string]any{"code": "print('a')\nprint('b')\nprint('c')"}},
+				{Type: app.EventOutputDelta, Text: "a\nb\nc\n", ToolName: tools.ToolNamePython},
+			},
+			contains: []string{
+				"Command: printf '1\\n2\\n3\\n'\n",
+				"1\n2\n",
+				"tool output truncated: 2 out of 3 lines",
+				"Command: print('a')\nprint('b')\nprint('c')\n",
+				"a\nb\n",
+				"done",
+			},
+			notContains: []string{"3\n", "c\n"},
 		},
 	}
 
@@ -324,6 +354,62 @@ func TestTaskLiveOutputLimiter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFormatTaskStreamedCommand(t *testing.T) {
+	tests := []struct {
+		name  string
+		event app.Event
+		want  string
+	}{
+		{
+			name:  "unix command",
+			event: app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "git status --short"}},
+			want:  "git status --short",
+		},
+		{
+			name:  "python code",
+			event: app.Event{ToolName: tools.ToolNamePython, ToolInput: map[string]any{"code": "print('hello')"}},
+			want:  "print('hello')",
+		},
+		{
+			name:  "python path",
+			event: app.Event{ToolName: tools.ToolNamePython, ToolInput: map[string]any{"path": "scripts/report.py"}},
+			want:  "scripts/report.py",
+		},
+		{
+			name:  "fallback action expression",
+			event: app.Event{ToolName: tools.ToolNameFileSearch, ToolInput: map[string]any{"name_pattern": "*.go"}},
+			want:  `file_search(name_pattern="*.go")`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, formatTaskStreamedCommand(tt.event))
+		})
+	}
+}
+
+func TestTaskLiveOutputPrinter(t *testing.T) {
+	progressOutput := &bytes.Buffer{}
+	progress := newTaskProgressPrinter(progressOutput, taskProgressConfig{})
+	output := &bytes.Buffer{}
+	printer := newTaskLiveOutputPrinter(output, progress, 2)
+
+	printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "printf one"}})
+	printer.PrintDelta("one")
+
+	assert.True(t, printer.Printed())
+	assert.True(t, printer.NeedsNewlineBeforeFinal())
+	assert.Equal(t, "Command: printf one\none", output.String())
+
+	printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "printf 'a\\nb\\nc\\n'"}})
+	printer.PrintDelta("a\nb\nc\n")
+
+	assert.Contains(t, output.String(), "one\nCommand: printf 'a\\nb\\nc\\n'\na\nb\n")
+	assert.Contains(t, output.String(), "[tool output truncated: 2 out of 3 lines]\n")
+	assert.False(t, printer.NeedsNewlineBeforeFinal())
 }
 
 func TestTaskCommandProgressOutput(t *testing.T) {
