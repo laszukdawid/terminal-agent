@@ -327,7 +327,6 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 
 	return response, nil
 }
-
 func (oc *OpenAIConnector) SupportsNativeToolCalling() bool {
 	return true
 }

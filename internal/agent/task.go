@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	MaxToolCalls              = 10
+	MaxToolCalls              = 50
 	MaxTurns                  = 50
 	maxTaskActionFallbackRuns = 2
 	UserClarificationToolName = "user_clarification"
@@ -267,6 +267,19 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 	}
 
 	if !response.ToolUse {
+		if response.Response != "" {
+			run.state.Phase = TaskPhaseCompleted
+			run.recordSuccess(connector.LlmResponseWithTools{
+				Response: response.Response,
+				ToolUse:  true,
+				ToolName: ToolNameFinalAnswer,
+				ToolInput: map[string]any{
+					"answer": response.Response,
+				},
+			}, response.Response)
+			run.emitStatus(TaskStatusCompleted, "Task completed.", ToolNameFinalAnswer, map[string]any{"answer": response.Response})
+			return run.finalAnswerResult(response.Response), true, nil
+		}
 		run.recordThought(response.Response)
 		logger.Debugw("Task iteration complete", "iteration", run.state.Iterations, "phase", run.state.Phase)
 		return TaskRunResult{}, false, nil

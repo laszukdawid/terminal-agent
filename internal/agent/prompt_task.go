@@ -72,7 +72,6 @@ func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, 
 		CurrentDir:    state.Dirs.CurrentDir,
 		History:       formatTaskPromptHistory(renderTaskHistoryForSummary(state.Steps)),
 	})
-
 	qParams := connector.QueryParams{
 		UserPrompt: StringPtr(summary),
 		SysPrompt:  a.systemPromptTask,

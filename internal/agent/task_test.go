@@ -931,8 +931,8 @@ func TestTaskActionPromptFinalGuidanceIsSelective(t *testing.T) {
 }
 
 func TestToolSupportsFinal(t *testing.T) {
-	t.Run("built-in tool opt-in", func(t *testing.T) {
-		assert.True(t, toolSupportsFinal(tools.NewReadTool("")))
+	t.Run("read tool does not opt in", func(t *testing.T) {
+		assert.False(t, toolSupportsFinal(tools.NewReadTool("")))
 	})
 
 	t.Run("custom schema with matching final semantics", func(t *testing.T) {
@@ -1317,6 +1317,51 @@ func TestTaskWithOptionsResultAcceptsJSONNumberIntegerToolInput(t *testing.T) {
 }
 
 func TestTaskWithOptionsResultUsesSummaryFallbackAtMaxIterations(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{queryResponse: "summary output"}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "finish without tools", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "summary output", result.Response)
+	assert.Equal(t, MaxTurns, conn.queryToolCalls)
+	assert.Equal(t, 1, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultCompletesOnNativeNoToolContent(t *testing.T) {
+	utils.GetLogger()
+
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{Response: "completed without another tool"},
+		},
+		queryResponse: "summary should not run",
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "finish directly", TaskOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "completed without another tool", result.Response)
+	assert.Equal(t, 1, conn.queryToolCalls)
+	assert.Equal(t, 0, conn.queryCalls)
+}
+
+func TestTaskWithOptionsResultStillSummarizesEmptyNativeNoToolContent(t *testing.T) {
 	utils.GetLogger()
 
 	conn := &scriptedToolConnector{queryResponse: "summary output"}
