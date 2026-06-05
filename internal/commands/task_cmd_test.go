@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
@@ -219,6 +220,24 @@ func TestTaskCommandStreamedOutput(t *testing.T) {
 			events:      []app.Event{{Type: app.EventOutputDelta, Text: "1\n2\n3\n4\n5\n6\n7\n"}},
 			contains:    []string{"7\n"},
 			notContains: []string{"truncated"},
+		},
+		{
+			name: "resets streamed output limit for each tool execution",
+			cfg:  taskLiveOutputLimitConfig(2),
+			args: []string{"--plain", "inspect", "repo"},
+			events: []app.Event{
+				{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix},
+				{Type: app.EventOutputDelta, Text: "1\n2\n3\n", ToolName: tools.ToolNameUnix},
+				{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running python...", ToolName: tools.ToolNamePython},
+				{Type: app.EventOutputDelta, Text: "a\nb\nc\n", ToolName: tools.ToolNamePython},
+			},
+			contains: []string{
+				"1\n2\n",
+				"tool output truncated: 2 out of 3 lines",
+				"a\nb\n",
+				"done",
+			},
+			notContains: []string{"3\n", "c\n"},
 		},
 	}
 

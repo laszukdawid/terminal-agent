@@ -62,6 +62,8 @@ Task execution has a direct-output path for output-oriented tools:
 
 Every `ask`, `chat`, and `task` run writes an always-on, file-only execution log (one JSONL file per run) under `~/.local/share/terminal-agent/sessions/`, named `{timestamp}_{kind}_{shortid}.jsonl`. See `internal/sessionlog` (the `Recorder`, `Meta` header, and unified `Record` schema) and the inline `recorder.Write` calls in each app-layer flow.
 
+When debugging a recent or current run, inspect the relevant JSONL session log in `~/.local/share/terminal-agent/sessions/` directly instead of asking the user to provide logs. Use the newest matching `{timestamp}_{kind}_{shortid}.jsonl` file unless the user points to a specific run.
+
 - The recorder is created per run at the app boundary (`AskEvents`/`ChatEvents`/`TaskEvents`) and writes a `meta` provenance header first (`user`, `cwd`, `provider`, `model`, `command`, `created_at` — intentionally no hostname).
 - For `ask`/`chat`, recording is inlined at each call site (request, completed, failed). For `task`, app-layer records are also inlined, while agent-internal steps (thoughts, tool calls, results) are captured via an `OnStep` callback in `TaskOptions` that writes through `taskStepToRecord`.
 - `taskExecutionState.appendStep` is the single chokepoint that both appends to history (for prompt building) and forwards the enriched step to the `OnStep` callback.

@@ -106,6 +106,9 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			for event := range events {
 				switch event.Type {
 				case app.EventTaskStatus:
+					if event.Status == string(agent.TaskStatusRunningTool) {
+						liveOutput.Reset()
+					}
 					progress.Print(event.Text)
 				case app.EventToolProgress:
 					progress.Print(formatToolProgress(event))
@@ -220,6 +223,14 @@ type taskLiveOutputLimiter struct {
 
 func newTaskLiveOutputLimiter(maxLines int, maxLineChars int) *taskLiveOutputLimiter {
 	return &taskLiveOutputLimiter{maxLines: maxLines, maxLineChars: maxLineChars}
+}
+
+func (l *taskLiveOutputLimiter) Reset() {
+	l.lines = 0
+	l.charsWithoutNewline = 0
+	l.sawNewline = false
+	l.truncated = false
+	l.truncationAnnounced = false
 }
 
 func (l *taskLiveOutputLimiter) Filter(chunk string) string {
