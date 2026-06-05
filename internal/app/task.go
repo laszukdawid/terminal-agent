@@ -23,6 +23,7 @@ type TaskRequest struct {
 	PromptOverride string
 	WorkingDir     string
 	Allow          []string
+	AutoApprove    bool
 	Device         string
 	// Timeout bounds the whole task run. 0 means no task-level timeout (unlimited).
 	Timeout time.Duration
@@ -166,6 +167,7 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 	agentInstance.SetDevice(req.Device)
 	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{
 		Allow:        req.Allow,
+		AutoApprove:  req.AutoApprove,
 		Interaction:  interaction,
 		OnStep:       onStep,
 		OnStatus:     onStatus,

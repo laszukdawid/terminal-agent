@@ -80,6 +80,8 @@ Test code should prefer table-driven tests: define test case tables for related 
 
 Taskfile commands will install Go dependencies automatically, but if you need to drop into language-specific tooling remember the project preference: use `uv run python …` instead of bare `python`, and `bun …` instead of `node`. These help keep virtual environments and JavaScript runtimes consistent across contributors.
 
+Documentation is built with MkDocs Material. If `mkdocs` is installed locally, use `mkdocs build --strict`. If it is not installed, use `uvx --with mkdocs-material mkdocs build --strict`; plain `uvx mkdocs` is insufficient because it does not include the `material` theme. If strict mode fails on pre-existing warnings unrelated to your change, run `uvx --with mkdocs-material mkdocs build` to confirm the site still builds, note the strict warnings, and remove the generated `site/` directory afterward.
+
 ## Local Development Tips
 
 - Install Task (`brew install go-task/tap/go-task` or follow upstream docs) and Docker before running integration tests.

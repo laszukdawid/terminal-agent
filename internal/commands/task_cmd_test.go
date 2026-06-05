@@ -545,3 +545,8 @@ func TestTaskCommandResolvesTimeout(t *testing.T) {
 		assert.Equal(t, time.Duration(0), req.Timeout)
 	})
 }
+
+func TestTaskCommandPassesAutoApprove(t *testing.T) {
+	req := runTaskCommandCapture(t, config.NewDefaultConfig(), "--auto-approve", "do", "something")
+	assert.True(t, req.AutoApprove)
+}

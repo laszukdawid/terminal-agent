@@ -71,9 +71,14 @@ You will be asked to confirm each execution step, and the agent may also ask fol
 | `--log` | `-l` | `false` | Whether to log the input and output to a file |
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
 | `--allow` |  | `[]` | Allow actions without confirmation (repeatable, glob-based) |
+| `--auto-approve` |  | `false` | Automatically approve confirmation prompts except explicit denies |
 | `--timeout` |  | unlimited | Maximum duration for the whole task run (Go duration, e.g. `90s`, `15m`, `2h`); `0` means no timeout |
 
 Action strings use a function-style format, e.g. `unix("aws login sso")` or `file_edit("README.md", operation="write")`. String values use glob matching against the full value: `*` matches any sequence, `?` matches a single character, and character classes like `[ab]` or `[a-z]` are supported. Escape glob metacharacters with `\` when you want a literal match, for example `unix("ls -d \\*/")`. To constrain keys, use `allowKeys=["region", "profile", "read*"]`, and key values can use the same glob syntax, e.g. `region="us-*"`.
+
+Simple read-only Unix commands and pipelines composed only of read-only commands, such as `ls -la | grep go | wc -l`, run without confirmation by default. Commands with redirection, shell control operators, command substitution, assignments, unknown commands, or write-capable actions such as `find -delete` still require confirmation unless allowed or auto-approved.
+
+See [Approval Logic](../approval-logic.md) for the complete confirmation and permission decision flow.
 
 ## Task Timeout
 
@@ -107,8 +112,8 @@ When a task stops because its timeout elapsed, the run fails with a distinct tim
 
 The task command includes safety measures:
 
-1. **Command Confirmation**: Before executing any generated command, the agent will show you the command and ask for confirmation.
-2. **Limited Command Set**: Only certain safe commands are allowed to be executed automatically.
+1. **Command Confirmation**: Before executing generated commands with side effects, the agent will show you the command and ask for confirmation.
+2. **Limited Command Set**: Only parser-verified read-only commands are allowed to execute automatically by default.
 3. **Iterative Approach**: The agent breaks down complex tasks into smaller steps, with visibility at each stage.
 
 ## Limitations

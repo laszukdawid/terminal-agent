@@ -298,7 +298,8 @@ func TestConfirmToolByCategory(t *testing.T) {
 		{"read never prompts", tools.NewReadTool("/repo"), map[string]any{"path": "x"}, false},
 		{"write inside root", tools.NewFileEditTool("/repo"), map[string]any{"path": "notes.txt", "operation": "write"}, false},
 		{"write outside root", tools.NewFileEditTool("/repo"), map[string]any{"path": "../escape.txt", "operation": "write"}, true},
-		{"execute always prompts", tools.NewUnixTool(nil), map[string]any{"command": "ls"}, true},
+		{"read-only unix never prompts", tools.NewUnixTool(nil), map[string]any{"command": "ls"}, false},
+		{"unsafe unix prompts", tools.NewUnixTool(nil), map[string]any{"command": "rm file"}, true},
 		{"undeclared tool gated", uncategorizedStubTool{}, map[string]any{}, true},
 	}
 
@@ -323,6 +324,28 @@ func TestConfirmToolByCategory(t *testing.T) {
 				t.Fatalf("prompted = %v, want %v", gotPrompt, tc.wantPrompt)
 			}
 		})
+	}
+}
+
+func TestConfirmToolAutoApproveSkipsPrompt(t *testing.T) {
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	requester := taskUserConfirmationRequester{interaction: interaction}
+	run := &taskExecutionState{
+		state:         &TaskState{Dirs: TaskDirs{RootDir: "/repo", CurrentDir: "/repo"}},
+		confirmations: NewConfirmationManager(nil, nil, requester.RequestUserConfirmation, nil),
+		autoApprove:   true,
+	}
+	response := connector.LlmResponseWithTools{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "rm file"}}
+
+	allowed, err := run.confirmTool(tools.NewUnixTool(nil), response)
+	if err != nil {
+		t.Fatalf("confirmTool error: %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected auto-approved unsafe command to be allowed")
+	}
+	if len(interaction.confirmations) > 0 {
+		t.Fatal("autoApprove should skip confirmation prompt")
 	}
 }
 

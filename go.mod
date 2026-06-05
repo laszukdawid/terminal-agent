@@ -23,8 +23,9 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.7.10
 	go.uber.org/zap v1.27.0
-	golang.org/x/term v0.38.0
+	golang.org/x/term v0.41.0
 	google.golang.org/api v0.230.0
+	mvdan.cc/sh/v3 v3.13.1
 )
 
 require (
@@ -118,7 +119,7 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
