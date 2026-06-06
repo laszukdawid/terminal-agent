@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	log "github.com/laszukdawid/terminal-agent/internal/utils"
@@ -25,6 +26,13 @@ type Config interface {
 	GetGUIEnvFile() string
 	GetGUILoadShellEnvironment() bool
 	GetGUIShellEnvironmentTimeout() time.Duration
+	GetGUIVoiceEnabled() bool
+	GetGUIVoiceTriggerKey() string
+	GetGUIVoiceAutoSubmit() bool
+	GetGUIVoiceMaxRecordingDuration() time.Duration
+	GetGUIVoiceSTTBackend() string
+	GetGUIVoiceSTTModel() string
+	GetGUIVoiceSTTLanguage() string
 	SetDefaultProvider(string) error
 	SetDefaultModelId(string) error
 	SetDevice(string) error
@@ -42,7 +50,15 @@ type Config interface {
 	GetProjectContext() bool
 }
 
-const DefaultTaskLiveOutputLimit = 6
+const (
+	DefaultTaskLiveOutputLimit          = 6
+	DefaultGUIVoiceEnabled              = true
+	DefaultGUIVoiceTriggerKey           = "F1"
+	DefaultGUIVoiceAutoSubmit           = true
+	DefaultGUIVoiceMaxRecordingDuration = 60 * time.Second
+	DefaultGUIVoiceSTTBackend           = "openai"
+	DefaultGUIVoiceSTTModel             = "gpt-4o-mini-transcribe"
+)
 
 type config struct {
 	LogLevel            string
@@ -62,9 +78,24 @@ type config struct {
 }
 
 type GUIConfig struct {
-	EnvFile                 string `json:"env_file,omitempty"`
-	LoadShellEnvironment    *bool  `json:"load_shell_environment,omitempty"`
-	ShellEnvironmentTimeout string `json:"shell_environment_timeout,omitempty"`
+	EnvFile                 string         `json:"env_file,omitempty"`
+	LoadShellEnvironment    *bool          `json:"load_shell_environment,omitempty"`
+	ShellEnvironmentTimeout string         `json:"shell_environment_timeout,omitempty"`
+	Voice                   GUIVoiceConfig `json:"voice,omitempty"`
+}
+
+type GUIVoiceConfig struct {
+	Enabled              *bool             `json:"enabled,omitempty"`
+	TriggerKey           string            `json:"trigger_key,omitempty"`
+	AutoSubmit           *bool             `json:"auto_submit,omitempty"`
+	MaxRecordingDuration string            `json:"max_recording_duration,omitempty"`
+	STT                  GUIVoiceSTTConfig `json:"stt,omitempty"`
+}
+
+type GUIVoiceSTTConfig struct {
+	Backend  string `json:"backend,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 func ensurePathExists(path string) error {
@@ -232,6 +263,71 @@ func (config *config) GetGUIShellEnvironmentTimeout() time.Duration {
 		return 2 * time.Second
 	}
 	return d
+}
+
+func (config *config) GetGUIVoiceEnabled() bool {
+	if config.GUI.Voice.Enabled == nil {
+		return DefaultGUIVoiceEnabled
+	}
+	return *config.GUI.Voice.Enabled
+}
+
+func (config *config) GetGUIVoiceTriggerKey() string {
+	key := strings.ToUpper(strings.TrimSpace(config.GUI.Voice.TriggerKey))
+	if key == "" {
+		return DefaultGUIVoiceTriggerKey
+	}
+	if !isKnownGUIVoiceTriggerKey(key) {
+		log.Warnw("Invalid gui.voice.trigger_key in config, using default", "value", config.GUI.Voice.TriggerKey)
+		return DefaultGUIVoiceTriggerKey
+	}
+	return key
+}
+
+func isKnownGUIVoiceTriggerKey(key string) bool {
+	switch key {
+	case "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12":
+		return true
+	default:
+		return false
+	}
+}
+
+func (config *config) GetGUIVoiceAutoSubmit() bool {
+	if config.GUI.Voice.AutoSubmit == nil {
+		return DefaultGUIVoiceAutoSubmit
+	}
+	return *config.GUI.Voice.AutoSubmit
+}
+
+func (config *config) GetGUIVoiceMaxRecordingDuration() time.Duration {
+	if config.GUI.Voice.MaxRecordingDuration == "" {
+		return DefaultGUIVoiceMaxRecordingDuration
+	}
+	d, err := time.ParseDuration(config.GUI.Voice.MaxRecordingDuration)
+	if err != nil || d <= 0 {
+		log.Warnw("Invalid gui.voice.max_recording_duration in config, using default", "value", config.GUI.Voice.MaxRecordingDuration, "error", err)
+		return DefaultGUIVoiceMaxRecordingDuration
+	}
+	return d
+}
+
+func (config *config) GetGUIVoiceSTTBackend() string {
+	if config.GUI.Voice.STT.Backend == "" {
+		return DefaultGUIVoiceSTTBackend
+	}
+	return config.GUI.Voice.STT.Backend
+}
+
+func (config *config) GetGUIVoiceSTTModel() string {
+	if config.GUI.Voice.STT.Model == "" {
+		return DefaultGUIVoiceSTTModel
+	}
+	return config.GUI.Voice.STT.Model
+}
+
+func (config *config) GetGUIVoiceSTTLanguage() string {
+	return config.GUI.Voice.STT.Language
 }
 
 func expandHome(path string) string {
