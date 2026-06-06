@@ -304,13 +304,14 @@ tasks:
   # Tests
   test:unit:
     cmds:
-      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
+      - go test -v ./cmd/agent ./cmd/agent-gui ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/gui ./internal/history ./internal/memory ./internal/tools ./internal/utils ./internal/voice ./internal/voice/audio ./internal/voice/stt
+      - go test -race ./internal/voice ./internal/gui
 
   test:integration:
     env:
       TEST_INTEG_DIR: "{{.USER_WORKING_DIR}}/test"
     cmds:
-      - go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
+      - go test -v -tags=integration ./cmd/agent ./cmd/agent-gui ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/gui ./internal/history ./internal/memory ./internal/tools ./internal/utils ./internal/voice ./internal/voice/audio ./internal/voice/stt
 
   test:integration:env:
     deps:
@@ -319,7 +320,7 @@ tasks:
       TEST_INTEG_DIR: "/agent/test"
     cmds:
       - docker ps | grep {{.TEST_IMAGE_NAME}}
-      - docker exec --env TEST_INTEG_DIR=$TEST_INTEG_DIR {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
+      - docker exec --env TEST_INTEG_DIR=$TEST_INTEG_DIR {{.TEST_IMAGE_NAME}} go test -v -tags=integration ./cmd/agent ./cmd/agent-gui ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/gui ./internal/history ./internal/memory ./internal/tools ./internal/utils ./internal/voice ./internal/voice/audio ./internal/voice/stt
       - docker stop {{.TEST_IMAGE_NAME}}
 
   # Testing models

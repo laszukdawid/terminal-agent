@@ -15,11 +15,12 @@ const (
 )
 
 type MalgoRecorder struct {
-	mu      sync.Mutex
-	ctx     *malgo.AllocatedContext
-	device  *malgo.Device
-	buffer  []byte
-	started bool
+	mu        sync.Mutex
+	ctx       *malgo.AllocatedContext
+	device    *malgo.Device
+	buffer    []byte
+	started   bool
+	finishing bool
 }
 
 func NewMalgoRecorder() *MalgoRecorder {
@@ -29,7 +30,7 @@ func NewMalgoRecorder() *MalgoRecorder {
 func (r *MalgoRecorder) Start(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.started {
+	if r.started || r.finishing {
 		return fmt.Errorf("voice recorder is already recording")
 	}
 
@@ -70,6 +71,7 @@ func (r *MalgoRecorder) Start(context.Context) error {
 	r.device = device
 	r.buffer = nil
 	r.started = true
+	r.finishing = false
 	return nil
 }
 
@@ -88,10 +90,11 @@ func (r *MalgoRecorder) Cancel(context.Context) error {
 
 func (r *MalgoRecorder) finish(discard bool) ([]byte, error) {
 	r.mu.Lock()
-	if !r.started {
+	if !r.started || r.finishing {
 		r.mu.Unlock()
 		return nil, fmt.Errorf("voice recorder is not recording")
 	}
+	r.finishing = true
 	device := r.device
 	malgoCtx := r.ctx
 	r.mu.Unlock()
@@ -107,6 +110,7 @@ func (r *MalgoRecorder) finish(discard bool) ([]byte, error) {
 	r.ctx = nil
 	r.buffer = nil
 	r.started = false
+	r.finishing = false
 	r.mu.Unlock()
 
 	if malgoCtx != nil {

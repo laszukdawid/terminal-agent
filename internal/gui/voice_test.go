@@ -71,7 +71,21 @@ func TestVoiceDoesNotStartWhileAskIsRunning(t *testing.T) {
 	g.scheduler.read(func() {
 		assert.Equal(t, 0, recorder.starts)
 		assert.Equal(t, voice.StateIdle, g.state.voiceState)
-		assert.Equal(t, voiceBlockedWhileRunningStatus, g.state.status)
+		assert.Equal(t, voiceBlockedWhileRunningStatus, g.state.voiceError)
+		assert.Equal(t, "", g.state.status)
+	})
+}
+
+func TestVoiceBlockedWhileRespondingDoesNotOverwriteStatus(t *testing.T) {
+	g := newVoiceTestApp(t, voiceTestOptions{})
+	g.state.isRunning = true
+	g.state.status = "responding"
+
+	g.toggleVoice()
+
+	g.scheduler.read(func() {
+		assert.Equal(t, "responding", g.state.status)
+		assert.Equal(t, voiceBlockedWhileRunningStatus, g.state.voiceError)
 	})
 }
 
@@ -82,6 +96,7 @@ func TestVoiceButtonDisabledWhileAskIsRunning(t *testing.T) {
 
 	g.scheduler.read(func() {
 		assert.True(t, g.popup.listenButton.Disabled())
+		assert.Equal(t, "Busy", g.popup.listenButton.Text)
 	})
 }
 

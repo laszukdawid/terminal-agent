@@ -265,10 +265,14 @@ func (g *App) render() {
 	}
 
 	voiceEnabled := g.cfg.GetGUIVoiceEnabled() && g.voiceController != nil
-	if g.state.isRunning && g.state.voiceState == voice.StateIdle {
+	voiceBlockedByRunning := g.state.isRunning && g.state.voiceState == voice.StateIdle
+	if voiceBlockedByRunning {
 		voiceEnabled = false
 	}
 	g.popup.setListenButton(voiceEnabled, g.state.voiceState)
+	if voiceBlockedByRunning {
+		g.popup.listenButton.SetText("Busy")
+	}
 
 	if hasCopyableResponse(g.state) {
 		g.popup.copyButton.Enable()

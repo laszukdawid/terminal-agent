@@ -65,7 +65,7 @@ func (g *App) toggleVoice() {
 		return
 	}
 	if g.state.isRunning && g.state.voiceState == voice.StateIdle {
-		g.state.status = voiceBlockedWhileRunningStatus
+		g.state.voiceError = voiceBlockedWhileRunningStatus
 		g.render()
 		return
 	}
