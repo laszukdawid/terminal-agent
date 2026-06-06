@@ -40,7 +40,7 @@ func TestControllerStopTranscribesAndReturnsTranscript(t *testing.T) {
 
 func TestControllerToggleCancelsTranscription(t *testing.T) {
 	recorder := &fakeRecorder{recording: Recording{Data: []byte("wav"), Format: AudioFormatWAV}}
-	transcriber := &fakeTranscriber{block: make(chan struct{})}
+	transcriber := &fakeTranscriber{block: make(chan struct{}), ctxCh: make(chan struct{}, 1)}
 	callbacks := &callbackRecorder{}
 	c := NewController(recorder, transcriber, ControllerOptions{Callbacks: callbacks.callbacks()})
 
@@ -134,6 +134,49 @@ func TestControllerMaxDurationStopsRecording(t *testing.T) {
 	assert.Equal(t, "done", callbacks.transcript.Text)
 }
 
+func TestControllerManualStopDoesNotRaceMaxDurationStop(t *testing.T) {
+	recorder := &fakeRecorder{recording: Recording{Data: []byte("wav"), Format: AudioFormatWAV}, stopBlock: make(chan struct{}), stopCh: make(chan struct{}, 1)}
+	transcriber := &fakeTranscriber{transcript: Transcript{Text: "done"}}
+	callbacks := &callbackRecorder{}
+	c := NewController(recorder, transcriber, ControllerOptions{
+		MaxRecordingDuration: time.Millisecond,
+		Callbacks:            callbacks.callbacks(),
+	})
+
+	require.NoError(t, c.Toggle(context.Background()))
+	manualStopDone := make(chan error, 1)
+	go func() {
+		manualStopDone <- c.Toggle(context.Background())
+	}()
+	recorder.waitForStopStarted(t)
+	time.Sleep(5 * time.Millisecond)
+	close(recorder.stopBlock)
+
+	require.NoError(t, <-manualStopDone)
+	callbacks.waitForTranscript(t)
+	assert.Equal(t, 1, recorder.stops)
+}
+
+func TestControllerConcurrentStopsCallRecorderOnce(t *testing.T) {
+	recorder := &fakeRecorder{recording: Recording{Data: []byte("wav"), Format: AudioFormatWAV}, stopBlock: make(chan struct{}), stopCh: make(chan struct{}, 2)}
+	transcriber := &fakeTranscriber{transcript: Transcript{Text: "done"}}
+	callbacks := &callbackRecorder{}
+	c := NewController(recorder, transcriber, ControllerOptions{Callbacks: callbacks.callbacks()})
+
+	require.NoError(t, c.Toggle(context.Background()))
+	stopDone := make(chan error, 2)
+	go func() { stopDone <- c.Toggle(context.Background()) }()
+	go func() { stopDone <- c.Toggle(context.Background()) }()
+	recorder.waitForStopStarted(t)
+	time.Sleep(5 * time.Millisecond)
+	close(recorder.stopBlock)
+
+	require.NoError(t, <-stopDone)
+	require.NoError(t, <-stopDone)
+	callbacks.waitForTranscript(t)
+	assert.Equal(t, 1, recorder.stops)
+}
+
 type fakeRecorder struct {
 	starts    int
 	stops     int
@@ -142,6 +185,8 @@ type fakeRecorder struct {
 	stopErr   error
 	cancelErr error
 	recording Recording
+	stopBlock chan struct{}
+	stopCh    chan struct{}
 }
 
 func (r *fakeRecorder) Start(context.Context) error {
@@ -151,6 +196,12 @@ func (r *fakeRecorder) Start(context.Context) error {
 
 func (r *fakeRecorder) Stop(context.Context) (Recording, error) {
 	r.stops++
+	if r.stopCh != nil {
+		r.stopCh <- struct{}{}
+	}
+	if r.stopBlock != nil {
+		<-r.stopBlock
+	}
 	return r.recording, r.stopErr
 }
 
@@ -159,17 +210,30 @@ func (r *fakeRecorder) Cancel(context.Context) error {
 	return r.cancelErr
 }
 
+func (r *fakeRecorder) waitForStopStarted(t *testing.T) {
+	t.Helper()
+	select {
+	case <-r.stopCh:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for recorder stop")
+	}
+}
+
 type fakeTranscriber struct {
 	calls      int
 	transcript Transcript
 	err        error
 	block      chan struct{}
 	ctx        context.Context
+	ctxCh      chan struct{}
 }
 
 func (t *fakeTranscriber) Transcribe(ctx context.Context, rec Recording) (Transcript, error) {
 	t.calls++
 	t.ctx = ctx
+	if t.ctxCh != nil {
+		t.ctxCh <- struct{}{}
+	}
 	if t.block != nil {
 		<-t.block
 	}
@@ -178,6 +242,13 @@ func (t *fakeTranscriber) Transcribe(ctx context.Context, rec Recording) (Transc
 
 func (t *fakeTranscriber) ctxCancelled(tb testing.TB) bool {
 	tb.Helper()
+	if t.ctx == nil && t.ctxCh != nil {
+		select {
+		case <-t.ctxCh:
+		case <-time.After(time.Second):
+			return false
+		}
+	}
 	select {
 	case <-t.ctx.Done():
 		return true

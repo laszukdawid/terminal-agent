@@ -34,6 +34,7 @@ type ControllerOptions struct {
 }
 
 type Controller struct {
+	opMu                 sync.Mutex
 	mu                   sync.Mutex
 	recorder             Recorder
 	transcriber          Transcriber
@@ -62,6 +63,9 @@ func (c *Controller) State() State {
 }
 
 func (c *Controller) Toggle(ctx context.Context) error {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+
 	c.mu.Lock()
 	state := c.state
 	c.mu.Unlock()
@@ -79,6 +83,9 @@ func (c *Controller) Toggle(ctx context.Context) error {
 }
 
 func (c *Controller) Cancel(ctx context.Context) error {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+
 	c.mu.Lock()
 	state := c.state
 	c.mu.Unlock()
@@ -110,6 +117,12 @@ func (c *Controller) start(ctx context.Context) error {
 
 func (c *Controller) stop(ctx context.Context) error {
 	c.stopMaxTimer()
+	c.mu.Lock()
+	if c.state != StateRecording {
+		c.mu.Unlock()
+		return nil
+	}
+	c.mu.Unlock()
 	rec, err := c.recorder.Stop(ctx)
 	if err != nil {
 		c.setState(StateIdle)
@@ -183,6 +196,8 @@ func (c *Controller) startMaxTimer() {
 	c.stopMaxTimer()
 	c.mu.Lock()
 	c.stopTimer = time.AfterFunc(c.maxRecording, func() {
+		c.opMu.Lock()
+		defer c.opMu.Unlock()
 		_ = c.stop(context.Background())
 	})
 	c.mu.Unlock()

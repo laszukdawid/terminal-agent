@@ -98,6 +98,7 @@ type settingsDialogOptions struct {
 	EnvResult        EnvironmentLoadResult
 	ModelForProvider func(provider string) string
 	OnSave           func(provider, model string) error
+	OnClosed         func()
 }
 
 func newProviderStatusIcon(c fyne.Canvas) *providerStatusIcon {
@@ -369,11 +370,13 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 		if p.onAction != nil {
 			p.onAction()
 		}
+		p.window.Canvas().Focus(p.input)
 	}
 	listenButton.OnTapped = func() {
 		if p.onVoiceToggle != nil {
 			p.onVoiceToggle()
 		}
+		p.window.Canvas().Focus(p.input)
 	}
 	copyButton.OnTapped = func() {
 		if p.onCopy != nil {
@@ -614,6 +617,9 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	updateHints(options.InitialProvider)
 
 	dlg = dialog.NewCustomWithoutButtons("Settings", content, p.window)
+	if options.OnClosed != nil {
+		dlg.SetOnClosed(options.OnClosed)
+	}
 	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
 }

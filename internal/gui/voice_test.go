@@ -71,6 +71,26 @@ func TestVoiceTriggerWorksWhenInputIsNotFocused(t *testing.T) {
 	assert.Equal(t, voice.StateRecording, g.state.voiceState)
 }
 
+func TestVoiceButtonRestoresInputFocus(t *testing.T) {
+	g := newVoiceTestApp(t, voiceTestOptions{})
+	g.popup.window.Canvas().Focus(g.popup.listenButton)
+
+	g.popup.listenButton.OnTapped()
+
+	assert.Same(t, g.popup.input, g.popup.window.Canvas().Focused())
+}
+
+func TestSubmitButtonRestoresInputFocus(t *testing.T) {
+	g := newVoiceTestApp(t, voiceTestOptions{})
+	g.state.input = "typed question"
+	g.render()
+	g.popup.window.Canvas().Focus(g.popup.actionButton)
+
+	g.popup.actionButton.OnTapped()
+
+	assert.Same(t, g.popup.input, g.popup.window.Canvas().Focused())
+}
+
 type voiceTestOptions struct {
 	cfg        config.Config
 	service    *voiceTestService

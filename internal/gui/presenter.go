@@ -26,6 +26,7 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 				g.renderOutput()
 				g.stopIndicatorAnimation()
 				g.state.clearRunning()
+				g.FocusInput()
 			case appservice.EventFailed:
 				g.stopIndicatorAnimation()
 				if isCanceledError(eventCopy.Err) {
@@ -35,6 +36,7 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 					g.state.errorText = runtimeErrorMessage(eventCopy.Err)
 				}
 				g.state.clearRunning()
+				g.FocusInput()
 			}
 			g.render()
 		})

@@ -301,6 +301,7 @@ func (g *App) openSettings() {
 			g.render()
 			return nil
 		},
+		OnClosed: g.FocusInput,
 	})
 }
 
