@@ -24,6 +24,16 @@ When the selected provider does not expose dependable native tool calling, Termi
 
 ## Examples
 
+`agent task` is built for the moments where a normal chat answer is not enough: checking local state, calling a CLI, drafting a small script, or chaining a few shell steps while keeping you in control.
+
+![Terminal Agent running task commands in the terminal](../assets/agent-task.gif)
+
+The demo above shows three small but representative flows:
+
+- `agent task what time is it`
+- `agent task --auto-approve make a simple curl request to get weather for Vancouver BC`
+- `agent task --auto-approve write a script to calculate minutes left until christmas`
+
 ```sh
 # List files
 agent task "List all files in the current directory sorted by size"

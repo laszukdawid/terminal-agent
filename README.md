@@ -1,12 +1,34 @@
 # Terminal agent
 
-An LLM Agent to help you from and within the terminal.
+An LLM agent that works where you already work: the terminal.
 
 Read more https://laszukdawid.github.io/terminal-agent/.
 
-Terminal Agent supports both API-backed providers and local model runtimes, including Ollama and direct `llama.cpp`-based GGUF inference through the `llama` provider.
+Terminal Agent turns plain-language prompts into useful shell workflows, quick answers, scripts, and desktop popup interactions. It supports API-backed providers and local model runtimes, including Ollama and direct `llama.cpp`-based GGUF inference through the `llama` provider.
 
-## Example
+## See it in action
+
+### Terminal tasks
+
+Ask for quick facts, let the agent make a simple web request, or have it write a small script without leaving your shell.
+
+<img src="./assets/agent-task.gif" width="760" alt="Terminal Agent running task commands in the terminal" />
+
+The demo runs:
+
+- `agent task what time is it`
+- `agent task --auto-approve make a simple curl request to get weather for Vancouver BC`
+- `agent task --auto-approve write a script to calculate minutes left until christmas`
+
+### Popup GUI
+
+Use the desktop popup for fast prompts, then switch providers and models from settings when you want a different backend.
+
+<img src="./assets/gui.gif" width="760" alt="Terminal Agent popup GUI switching providers and answering prompts" />
+
+The GUI demo shows asking with Codex, switching to Bedrock, asking again, and moving back to Codex without touching a config file.
+
+## More examples
 
 <table>
   <tr>

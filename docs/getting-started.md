@@ -71,6 +71,10 @@ Inside the popup:
 - invalid providers and empty models are rejected before save
 - provider-specific credential/setup errors are shown in clearer language when a request fails
 
+![Terminal Agent popup GUI switching providers and answering prompts](assets/gui.gif)
+
+The popup is designed for fast back-and-forth work: ask a quick prompt, switch from Codex to Bedrock in settings, ask again with the new provider, then switch back when that is the right model for the job.
+
 ## Configuration
 
 Before using Terminal Agent, you'll need to configure it with your preferred LLM provider:
@@ -147,6 +151,8 @@ The `llama` provider supports direct local query flows and the `task` command.
 ## Quick Start
 
 Once installed and configured, you can start using Terminal Agent:
+
+![Terminal Agent running task commands in the terminal](assets/agent-task.gif)
 
 ```sh
 # Ask a question
