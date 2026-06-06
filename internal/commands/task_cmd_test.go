@@ -552,7 +552,7 @@ func TestTaskLiveOutputPrinterPerToolState(t *testing.T) {
 		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
 	})
 
-	t.Run("OR semantics across multiple invocations of same tool", func(t *testing.T) {
+	t.Run("OR semantics for truncated across multiple invocations", func(t *testing.T) {
 		output := &bytes.Buffer{}
 		printer := newTaskLiveOutputPrinter(output, nil, 2)
 
@@ -565,6 +565,19 @@ func TestTaskLiveOutputPrinterPerToolState(t *testing.T) {
 
 		assert.True(t, printer.TruncatedTool(tools.ToolNameUnix), "OR semantics: truncation from earlier invocation must persist")
 		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
+	})
+
+	t.Run("replace semantics for printed across multiple invocations", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		printer := newTaskLiveOutputPrinter(output, nil, 10)
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo hi"}})
+		printer.PrintDelta("hi\n")
+		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "true"}})
+
+		assert.False(t, printer.PrintedTool(tools.ToolNameUnix), "replace semantics: latest invocation has not printed")
 	})
 }
 
@@ -595,6 +608,22 @@ func TestTaskCommandEarlierToolTruncatedPreservesRawOutput(t *testing.T) {
 
 	assert.Contains(t, output, "Raw output from unix:")
 	assert.Contains(t, output, "line3\nline4\n", "truncated unix raw output must be preserved at completion")
+}
+
+func TestTaskCommandSameToolTruncatedThenShortPreservesRawOutput(t *testing.T) {
+	rawOutput := "line1\nline2\nline3\nline4\n"
+	output := runTaskCommandWithConfigAndEvents(t, taskLiveOutputLimitConfig(2), []string{"--plain", "check", "logs"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "cat big.log"}},
+			{Type: app.EventOutputDelta, Text: rawOutput, ToolName: tools.ToolNameUnix},
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo ok"}},
+			{Type: app.EventOutputDelta, Text: "ok\n", ToolName: tools.ToolNameUnix},
+			{Type: app.EventCompleted, FinalOutput: "Summary", RawOutput: rawOutput, RawOutputTool: tools.ToolNameUnix},
+		}
+	})
+
+	assert.Contains(t, output, "Raw output from unix:", "raw output must be preserved when earlier same-tool invocation truncated")
+	assert.Contains(t, output, "line3\nline4\n")
 }
 
 func TestFormatTaskTrace(t *testing.T) {

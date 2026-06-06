@@ -51,6 +51,10 @@ func (p *taskLiveOutputPrinter) BeginTool(event app.Event) {
 	p.snapshotCurrentTool()
 	p.currentTool = event.ToolName
 
+	state := p.toolStates[p.currentTool]
+	state.printed = false
+	p.toolStates[p.currentTool] = state
+
 	isFinal, _ := event.ToolInput["final"].(bool)
 	if isFinal {
 		p.limiter.ResetWithMaxLines(0)
