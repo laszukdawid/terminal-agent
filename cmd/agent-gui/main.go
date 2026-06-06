@@ -19,6 +19,9 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/gui"
 	"github.com/laszukdawid/terminal-agent/internal/platform"
 	u "github.com/laszukdawid/terminal-agent/internal/utils"
+	"github.com/laszukdawid/terminal-agent/internal/voice"
+	voiceaudio "github.com/laszukdawid/terminal-agent/internal/voice/audio"
+	"github.com/laszukdawid/terminal-agent/internal/voice/stt"
 	"go.uber.org/zap"
 )
 
@@ -119,6 +122,12 @@ func main() {
 		AppID:   windowAppID,
 		DevMode: *devMode,
 		Version: displayVersion(),
+		Voice: gui.VoiceOptions{
+			Recorder: voiceaudio.NewMalgoRecorder(),
+			Transcriber: stt.NewLazyTranscriber(func() (voice.Transcriber, error) {
+				return stt.NewTranscriber(cfg)
+			}),
+		},
 	})
 	server, err := platform.Listen(instance.SocketPath, func(command string) error {
 		switch command {

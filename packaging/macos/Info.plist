@@ -29,5 +29,7 @@
   <true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Terminal Agent uses the microphone to transcribe voice prompts when voice input is enabled.</string>
 </dict>
 </plist>
