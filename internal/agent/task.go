@@ -256,7 +256,7 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 }
 
 func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState) (TaskRunResult, bool, error) {
-	run.emitStatus(TaskStatusThinking, "Thinking...", "", nil)
+	run.emitStatus(TaskStatusThinking, "Thinking", "", nil)
 	response, err := a.queryTaskResponse(ctx, run)
 	if err != nil {
 		logger.Debugw("Error querying model", "iteration", run.state.Iterations, "error", err)

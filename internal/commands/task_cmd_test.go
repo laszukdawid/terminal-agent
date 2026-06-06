@@ -438,13 +438,13 @@ func TestTaskCommandProgressOutput(t *testing.T) {
 		{
 			name:     "prints progress when always enabled",
 			args:     []string{"--progress=always", "--plain", "inspect", "repo"},
-			contains: []string{"Thinking...\n", "file_search: scanning\n", "done"},
+			contains: []string{"Thinking\n", "file_search: scanning\n", "done"},
 		},
 		{
 			name:        "suppresses progress when never enabled",
 			args:        []string{"--progress=never", "--plain", "inspect", "repo"},
 			contains:    []string{"done"},
-			notContains: []string{"Thinking...", "file_search: scanning"},
+			notContains: []string{"Thinking", "file_search: scanning"},
 		},
 	}
 
@@ -452,7 +452,7 @@ func TestTaskCommandProgressOutput(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			output := runTaskCommandWithEvents(t, tt.args, func(req app.TaskRequest) []app.Event {
 				return []app.Event{
-					{Type: app.EventTaskStatus, Text: "Thinking..."},
+					{Type: app.EventTaskStatus, Text: "Thinking"},
 					{Type: app.EventToolProgress, ToolName: "file_search", Text: "scanning"},
 					{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message},
 				}
@@ -508,15 +508,15 @@ func TestTaskProgressPrinterOutput(t *testing.T) {
 		{
 			name:        "interactive replaces status line",
 			config:      taskProgressConfig{enabled: true, interactive: true},
-			messages:    []string{"Thinking...", "Running file_search..."},
+			messages:    []string{"Thinking", "Running file_search..."},
 			contains:    []string{"\r\x1b[2K\x1b[31mT\x1b[37mh", "\r\x1b[2K\x1b[31mR\x1b[37mu", "\r\x1b[2K"},
-			notContains: []string{"Thinking...\n"},
+			notContains: []string{"Thinking\n"},
 		},
 		{
 			name:     "non-interactive prints unique progress lines",
 			config:   taskProgressConfig{enabled: true},
-			messages: []string{"Thinking...", "Thinking...", "Running file_search..."},
-			want:     "Thinking...\nRunning file_search...\n",
+			messages: []string{"Thinking", "Thinking", "Running file_search..."},
+			want:     "Thinking\nRunning file_search...\n",
 		},
 	}
 
