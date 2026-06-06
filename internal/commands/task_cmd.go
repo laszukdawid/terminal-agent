@@ -139,7 +139,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					}
 				case app.EventCompleted:
 					result.Response = event.FinalOutput
-					if !liveOutput.Printed() {
+					if !liveOutput.Printed() || liveOutput.Truncated() {
 						result.RawOutput = event.RawOutput
 					}
 					result.RawOutputTool = event.RawOutputTool
@@ -153,7 +153,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 			response := result.Response
 
-			if liveOutput.Printed() && result.DirectRawOutput {
+			if liveOutput.Printed() && !liveOutput.Truncated() && result.DirectRawOutput {
 				response = ""
 			}
 
@@ -428,14 +428,6 @@ func promptTaskConfirmationInteractive(stdin *os.File, stderr *os.File, confirma
 	resp, err := processConfirmationResponse(result.response, result.pattern)
 	if err != nil {
 		return resp, err
-	}
-
-	if resp.Allowed {
-		display := ic.command
-		if display == "" {
-			display = ic.action
-		}
-		fmt.Fprintln(stderr, formatTaskTrace("Executing", display, isTerminalWriter(stderr)))
 	}
 
 	return resp, nil

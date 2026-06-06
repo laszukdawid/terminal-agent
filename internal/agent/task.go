@@ -505,8 +505,7 @@ func (r *taskExecutionState) handleDirectoryChange(response connector.LlmRespons
 }
 
 func (r *taskExecutionState) finalAnswerResult(answer string) TaskRunResult {
-	rawOutput := selectRawTaskOutput(r.successfulOutputs)
-	return TaskRunResult{Response: answer, RawOutput: rawOutput.Output, RawOutputTool: rawOutput.ToolName}
+	return TaskRunResult{Response: answer}
 }
 
 func (a *Agent) buildTaskTools(interaction TaskInteraction) map[string]tools.Tool {

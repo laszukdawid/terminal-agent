@@ -7,6 +7,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/app"
+	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
 
 const taskLiveOutputMaxLineChars = 120
@@ -15,6 +16,8 @@ type taskLiveOutputPrinter struct {
 	out                   io.Writer
 	progress              *taskProgressPrinter
 	limiter               *taskLiveOutputLimiter
+	defaultMaxLines       int
+	toolName              string
 	command               string
 	commandPrinted        bool
 	traceStyling          bool
@@ -30,14 +33,20 @@ func newTaskLiveOutputPrinter(out io.Writer, progress *taskProgressPrinter, maxL
 		out:                   out,
 		progress:              progress,
 		limiter:               newTaskLiveOutputLimiter(maxLines, taskLiveOutputMaxLineChars),
+		defaultMaxLines:       maxLines,
 		traceStyling:          isTerminalWriter(out),
 		lastChunkEndedNewline: true,
 	}
 }
 
 func (p *taskLiveOutputPrinter) BeginTool(event app.Event) {
-	p.limiter.Reset()
-	p.command = formatTaskStreamedCommand(event)
+	isFinal, _ := event.ToolInput["final"].(bool)
+	if isFinal {
+		p.limiter.ResetWithMaxLines(0)
+	} else {
+		p.limiter.ResetWithMaxLines(p.defaultMaxLines)
+	}
+	p.toolName, p.command = formatTaskStreamedCommand(event)
 	p.commandPrinted = false
 }
 
@@ -54,7 +63,7 @@ func (p *taskLiveOutputPrinter) PrintDelta(text string) {
 		if p.printed && !p.lastChunkEndedNewline {
 			_, _ = fmt.Fprint(p.out, "\n")
 		}
-		_, _ = fmt.Fprintln(p.out, formatTaskTrace("Command", p.command, p.traceStyling))
+		_, _ = fmt.Fprint(p.out, formatToolCommandTrace(p.toolName, p.command, p.traceStyling))
 		p.commandPrinted = true
 	}
 	p.printed = true
@@ -64,6 +73,10 @@ func (p *taskLiveOutputPrinter) PrintDelta(text string) {
 
 func (p *taskLiveOutputPrinter) Printed() bool {
 	return p.printed
+}
+
+func (p *taskLiveOutputPrinter) Truncated() bool {
+	return p.limiter.truncated
 }
 
 func (p *taskLiveOutputPrinter) NeedsNewlineBeforeFinal() bool {
@@ -90,6 +103,11 @@ func (l *taskLiveOutputLimiter) Reset() {
 	l.sawNewline = false
 	l.truncated = false
 	l.truncationAnnounced = false
+}
+
+func (l *taskLiveOutputLimiter) ResetWithMaxLines(maxLines int) {
+	l.maxLines = maxLines
+	l.Reset()
 }
 
 func (l *taskLiveOutputLimiter) Filter(chunk string) string {
@@ -149,11 +167,33 @@ func formatLiveOutputTruncation(shown int, totalLines int, lineMode bool) string
 	return fmt.Sprintf("[tool output truncated: %d lines shown]\n", shown)
 }
 
-func formatTaskStreamedCommand(event app.Event) string {
+func formatTaskStreamedCommand(event app.Event) (toolName, display string) {
 	action := agent.BuildActionString(event.ToolName, event.ToolInput)
-	_, display := agent.ParseToolAndDisplay(action)
+	toolName, display = agent.ParseToolAndDisplay(action)
 	if display != "" {
-		return display
+		return toolName, display
 	}
-	return action
+	return toolName, action
+}
+
+func formatToolCommandTrace(toolName string, command string, styled bool) string {
+	if toolName == tools.ToolNamePython {
+		return formatPythonTrace(command, styled)
+	}
+	return formatTaskTrace("Command", command, styled) + "\n"
+}
+
+func formatPythonTrace(code string, styled bool) string {
+	var out strings.Builder
+	if styled {
+		fmt.Fprintf(&out, "%sPython:%s\n", taskTraceANSIBoldCyan, taskTraceANSIReset)
+	} else {
+		out.WriteString("Python:\n")
+	}
+	for _, line := range strings.Split(code, "\n") {
+		out.WriteString("  ")
+		out.WriteString(line)
+		out.WriteByte('\n')
+	}
+	return out.String()
 }
