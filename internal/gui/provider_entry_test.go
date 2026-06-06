@@ -3,6 +3,7 @@ package gui
 import (
 	"testing"
 
+	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/assert"
@@ -55,4 +56,20 @@ func TestMatchSegments(t *testing.T) {
 	assertSeg(t, segs[0], "b", false)
 	assertSeg(t, segs[1], "ed", true)
 	assertSeg(t, segs[2], "rock", false)
+}
+
+func TestProviderEntryUpdatesTextAndNotifiesChanges(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+
+	changes := []string{}
+	entry := newProviderEntry("OpenAI", func(value string) {
+		changes = append(changes, value)
+	})
+
+	entry.SetText("OpenA")
+	entry.SetText("Anthropic")
+
+	assert.Equal(t, "Anthropic", entry.Text)
+	assert.Equal(t, []string{"OpenA", "Anthropic"}, changes)
 }
