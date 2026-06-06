@@ -27,7 +27,7 @@ func (b *BashExecutor) ExecContext(ctx context.Context, code string) (string, er
 	}
 
 	log.Debugw("Executing Unix command", "command", code)
-	cmd := exec.CommandContext(ctx, "bash", "-c", code)
+	cmd := exec.CommandContext(ctx, "bash", "-o", "pipefail", "-c", code)
 	configureCommandCancellation(cmd)
 
 	// Set working directory if provided

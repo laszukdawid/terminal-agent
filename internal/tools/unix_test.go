@@ -99,6 +99,12 @@ func TestUnixToolDoesNotPrintExecutionInternals(t *testing.T) {
 }
 
 func TestBashExecutor(t *testing.T) {
+	t.Run("pipefail catches early pipeline failures", func(t *testing.T) {
+		executor := &BashExecutor{}
+		_, err := executor.Exec("false | true")
+		assert.Error(t, err, "pipefail should propagate failure from early pipeline stage")
+	})
+
 	t.Run("streams output before command completes", func(t *testing.T) {
 		chunks := make(chan string, 4)
 		executor := &BashExecutor{output: testOutputWriter(func(p []byte) (int, error) {

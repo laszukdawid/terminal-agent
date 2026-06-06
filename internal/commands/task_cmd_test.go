@@ -244,7 +244,7 @@ func TestTaskCommandStreamedOutput(t *testing.T) {
 				"Command: printf '1\\n2\\n3\\n'\n",
 				"1\n2\n",
 				"tool output truncated: 2 out of 3 lines",
-				"Command: print('a')\nprint('b')\nprint('c')\n",
+				"Python:\n  print('a')\n  print('b')\n  print('c')\n",
 				"a\nb\n",
 				"done",
 			},
@@ -386,7 +386,8 @@ func TestFormatTaskStreamedCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, formatTaskStreamedCommand(tt.event))
+			_, display := formatTaskStreamedCommand(tt.event)
+			assert.Equal(t, tt.want, display)
 		})
 	}
 }
@@ -412,6 +413,88 @@ func TestTaskLiveOutputPrinter(t *testing.T) {
 	assert.False(t, printer.NeedsNewlineBeforeFinal())
 }
 
+func TestTaskLiveOutputPrinterTruncated(t *testing.T) {
+	output := &bytes.Buffer{}
+	printer := newTaskLiveOutputPrinter(output, nil, 2)
+
+	printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo short"}})
+	printer.PrintDelta("one\ntwo\n")
+	assert.False(t, printer.Truncated(), "exactly at limit should not be truncated")
+
+	printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo long"}})
+	printer.PrintDelta("a\nb\nc\n")
+	assert.True(t, printer.Truncated(), "exceeding limit should be truncated")
+}
+
+func TestTaskLiveOutputPrinterFinalDisablesTruncation(t *testing.T) {
+	output := &bytes.Buffer{}
+	printer := newTaskLiveOutputPrinter(output, nil, 2)
+
+	printer.BeginTool(app.Event{
+		ToolName:  tools.ToolNameUnix,
+		ToolInput: map[string]any{"command": "ls -la", "final": true},
+	})
+	printer.PrintDelta("a\nb\nc\nd\ne\n")
+
+	assert.Contains(t, output.String(), "a\nb\nc\nd\ne\n")
+	assert.NotContains(t, output.String(), "truncated")
+	assert.False(t, printer.Truncated())
+
+	output.Reset()
+	printer.BeginTool(app.Event{
+		ToolName:  tools.ToolNameUnix,
+		ToolInput: map[string]any{"command": "echo hi"},
+	})
+	printer.PrintDelta("1\n2\n3\n")
+
+	assert.Contains(t, output.String(), "1\n2\n")
+	assert.Contains(t, output.String(), "truncated")
+	assert.True(t, printer.Truncated())
+}
+
+func TestTaskCommandDirectRawOutputNoTruncationForFinal(t *testing.T) {
+	fullOutput := "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n"
+	output := runTaskCommandWithConfigAndEvents(t, config.NewDefaultConfig(), []string{"--plain", "list", "files"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "ls -la", "final": true}},
+			{Type: app.EventOutputDelta, Text: fullOutput, ToolName: tools.ToolNameUnix},
+			{Type: app.EventCompleted, FinalOutput: fullOutput, RawOutput: fullOutput, RawOutputTool: tools.ToolNameUnix, DirectRawOutput: true},
+		}
+	})
+
+	assert.NotContains(t, output, "truncated")
+	assert.Contains(t, output, "line7\nline8\n")
+	assert.Equal(t, 1, strings.Count(output, "line1"), "output should appear exactly once")
+}
+
+func TestTaskCommandDirectRawOutputShowsFullWhenTruncated(t *testing.T) {
+	fullOutput := "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n"
+	output := runTaskCommandWithConfigAndEvents(t, config.NewDefaultConfig(), []string{"--plain", "list", "files"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "ls -la"}},
+			{Type: app.EventOutputDelta, Text: fullOutput, ToolName: tools.ToolNameUnix},
+			{Type: app.EventCompleted, FinalOutput: fullOutput, RawOutput: fullOutput, RawOutputTool: tools.ToolNameUnix, DirectRawOutput: true},
+		}
+	})
+
+	assert.Contains(t, output, "[tool output truncated:")
+	assert.Contains(t, output, "line7\nline8\n")
+}
+
+func TestTaskCommandDirectRawOutputSuppressedWhenNotTruncated(t *testing.T) {
+	shortOutput := "line1\nline2\n"
+	output := runTaskCommandWithConfigAndEvents(t, config.NewDefaultConfig(), []string{"--plain", "list", "files"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "ls"}},
+			{Type: app.EventOutputDelta, Text: shortOutput, ToolName: tools.ToolNameUnix},
+			{Type: app.EventCompleted, FinalOutput: shortOutput, RawOutput: shortOutput, RawOutputTool: tools.ToolNameUnix, DirectRawOutput: true},
+		}
+	})
+
+	assert.NotContains(t, output, "truncated")
+	assert.Equal(t, 1, strings.Count(output, "line1"), "full output should not be repeated when live output was complete")
+}
+
 func TestTaskLiveOutputPrinterStylesCommandTrace(t *testing.T) {
 	output := &bytes.Buffer{}
 	printer := newTaskLiveOutputPrinter(output, nil, 2)
@@ -421,6 +504,126 @@ func TestTaskLiveOutputPrinterStylesCommandTrace(t *testing.T) {
 	printer.PrintDelta("diff output\n")
 
 	assert.Equal(t, "\x1b[1;36mCommand:\x1b[0m \x1b[1mgit diff --cached\x1b[0m\ndiff output\n", output.String())
+}
+
+func TestTaskLiveOutputPrinterPythonTrace(t *testing.T) {
+	output := &bytes.Buffer{}
+	printer := newTaskLiveOutputPrinter(output, nil, 10)
+
+	printer.BeginTool(app.Event{ToolName: tools.ToolNamePython, ToolInput: map[string]any{"code": "import os\nprint(os.getcwd())"}})
+	printer.PrintDelta("/home/user\n")
+
+	assert.Contains(t, output.String(), "Python:\n")
+	assert.Contains(t, output.String(), "  import os\n")
+	assert.Contains(t, output.String(), "  print(os.getcwd())\n")
+	assert.NotContains(t, output.String(), "Command:")
+}
+
+func TestTaskLiveOutputPrinterPerToolState(t *testing.T) {
+	t.Run("tracks state independently per tool name", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		printer := newTaskLiveOutputPrinter(output, nil, 2)
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "cat big.log"}})
+		printer.PrintDelta("a\nb\nc\n")
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNamePython, ToolInput: map[string]any{"code": "print(1)"}})
+		printer.PrintDelta("1\n")
+
+		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
+		assert.True(t, printer.TruncatedTool(tools.ToolNameUnix))
+		assert.True(t, printer.PrintedTool(tools.ToolNamePython))
+		assert.False(t, printer.TruncatedTool(tools.ToolNamePython))
+		assert.False(t, printer.PrintedTool("file_search"), "unknown tool should return false")
+		assert.False(t, printer.TruncatedTool("file_search"))
+	})
+
+	t.Run("tool never printed returns false while global Printed is true", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		printer := newTaskLiveOutputPrinter(output, nil, 10)
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo hi"}})
+		printer.PrintDelta("hi\n")
+
+		printer.BeginTool(app.Event{ToolName: "file_search", ToolInput: map[string]any{}})
+
+		assert.True(t, printer.Printed(), "task-global printed should be true")
+		assert.False(t, printer.PrintedTool("file_search"), "file_search never streamed output")
+		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
+	})
+
+	t.Run("OR semantics for truncated across multiple invocations", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		printer := newTaskLiveOutputPrinter(output, nil, 2)
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "cat big.log"}})
+		printer.PrintDelta("a\nb\nc\n")
+		assert.True(t, printer.TruncatedTool(tools.ToolNameUnix))
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo ok"}})
+		printer.PrintDelta("ok\n")
+
+		assert.True(t, printer.TruncatedTool(tools.ToolNameUnix), "OR semantics: truncation from earlier invocation must persist")
+		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
+	})
+
+	t.Run("replace semantics for printed across multiple invocations", func(t *testing.T) {
+		output := &bytes.Buffer{}
+		printer := newTaskLiveOutputPrinter(output, nil, 10)
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo hi"}})
+		printer.PrintDelta("hi\n")
+		assert.True(t, printer.PrintedTool(tools.ToolNameUnix))
+
+		printer.BeginTool(app.Event{ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "true"}})
+
+		assert.False(t, printer.PrintedTool(tools.ToolNameUnix), "replace semantics: latest invocation has not printed")
+	})
+}
+
+func TestTaskCommandDirectRawOutputToolWithNoDeltas(t *testing.T) {
+	output := runTaskCommandWithConfigAndEvents(t, config.NewDefaultConfig(), []string{"--plain", "find", "files"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo setup"}},
+			{Type: app.EventOutputDelta, Text: "setup\n", ToolName: tools.ToolNameUnix},
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running file_search...", ToolName: "file_search", ToolInput: map[string]any{}},
+			{Type: app.EventCompleted, FinalOutput: "found: a.txt, b.txt", RawOutputTool: "file_search", DirectRawOutput: true},
+		}
+	})
+
+	assert.Contains(t, output, "found: a.txt, b.txt", "DirectRawOutput should appear even when file_search never streamed")
+}
+
+func TestTaskCommandEarlierToolTruncatedPreservesRawOutput(t *testing.T) {
+	rawOutput := "line1\nline2\nline3\nline4\n"
+	output := runTaskCommandWithConfigAndEvents(t, taskLiveOutputLimitConfig(2), []string{"--plain", "analyze", "logs"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "cat big.log"}},
+			{Type: app.EventOutputDelta, Text: rawOutput, ToolName: tools.ToolNameUnix},
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running python...", ToolName: tools.ToolNamePython, ToolInput: map[string]any{"code": "print('done')"}},
+			{Type: app.EventOutputDelta, Text: "done\n", ToolName: tools.ToolNamePython},
+			{Type: app.EventCompleted, FinalOutput: "Analysis complete", RawOutput: rawOutput, RawOutputTool: tools.ToolNameUnix},
+		}
+	})
+
+	assert.Contains(t, output, "Raw output from unix:")
+	assert.Contains(t, output, "line3\nline4\n", "truncated unix raw output must be preserved at completion")
+}
+
+func TestTaskCommandSameToolTruncatedThenShortPreservesRawOutput(t *testing.T) {
+	rawOutput := "line1\nline2\nline3\nline4\n"
+	output := runTaskCommandWithConfigAndEvents(t, taskLiveOutputLimitConfig(2), []string{"--plain", "check", "logs"}, func(req app.TaskRequest) []app.Event {
+		return []app.Event{
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "cat big.log"}},
+			{Type: app.EventOutputDelta, Text: rawOutput, ToolName: tools.ToolNameUnix},
+			{Type: app.EventTaskStatus, Status: string(agent.TaskStatusRunningTool), Text: "Running unix...", ToolName: tools.ToolNameUnix, ToolInput: map[string]any{"command": "echo ok"}},
+			{Type: app.EventOutputDelta, Text: "ok\n", ToolName: tools.ToolNameUnix},
+			{Type: app.EventCompleted, FinalOutput: "Summary", RawOutput: rawOutput, RawOutputTool: tools.ToolNameUnix},
+		}
+	})
+
+	assert.Contains(t, output, "Raw output from unix:", "raw output must be preserved when earlier same-tool invocation truncated")
+	assert.Contains(t, output, "line3\nline4\n")
 }
 
 func TestFormatTaskTrace(t *testing.T) {
