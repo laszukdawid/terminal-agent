@@ -65,6 +65,7 @@ After setup:
 - `agent-gui --new` starts a separate isolated popup instance for local testing
 - pressing `Escape` hides the popup
 - the popup `Settings` button updates the shared default provider/model used by GUI asks
+- the first voice recording from the packaged app may trigger a macOS microphone permission prompt
 - the app appears in Spotlight and Finder under `~/Applications/`
 
 ## Keyboard shortcut

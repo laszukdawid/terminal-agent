@@ -181,6 +181,13 @@ func TestGUIConfigDefaults(t *testing.T) {
 	assert.Equal(t, filepath.Join(homeDir, ".config", "terminal-agent", ".gui.env"), cfg.GetGUIEnvFile())
 	assert.False(t, cfg.GetGUILoadShellEnvironment())
 	assert.Equal(t, 2*time.Second, cfg.GetGUIShellEnvironmentTimeout())
+	assert.True(t, cfg.GetGUIVoiceEnabled())
+	assert.Equal(t, DefaultGUIVoiceTriggerKey, cfg.GetGUIVoiceTriggerKey())
+	assert.True(t, cfg.GetGUIVoiceAutoSubmit())
+	assert.Equal(t, DefaultGUIVoiceMaxRecordingDuration, cfg.GetGUIVoiceMaxRecordingDuration())
+	assert.Equal(t, DefaultGUIVoiceSTTBackend, cfg.GetGUIVoiceSTTBackend())
+	assert.Equal(t, DefaultGUIVoiceSTTModel, cfg.GetGUIVoiceSTTModel())
+	assert.Equal(t, "", cfg.GetGUIVoiceSTTLanguage())
 }
 
 func TestLoadConfigGUIOverrides(t *testing.T) {
@@ -209,6 +216,50 @@ func TestLoadConfigGUIOverrides(t *testing.T) {
 	assert.Equal(t, filepath.Join(homeDir, "custom-gui.env"), cfg.GetGUIEnvFile())
 	assert.False(t, cfg.GetGUILoadShellEnvironment())
 	assert.Equal(t, 500*time.Millisecond, cfg.GetGUIShellEnvironmentTimeout())
+}
+
+func TestGUIVoiceConfigOverrides(t *testing.T) {
+	enabled := false
+	autoSubmit := false
+	cfg := NewDefaultConfig()
+	cfg.GUI.Voice = GUIVoiceConfig{
+		Enabled:              &enabled,
+		TriggerKey:           "F2",
+		AutoSubmit:           &autoSubmit,
+		MaxRecordingDuration: "15s",
+		STT: GUIVoiceSTTConfig{
+			Backend:  "openai",
+			Model:    "whisper-1",
+			Language: "en",
+		},
+	}
+
+	assert.False(t, cfg.GetGUIVoiceEnabled())
+	assert.Equal(t, "F2", cfg.GetGUIVoiceTriggerKey())
+	assert.False(t, cfg.GetGUIVoiceAutoSubmit())
+	assert.Equal(t, 15*time.Second, cfg.GetGUIVoiceMaxRecordingDuration())
+	assert.Equal(t, "openai", cfg.GetGUIVoiceSTTBackend())
+	assert.Equal(t, "whisper-1", cfg.GetGUIVoiceSTTModel())
+	assert.Equal(t, "en", cfg.GetGUIVoiceSTTLanguage())
+}
+
+func TestGUIVoiceMaxRecordingDurationFallback(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "invalid duration", value: "not-a-duration"},
+		{name: "zero duration", value: "0s"},
+		{name: "negative duration", value: "-1s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := NewDefaultConfig()
+			cfg.GUI.Voice.MaxRecordingDuration = tt.value
+			assert.Equal(t, DefaultGUIVoiceMaxRecordingDuration, cfg.GetGUIVoiceMaxRecordingDuration())
+		})
+	}
 }
 
 func TestSetDevice(t *testing.T) {

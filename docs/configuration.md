@@ -258,6 +258,40 @@ Shell import is disabled by default because shell startup files can be slow or i
 
 The Settings dialog reports whether the GUI environment was loaded. Restart `agent-gui` after changing `.gui.env` or shell startup files.
 
+### GUI Voice Input
+
+The popup GUI supports focused-window voice input. Press `F1` while the input is focused, or click `Listen`, to start recording. Press `F1` again or click `Stop` to finish recording. The transcript is inserted into the input and submitted through the normal Ask path by default.
+
+Voice input is enabled by default, but recording starts only after an explicit toggle. Raw audio is kept in memory and is not written to disk. With the default OpenAI speech-to-text backend, recorded audio is sent to OpenAI for transcription. The resulting transcript is treated like typed input and is included in normal Ask/session logging.
+
+Configuration lives under the global `gui.voice` section of `~/.config/terminal-agent/config.json`:
+
+```json
+{
+  "gui": {
+    "voice": {
+      "enabled": true,
+      "trigger_key": "F1",
+      "auto_submit": true,
+      "max_recording_duration": "60s",
+      "stt": {
+        "backend": "openai",
+        "model": "gpt-4o-mini-transcribe",
+        "language": ""
+      }
+    }
+  }
+}
+```
+
+Supported first-pass behavior:
+
+- The GUI window must be focused; there is no global hotkey capture.
+- The trigger is toggle-based, not push-to-talk.
+- `auto_submit=false` leaves the transcript in the input for review.
+- OpenAI STT uses the existing OpenAI auth resolution: `OPENAI_API_KEY`, GUI env loading, or stored OpenAI API key auth.
+- `OPENAI_BASE_URL` is respected for OpenAI-compatible endpoints.
+
 ## Model Context Protocol (MCP)
 
 Terminal Agent supports the Model Context Protocol (MCP) for defining custom tools:

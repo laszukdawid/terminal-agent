@@ -68,6 +68,7 @@ After setup:
 - pressing `Escape` hides the popup
 - the desktop shortcut is configured to run `agent-gui --show`
 - the popup `Settings` button updates the shared default provider/model used by GUI asks
+- GUI voice input uses the system audio stack through `malgo`; install the distribution audio development/runtime packages required by your desktop session if microphone capture fails
 
 ## Ubuntu GNOME
 

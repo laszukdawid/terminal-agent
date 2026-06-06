@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.4
 	github.com/charmbracelet/glamour v0.9.1
 	github.com/diverged/tavily-go v1.0.0
+	github.com/gen2brain/malgo v0.11.25
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
 	github.com/hybridgroup/yzma v1.14.1
