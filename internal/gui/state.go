@@ -1,6 +1,10 @@
 package gui
 
-import "context"
+import (
+	"context"
+
+	"github.com/laszukdawid/terminal-agent/internal/voice"
+)
 
 type state struct {
 	input        string
@@ -13,6 +17,8 @@ type state struct {
 	isVisible    bool
 	showRequest  bool
 	cancelFunc   context.CancelFunc
+	voiceState   voice.State
+	voiceError   string
 }
 
 func (s *state) resetOutput() {

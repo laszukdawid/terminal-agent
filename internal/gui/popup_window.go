@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/voice"
 )
 
 const (
@@ -55,27 +56,31 @@ type popupWindow struct {
 	headerStatusBox fyne.CanvasObject
 	modelLabel      *widget.Label
 	actionButton    *widget.Button
+	listenButton    *widget.Button
 	copyButton      *widget.Button
 	settingsButton  *widget.Button
 	testButton      *widget.Button
 	answerPanel     *fyne.Container
 
-	onSubmit     func()
-	onShiftEnter func()
-	onEscape     func()
-	onAction     func()
-	onCopy       func()
-	onSettings   func()
-	onTest       func()
-	onInput      func(string)
-	onQuit       func()
+	onSubmit      func()
+	onShiftEnter  func()
+	onEscape      func()
+	onAction      func()
+	onVoiceToggle func()
+	onCopy        func()
+	onSettings    func()
+	onTest        func()
+	onInput       func(string)
+	onQuit        func()
 }
 
 type popupEntry struct {
 	widget.Entry
-	app      fyne.App
-	onEscape func()
-	onSubmit func()
+	app             fyne.App
+	onEscape        func()
+	onSubmit        func()
+	onVoiceToggle   func()
+	voiceTriggerKey fyne.KeyName
 }
 
 type providerStatusIcon struct {
@@ -190,6 +195,11 @@ func newPopupEntry(app fyne.App) *popupEntry {
 
 func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 	switch key.Name {
+	case e.voiceTriggerKey:
+		if e.onVoiceToggle != nil {
+			e.onVoiceToggle()
+		}
+		return
 	case fyne.KeyEscape:
 		if e.onEscape != nil {
 			e.onEscape()
@@ -254,6 +264,7 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	modelLabel := widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true})
 
 	actionButton := widget.NewButton("Submit", nil)
+	listenButton := widget.NewButton("Listen", nil)
 	copyButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
 	settingsButton := widget.NewButton("Settings", nil)
 	copyButton.Disable()
@@ -275,7 +286,7 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	)
 	answerMeta := container.NewVBox(requestHeading, questionCard, answerHeader)
 	answerPanel := container.NewBorder(answerMeta, nil, nil, nil, outputCard)
-	toolbar := container.NewHBox(actionButton, layout.NewSpacer())
+	toolbar := container.NewHBox(listenButton, actionButton, layout.NewSpacer())
 	if testButton != nil {
 		toolbar.Add(testButton)
 	}
@@ -327,6 +338,7 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 		headerStatusBox: headerStatusBox,
 		modelLabel:      modelLabel,
 		actionButton:    actionButton,
+		listenButton:    listenButton,
 		copyButton:      copyButton,
 		settingsButton:  settingsButton,
 		testButton:      testButton,
@@ -342,6 +354,11 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 			p.onSubmit()
 		}
 	}
+	input.onVoiceToggle = func() {
+		if p.onVoiceToggle != nil {
+			p.onVoiceToggle()
+		}
+	}
 	input.OnChanged = func(value string) {
 		p.resizeInput(value)
 		if p.onInput != nil {
@@ -351,6 +368,11 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	actionButton.OnTapped = func() {
 		if p.onAction != nil {
 			p.onAction()
+		}
+	}
+	listenButton.OnTapped = func() {
+		if p.onVoiceToggle != nil {
+			p.onVoiceToggle()
 		}
 	}
 	copyButton.OnTapped = func() {
@@ -381,6 +403,22 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	})
 
 	return p
+}
+
+func (p *popupWindow) setListenButton(enabled bool, state voice.State) {
+	switch state {
+	case voice.StateRecording:
+		p.listenButton.SetText("Stop")
+	case voice.StateTranscribing:
+		p.listenButton.SetText("Cancel")
+	default:
+		p.listenButton.SetText("Listen")
+	}
+	if enabled {
+		p.listenButton.Enable()
+	} else {
+		p.listenButton.Disable()
+	}
 }
 
 func (p *popupWindow) setOutput(content string) {

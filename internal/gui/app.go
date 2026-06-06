@@ -11,28 +11,43 @@ import (
 	"fyne.io/fyne/v2/app"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/voice"
 )
 
 type App struct {
-	fyneApp       fyne.App
-	service       appservice.Service
-	cfg           config.Config
-	state         *state
-	popup         *popupWindow
-	quit          func()
-	stopIndicator chan struct{}
-	version       string
-	envResult     EnvironmentLoadResult
+	fyneApp         fyne.App
+	service         appservice.Service
+	cfg             config.Config
+	state           *state
+	popup           *popupWindow
+	quit            func()
+	stopIndicator   chan struct{}
+	version         string
+	envResult       EnvironmentLoadResult
+	voiceController *voice.Controller
+	voiceSchedule   func(func())
 }
 
 type AppOptions struct {
 	AppID   string
 	DevMode bool
 	Version string
+	Voice   VoiceOptions
+	FyneApp fyne.App
+}
+
+type VoiceOptions struct {
+	Recorder    voice.Recorder
+	Transcriber voice.Transcriber
+	Trigger     voice.Trigger
+	Schedule    func(func())
 }
 
 func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *App {
-	fyneApp := app.NewWithID(options.AppID)
+	fyneApp := options.FyneApp
+	if fyneApp == nil {
+		fyneApp = app.NewWithID(options.AppID)
+	}
 	gui := &App{
 		fyneApp:       fyneApp,
 		service:       service,
@@ -41,11 +56,16 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
 		version:       options.Version,
+		voiceSchedule: fyne.Do,
+	}
+	if options.Voice.Schedule != nil {
+		gui.voiceSchedule = options.Voice.Schedule
 	}
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
 	}
 	gui.popup = newPopupWindow(fyneApp, options.DevMode)
+	gui.initVoice(options.Voice)
 	gui.wire()
 	gui.render()
 	return gui
@@ -82,6 +102,7 @@ func (g *App) Show() {
 }
 
 func (g *App) Hide() {
+	g.cancelVoice()
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
@@ -94,6 +115,7 @@ func (g *App) Hide() {
 }
 
 func (g *App) Quit() {
+	g.cancelVoice()
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
@@ -148,6 +170,9 @@ func (g *App) wire() {
 	g.popup.onCopy = g.copyOutput
 	g.popup.onSettings = g.openSettings
 	g.popup.onTest = g.openTestMenu
+	g.popup.onVoiceToggle = g.toggleVoice
+	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
+	g.popup.input.onVoiceToggle = g.toggleVoice
 	g.popup.onEscape = func() {
 		g.Hide()
 	}
@@ -234,6 +259,8 @@ func (g *App) render() {
 		g.popup.actionButton.SetText("Submit")
 		g.popup.actionButton.Enable()
 	}
+
+	g.popup.setListenButton(g.cfg.GetGUIVoiceEnabled() && g.voiceController != nil, g.state.voiceState)
 
 	if hasCopyableResponse(g.state) {
 		g.popup.copyButton.Enable()
