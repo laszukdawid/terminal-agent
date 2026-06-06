@@ -20,8 +20,10 @@ func TestVoiceToggleStartsRecording(t *testing.T) {
 
 	g.toggleVoice()
 
-	assert.Equal(t, voice.StateRecording, g.state.voiceState)
-	assert.Equal(t, "Stop", g.popup.listenButton.Text)
+	g.scheduler.read(func() {
+		assert.Equal(t, voice.StateRecording, g.state.voiceState)
+		assert.Equal(t, "Stop", g.popup.listenButton.Text)
+	})
 }
 
 func TestVoiceTranscriptAutoSubmits(t *testing.T) {
@@ -33,8 +35,10 @@ func TestVoiceTranscriptAutoSubmits(t *testing.T) {
 
 	service.waitForAsk(t)
 	assert.Equal(t, "hello from voice", service.askMessage)
-	assert.Equal(t, "hello from voice", g.popup.input.Text)
-	assert.Equal(t, voice.StateIdle, g.state.voiceState)
+	g.scheduler.read(func() {
+		assert.Equal(t, "hello from voice", g.popup.input.Text)
+		assert.Equal(t, voice.StateIdle, g.state.voiceState)
+	})
 }
 
 func TestVoiceTranscriptDoesNotSubmitWhenAutoSubmitDisabled(t *testing.T) {
@@ -43,9 +47,17 @@ func TestVoiceTranscriptDoesNotSubmitWhenAutoSubmitDisabled(t *testing.T) {
 
 	g.toggleVoice()
 	g.toggleVoice()
-	require.Eventually(t, func() bool { return g.popup.input.Text == "draft only" }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool {
+		var ok bool
+		g.scheduler.read(func() {
+			ok = g.popup.input.Text == "draft only"
+		})
+		return ok
+	}, time.Second, time.Millisecond)
 
-	assert.Equal(t, "draft only", g.popup.input.Text)
+	g.scheduler.read(func() {
+		assert.Equal(t, "draft only", g.popup.input.Text)
+	})
 	assert.Equal(t, 0, service.askCalls)
 }
 
@@ -56,8 +68,21 @@ func TestVoiceDoesNotStartWhileAskIsRunning(t *testing.T) {
 
 	g.toggleVoice()
 
-	assert.Equal(t, 0, recorder.starts)
-	assert.Equal(t, voice.StateIdle, g.state.voiceState)
+	g.scheduler.read(func() {
+		assert.Equal(t, 0, recorder.starts)
+		assert.Equal(t, voice.StateIdle, g.state.voiceState)
+		assert.Equal(t, voiceBlockedWhileRunningStatus, g.state.status)
+	})
+}
+
+func TestVoiceButtonDisabledWhileAskIsRunning(t *testing.T) {
+	g := newVoiceTestApp(t, voiceTestOptions{})
+	g.state.isRunning = true
+	g.render()
+
+	g.scheduler.read(func() {
+		assert.True(t, g.popup.listenButton.Disabled())
+	})
 }
 
 func TestVoiceTriggerWorksWhenInputIsNotFocused(t *testing.T) {
@@ -68,7 +93,9 @@ func TestVoiceTriggerWorksWhenInputIsNotFocused(t *testing.T) {
 	require.NotNil(t, handler)
 	handler(&fyne.KeyEvent{Name: fyne.KeyF1})
 
-	assert.Equal(t, voice.StateRecording, g.state.voiceState)
+	g.scheduler.read(func() {
+		assert.Equal(t, voice.StateRecording, g.state.voiceState)
+	})
 }
 
 func TestVoiceButtonRestoresInputFocus(t *testing.T) {
@@ -77,7 +104,9 @@ func TestVoiceButtonRestoresInputFocus(t *testing.T) {
 
 	g.popup.listenButton.OnTapped()
 
-	assert.Same(t, g.popup.input, g.popup.window.Canvas().Focused())
+	g.scheduler.read(func() {
+		assert.Same(t, g.popup.input, g.popup.window.Canvas().Focused())
+	})
 }
 
 func TestSubmitButtonRestoresInputFocus(t *testing.T) {
@@ -88,7 +117,9 @@ func TestSubmitButtonRestoresInputFocus(t *testing.T) {
 
 	g.popup.actionButton.OnTapped()
 
-	assert.Same(t, g.popup.input, g.popup.window.Canvas().Focused())
+	g.scheduler.read(func() {
+		assert.Same(t, g.popup.input, g.popup.window.Canvas().Focused())
+	})
 }
 
 type voiceTestOptions struct {
@@ -98,7 +129,12 @@ type voiceTestOptions struct {
 	transcript string
 }
 
-func newVoiceTestApp(t *testing.T, opts voiceTestOptions) *App {
+type voiceTestApp struct {
+	*App
+	scheduler *voiceTestScheduler
+}
+
+func newVoiceTestApp(t *testing.T, opts voiceTestOptions) *voiceTestApp {
 	t.Helper()
 	cfg := opts.cfg
 	if cfg == nil {
@@ -117,17 +153,61 @@ func newVoiceTestApp(t *testing.T, opts voiceTestOptions) *App {
 		transcript = "voice prompt"
 	}
 
+	scheduler := newVoiceTestScheduler()
 	g := NewApp(service, cfg, AppOptions{
 		AppID:   "terminal-agent-voice-test",
 		FyneApp: test.NewApp(),
 		Voice: VoiceOptions{
 			Recorder:    recorder,
 			Transcriber: &guiFakeTranscriber{transcript: voice.Transcript{Text: transcript}},
-			Schedule:    func(fn func()) { fn() },
+			Schedule:    scheduler.schedule,
 		},
 	})
-	t.Cleanup(func() { g.fyneApp.Quit() })
-	return g
+	t.Cleanup(func() {
+		scheduler.close()
+		g.fyneApp.Quit()
+	})
+	return &voiceTestApp{App: g, scheduler: scheduler}
+}
+
+type voiceTestScheduler struct {
+	jobs chan voiceTestJob
+	done chan struct{}
+}
+
+type voiceTestJob struct {
+	fn   func()
+	done chan struct{}
+}
+
+func newVoiceTestScheduler() *voiceTestScheduler {
+	s := &voiceTestScheduler{
+		jobs: make(chan voiceTestJob),
+		done: make(chan struct{}),
+	}
+	go func() {
+		defer close(s.done)
+		for job := range s.jobs {
+			job.fn()
+			close(job.done)
+		}
+	}()
+	return s
+}
+
+func (s *voiceTestScheduler) schedule(fn func()) {
+	done := make(chan struct{})
+	s.jobs <- voiceTestJob{fn: fn, done: done}
+	<-done
+}
+
+func (s *voiceTestScheduler) read(fn func()) {
+	s.schedule(fn)
+}
+
+func (s *voiceTestScheduler) close() {
+	close(s.jobs)
+	<-s.done
 }
 
 type voiceGUIConfig struct {

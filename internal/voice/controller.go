@@ -153,29 +153,47 @@ func (c *Controller) transcribe(ctx context.Context, generation int, rec Recordi
 		return
 	}
 
-	c.mu.Lock()
-	current := c.transcribeGeneration
-	c.mu.Unlock()
-	if generation != current {
-		return
-	}
-
 	if err != nil {
-		c.setState(StateIdle)
+		if !c.completeTranscription(generation) {
+			return
+		}
+		c.emitState(StateIdle)
 		c.emitError(err)
 		return
 	}
 	if strings.TrimSpace(transcript.Text) == "" {
-		c.setState(StateIdle)
+		if !c.completeTranscription(generation) {
+			return
+		}
+		c.emitState(StateIdle)
 		c.emitError(ErrEmptyTranscript)
 		return
 	}
-	c.setState(StateIdle)
+	if !c.completeTranscription(generation) {
+		return
+	}
+	c.emitState(StateIdle)
 	c.emitTranscript(transcript)
+}
+
+func (c *Controller) completeTranscription(generation int) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state != StateTranscribing || c.transcribeGeneration != generation {
+		return false
+	}
+	c.transcribeGeneration++
+	c.transcribeCancel = nil
+	c.state = StateIdle
+	return true
 }
 
 func (c *Controller) cancelTranscription() error {
 	c.mu.Lock()
+	if c.state != StateTranscribing {
+		c.mu.Unlock()
+		return nil
+	}
 	c.transcribeGeneration++
 	cancel := c.transcribeCancel
 	c.transcribeCancel = nil

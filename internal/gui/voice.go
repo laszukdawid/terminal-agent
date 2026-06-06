@@ -7,6 +7,8 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/voice"
 )
 
+const voiceBlockedWhileRunningStatus = "Voice unavailable while responding"
+
 func (g *App) initVoice(options VoiceOptions) {
 	g.state.voiceState = voice.StateIdle
 	if options.Recorder == nil || options.Transcriber == nil {
@@ -56,9 +58,6 @@ func (g *App) initVoice(options VoiceOptions) {
 			},
 		},
 	})
-	if options.Trigger != nil {
-		options.Trigger.Register(g.toggleVoice)
-	}
 }
 
 func (g *App) toggleVoice() {
@@ -66,6 +65,8 @@ func (g *App) toggleVoice() {
 		return
 	}
 	if g.state.isRunning && g.state.voiceState == voice.StateIdle {
+		g.state.status = voiceBlockedWhileRunningStatus
+		g.render()
 		return
 	}
 	_ = g.voiceController.Toggle(context.Background())

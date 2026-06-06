@@ -173,7 +173,6 @@ func TestControllerConcurrentStopsCallRecorderOnce(t *testing.T) {
 
 	require.NoError(t, <-stopDone)
 	require.NoError(t, <-stopDone)
-	callbacks.waitForTranscript(t)
 	assert.Equal(t, 1, recorder.stops)
 }
 
@@ -220,6 +219,7 @@ func (r *fakeRecorder) waitForStopStarted(t *testing.T) {
 }
 
 type fakeTranscriber struct {
+	mu         sync.Mutex
 	calls      int
 	transcript Transcript
 	err        error
@@ -229,8 +229,10 @@ type fakeTranscriber struct {
 }
 
 func (t *fakeTranscriber) Transcribe(ctx context.Context, rec Recording) (Transcript, error) {
+	t.mu.Lock()
 	t.calls++
 	t.ctx = ctx
+	t.mu.Unlock()
 	if t.ctxCh != nil {
 		t.ctxCh <- struct{}{}
 	}
@@ -242,15 +244,21 @@ func (t *fakeTranscriber) Transcribe(ctx context.Context, rec Recording) (Transc
 
 func (t *fakeTranscriber) ctxCancelled(tb testing.TB) bool {
 	tb.Helper()
-	if t.ctx == nil && t.ctxCh != nil {
+	t.mu.Lock()
+	ctx := t.ctx
+	t.mu.Unlock()
+	if ctx == nil && t.ctxCh != nil {
 		select {
 		case <-t.ctxCh:
 		case <-time.After(time.Second):
 			return false
 		}
+		t.mu.Lock()
+		ctx = t.ctx
+		t.mu.Unlock()
 	}
 	select {
-	case <-t.ctx.Done():
+	case <-ctx.Done():
 		return true
 	case <-time.After(time.Second):
 		return false

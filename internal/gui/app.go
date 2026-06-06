@@ -39,7 +39,6 @@ type AppOptions struct {
 type VoiceOptions struct {
 	Recorder    voice.Recorder
 	Transcriber voice.Transcriber
-	Trigger     voice.Trigger
 	Schedule    func(func())
 }
 
@@ -265,7 +264,11 @@ func (g *App) render() {
 		g.popup.actionButton.Enable()
 	}
 
-	g.popup.setListenButton(g.cfg.GetGUIVoiceEnabled() && g.voiceController != nil, g.state.voiceState)
+	voiceEnabled := g.cfg.GetGUIVoiceEnabled() && g.voiceController != nil
+	if g.state.isRunning && g.state.voiceState == voice.StateIdle {
+		voiceEnabled = false
+	}
+	g.popup.setListenButton(voiceEnabled, g.state.voiceState)
 
 	if hasCopyableResponse(g.state) {
 		g.popup.copyButton.Enable()

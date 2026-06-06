@@ -94,6 +94,14 @@ func (r *MalgoRecorder) finish(discard bool) ([]byte, error) {
 	}
 	device := r.device
 	malgoCtx := r.ctx
+	r.mu.Unlock()
+
+	if device != nil {
+		_ = device.Stop()
+		device.Uninit()
+	}
+
+	r.mu.Lock()
 	pcm := append([]byte(nil), r.buffer...)
 	r.device = nil
 	r.ctx = nil
@@ -101,10 +109,6 @@ func (r *MalgoRecorder) finish(discard bool) ([]byte, error) {
 	r.started = false
 	r.mu.Unlock()
 
-	if device != nil {
-		_ = device.Stop()
-		device.Uninit()
-	}
 	if malgoCtx != nil {
 		_ = malgoCtx.Uninit()
 		malgoCtx.Free()
