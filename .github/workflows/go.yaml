@@ -25,6 +25,9 @@ jobs:
     - name: Install Task
       run: curl -sL https://taskfile.dev/install.sh | sh
 
+    - name: Install GUI dependencies
+      run: ./bin/task deps:gui:ubuntu
+
     - name: Build
       run: ./bin/task build:agent
 
@@ -46,6 +49,9 @@ jobs:
 
     - name: Install Task
       run: curl -sL https://taskfile.dev/install.sh | sh
+
+    - name: Install GUI dependencies
+      run: ./bin/task deps:gui:ubuntu
 
     - name: Build GUI
       run: ./bin/task build:gui
