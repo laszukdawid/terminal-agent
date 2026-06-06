@@ -129,4 +129,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace fyne.io/x/fyne => github.com/laszukdawid/fyne-x v0.0.0-20260529182451-7d2670a45b5f
+replace fyne.io/x/fyne => github.com/laszukdawid/fyne-x v0.0.0-20260530141525-4d4183a91890

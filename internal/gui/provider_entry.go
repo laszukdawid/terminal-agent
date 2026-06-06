@@ -11,37 +11,26 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 )
 
+type providerEntry struct {
+	xwidget.CompletionEntry
+
+	shown []string
+	query string
+}
+
 // newProviderEntry builds an editable autocomplete field for choosing a
 // provider, pre-filled with initial. The user may type any value; suggestions
 // are filtered from the connector registry by case-insensitive substring, and
-// the full list is shown when the field is focused while empty. In each
-// suggestion the portion matching what the user typed is emphasized (bold,
-// accent color).
-//
-// It uses *CompletionEntry directly rather than embedding/subclassing it:
-// CompletionEntry's popup methods resolve their canvas via the receiver, so a
-// subclass breaks the lookup under the real driver (the embedded value is not
-// the object registered in the canvas cache, so CanvasForObject returns nil).
-// The OnFocusGained hook (added upstream) lets us react to focus without
-// subclassing.
-//
-// onChange (may be nil) is invoked after each text change so callers can update
-// dependent UI (e.g. hint labels).
-func newProviderEntry(initial string, onChange func(string)) *xwidget.CompletionEntry {
-	e := xwidget.NewCompletionEntry(connector.SupportedProviders())
+// the matching substring is emphasized in each suggestion.
+func newProviderEntry(initial string, onChange func(string)) *providerEntry {
+	e := &providerEntry{}
+	e.ExtendBaseWidget(e)
+	e.Options = connector.SupportedProviders()
+	e.Wrapping = fyne.TextWrap(fyne.TextTruncateClip)
 
-	// shown mirrors the options currently displayed and query is what the user
-	// typed; the custom item renderer reads them to emphasize the matched part.
-	var (
-		shown []string
-		query string
-	)
 	display := func(opts []string, q string) {
-		shown = opts
-		query = q
-		// Always update the widget's options first so a no-match query clears
-		// the (hidden) suggestion list rather than leaving stale items that
-		// keyboard navigation could still act on.
+		e.shown = opts
+		e.query = q
 		e.SetOptions(opts)
 		if len(opts) == 0 {
 			e.HideCompletion()
@@ -50,9 +39,6 @@ func newProviderEntry(initial string, onChange func(string)) *xwidget.Completion
 		e.ShowCompletion()
 	}
 
-	// Render each suggestion as RichText so the matched substring can be
-	// emphasized. The template carries a single space so the list measures a
-	// full line height for its rows.
 	e.CustomCreate = func() fyne.CanvasObject {
 		rt := widget.NewRichText(&widget.TextSegment{Style: widget.RichTextStyleInline, Text: " "})
 		rt.Wrapping = fyne.TextWrapOff
@@ -64,10 +50,10 @@ func newProviderEntry(initial string, onChange func(string)) *xwidget.Completion
 			return
 		}
 		text := ""
-		if id >= 0 && id < len(shown) {
-			text = shown[id]
+		if id >= 0 && id < len(e.shown) {
+			text = e.shown[id]
 		}
-		rt.Segments = matchSegments(text, query)
+		rt.Segments = matchSegments(text, e.query)
 		rt.Refresh()
 	}
 
@@ -78,12 +64,17 @@ func newProviderEntry(initial string, onChange func(string)) *xwidget.Completion
 			onChange(s)
 		}
 	}
-	e.OnFocusGained = func() {
-		if e.Text == "" {
-			display(connector.SupportedProviders(), "")
-		}
-	}
 	return e
+}
+
+func (e *providerEntry) FocusGained() {
+	e.CompletionEntry.FocusGained()
+	if e.Text == "" {
+		e.shown = connector.SupportedProviders()
+		e.query = ""
+		e.SetOptions(e.shown)
+		e.ShowCompletion()
+	}
 }
 
 // matchSegments splits text into RichText segments, emphasizing the first
