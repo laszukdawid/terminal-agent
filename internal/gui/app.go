@@ -173,6 +173,11 @@ func (g *App) wire() {
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
 	g.popup.input.onVoiceToggle = g.toggleVoice
+	g.popup.window.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
+		if key.Name == fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey()) {
+			g.toggleVoice()
+		}
+	})
 	g.popup.onEscape = func() {
 		g.Hide()
 	}

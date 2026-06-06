@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
@@ -57,6 +58,17 @@ func TestVoiceDoesNotStartWhileAskIsRunning(t *testing.T) {
 
 	assert.Equal(t, 0, recorder.starts)
 	assert.Equal(t, voice.StateIdle, g.state.voiceState)
+}
+
+func TestVoiceTriggerWorksWhenInputIsNotFocused(t *testing.T) {
+	g := newVoiceTestApp(t, voiceTestOptions{})
+	g.popup.window.Canvas().Unfocus()
+
+	handler := g.popup.window.Canvas().OnTypedKey()
+	require.NotNil(t, handler)
+	handler(&fyne.KeyEvent{Name: fyne.KeyF1})
+
+	assert.Equal(t, voice.StateRecording, g.state.voiceState)
 }
 
 type voiceTestOptions struct {
