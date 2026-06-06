@@ -139,7 +139,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					}
 				case app.EventCompleted:
 					result.Response = event.FinalOutput
-					if !liveOutput.Printed() || liveOutput.Truncated() {
+					if !liveOutput.PrintedTool(event.RawOutputTool) || liveOutput.TruncatedTool(event.RawOutputTool) {
 						result.RawOutput = event.RawOutput
 					}
 					result.RawOutputTool = event.RawOutputTool
@@ -153,7 +153,7 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 
 			response := result.Response
 
-			if liveOutput.Printed() && !liveOutput.Truncated() && result.DirectRawOutput {
+			if liveOutput.PrintedTool(result.RawOutputTool) && !liveOutput.TruncatedTool(result.RawOutputTool) && result.DirectRawOutput {
 				response = ""
 			}
 

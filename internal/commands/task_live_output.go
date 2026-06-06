@@ -12,12 +12,19 @@ import (
 
 const taskLiveOutputMaxLineChars = 120
 
+type toolOutputState struct {
+	printed   bool
+	truncated bool
+}
+
 type taskLiveOutputPrinter struct {
 	out                   io.Writer
 	progress              *taskProgressPrinter
 	limiter               *taskLiveOutputLimiter
 	defaultMaxLines       int
 	toolName              string
+	currentTool           string
+	toolStates            map[string]toolOutputState
 	command               string
 	commandPrinted        bool
 	traceStyling          bool
@@ -34,12 +41,16 @@ func newTaskLiveOutputPrinter(out io.Writer, progress *taskProgressPrinter, maxL
 		progress:              progress,
 		limiter:               newTaskLiveOutputLimiter(maxLines, taskLiveOutputMaxLineChars),
 		defaultMaxLines:       maxLines,
+		toolStates:            make(map[string]toolOutputState),
 		traceStyling:          isTerminalWriter(out),
 		lastChunkEndedNewline: true,
 	}
 }
 
 func (p *taskLiveOutputPrinter) BeginTool(event app.Event) {
+	p.snapshotCurrentTool()
+	p.currentTool = event.ToolName
+
 	isFinal, _ := event.ToolInput["final"].(bool)
 	if isFinal {
 		p.limiter.ResetWithMaxLines(0)
@@ -67,6 +78,11 @@ func (p *taskLiveOutputPrinter) PrintDelta(text string) {
 		p.commandPrinted = true
 	}
 	p.printed = true
+	if p.currentTool != "" {
+		state := p.toolStates[p.currentTool]
+		state.printed = true
+		p.toolStates[p.currentTool] = state
+	}
 	p.lastChunkEndedNewline = strings.HasSuffix(chunk, "\n")
 	_, _ = fmt.Fprint(p.out, chunk)
 }
@@ -77,6 +93,25 @@ func (p *taskLiveOutputPrinter) Printed() bool {
 
 func (p *taskLiveOutputPrinter) Truncated() bool {
 	return p.limiter.truncated
+}
+
+func (p *taskLiveOutputPrinter) snapshotCurrentTool() {
+	if p.currentTool == "" {
+		return
+	}
+	state := p.toolStates[p.currentTool]
+	state.truncated = state.truncated || p.limiter.truncated
+	p.toolStates[p.currentTool] = state
+}
+
+func (p *taskLiveOutputPrinter) PrintedTool(name string) bool {
+	p.snapshotCurrentTool()
+	return p.toolStates[name].printed
+}
+
+func (p *taskLiveOutputPrinter) TruncatedTool(name string) bool {
+	p.snapshotCurrentTool()
+	return p.toolStates[name].truncated
 }
 
 func (p *taskLiveOutputPrinter) NeedsNewlineBeforeFinal() bool {
