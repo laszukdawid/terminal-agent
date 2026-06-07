@@ -50,8 +50,21 @@ type state struct {
 	// block so consecutive chunks render as one contiguous transcript block.
 	taskSawLiveOutput   bool
 	taskLiveOutputTools map[string]bool
-	taskToolOpen        bool
-	taskToolProcessID   int
+	// taskLiveOutputTruncatedTools records tools whose live output was capped, so
+	// completion still surfaces their full raw result instead of suppressing it
+	// as an already-streamed duplicate (mirrors the CLI's TruncatedTool de-dupe).
+	taskLiveOutputTruncatedTools map[string]bool
+	taskToolOpen                 bool
+	taskToolProcessID            int
+
+	// outputDirty marks that state.output changed and the response panel needs a
+	// (coalesced) re-render; the indicator ticker flushes it.
+	outputDirty bool
+	// taskCurrentToolFinal is set from the running_tool status: final tools stream
+	// unlimited because their output is the run's answer.
+	taskCurrentToolFinal bool
+	// taskLiveLimiter bounds the current tool block's live output.
+	taskLiveLimiter *liveOutputLimiter
 }
 
 type modeViewState struct {
@@ -134,14 +147,19 @@ func (s *state) resetOutput() {
 func (s *state) resetTaskStreaming() {
 	s.taskSawLiveOutput = false
 	s.taskLiveOutputTools = map[string]bool{}
+	s.taskLiveOutputTruncatedTools = map[string]bool{}
 	s.taskToolOpen = false
 	s.taskToolProcessID = 0
+	s.outputDirty = false
+	s.taskCurrentToolFinal = false
+	s.taskLiveLimiter = nil
 }
 
-// openTaskToolBlock ensures a fenced output block is open for processID. A new
-// process (or no open block) closes any previous fence and opens a fresh one so
-// each tool's live output is its own readable block.
-func (s *state) openTaskToolBlock(processID int) {
+// openTaskToolBlock ensures a fenced output block is open for processID, bounding
+// it to maxLines lines (0 = unlimited). A new process (or no open block) closes
+// any previous fence and opens a fresh one with a fresh limiter so each tool's
+// live output is its own readable, bounded block.
+func (s *state) openTaskToolBlock(processID, maxLines int) {
 	if s.taskToolOpen && s.taskToolProcessID == processID {
 		return
 	}
@@ -150,6 +168,17 @@ func (s *state) openTaskToolBlock(processID int) {
 	s.output += taskToolFenceMarker + "\n"
 	s.taskToolOpen = true
 	s.taskToolProcessID = processID
+	s.taskLiveLimiter = newLiveOutputLimiter(maxLines, liveOutputMaxLineChars)
+}
+
+// appendTaskOutput appends live tool output to the open block, applying the
+// block's line cap. Output beyond the cap is replaced by a one-time truncation
+// marker (see liveOutputLimiter).
+func (s *state) appendTaskOutput(text string) {
+	if s.taskLiveLimiter != nil {
+		text = s.taskLiveLimiter.Filter(text)
+	}
+	s.output += text
 }
 
 // closeTaskToolBlock closes an open fenced output block, if any.

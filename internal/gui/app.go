@@ -21,6 +21,7 @@ type App struct {
 	cfg             config.Config
 	state           *state
 	popup           *popupWindow
+	pending         *pendingInteraction
 	quit            func()
 	stopIndicator   chan struct{}
 	version         string
@@ -104,6 +105,9 @@ func (g *App) Show() {
 
 func (g *App) Hide() {
 	g.cancelVoice()
+	// Hide/Quit are run-termination paths too: tear down any pending interaction
+	// so a clarification dialog can never outlive the run (or the window).
+	g.dismissInteraction()
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
@@ -117,6 +121,7 @@ func (g *App) Hide() {
 
 func (g *App) Quit() {
 	g.cancelVoice()
+	g.dismissInteraction()
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
@@ -135,11 +140,22 @@ func (g *App) startIndicator() {
 			select {
 			case <-ticker.C:
 				fyne.Do(func() {
-					if !g.state.isRunning || g.state.status != "responding" {
+					if !g.state.isRunning {
 						return
 					}
-					g.state.spinnerFrame = (g.state.spinnerFrame + 1) % len(spinnerFrames)
-					g.popup.setStatus(g.state.status, g.state.isRunning, g.state.spinnerFrame)
+					// Coalesced output flush: Task streaming marks state dirty and
+					// lets this ticker render at its cadence instead of re-parsing the
+					// whole transcript on every chunk. Ask never sets outputDirty, so
+					// this is a no-op for Ask.
+					if g.state.outputDirty {
+						g.state.outputDirty = false
+						g.renderOutput()
+						g.popup.outputScroll.ScrollToBottom()
+					}
+					if g.state.status == "responding" {
+						g.state.spinnerFrame = (g.state.spinnerFrame + 1) % len(spinnerFrames)
+						g.popup.setStatus(g.state.status, g.state.isRunning, g.state.spinnerFrame)
+					}
 				})
 			case <-stop:
 				return
@@ -356,6 +372,40 @@ func (g *App) failRunSetup(err error) {
 	g.state.clearRunning()
 	g.state.errorText = runtimeErrorMessage(err)
 	g.render()
+}
+
+// finishRun is the single chokepoint for run termination, shared by Ask and
+// Task. It dismisses any pending interaction, records timing, stops the
+// indicator, applies cancel/error display, clears running state, and refocuses
+// input. A nil err means successful completion.
+func (g *App) finishRun(err error) {
+	g.dismissInteraction()
+	// finishRun owns the final output flush: any coalesced (dirty) transcript
+	// content is rendered here so terminal callers never have to remember to.
+	if g.state.outputDirty {
+		g.state.outputDirty = false
+		g.renderOutput()
+	}
+	g.state.markCompleted()
+	g.stopIndicatorAnimation()
+	if err != nil {
+		if isCanceledError(err) {
+			g.state.errorText = ""
+			g.state.status = "Canceled."
+		} else {
+			g.state.errorText = runtimeErrorMessage(err)
+		}
+	}
+	g.state.clearRunning()
+	g.FocusInput()
+}
+
+// taskAutoApprove reports whether GUI Task runs auto-approve actions. Today it is
+// always true; permission prompts are a future release, at which point this
+// becomes config/UI-driven and EventConfirmationNeeded graduates from a backstop
+// into a real confirmation dialog routed through the interaction controller.
+func (g *App) taskAutoApprove() bool {
+	return true
 }
 
 // inputHeadingForMode returns the input section heading for the active mode.

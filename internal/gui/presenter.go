@@ -23,22 +23,10 @@ func (g *App) consumeAskEvents(events <-chan appservice.Event) {
 				g.state.status = "responding"
 			case appservice.EventCompleted:
 				g.state.output = eventCopy.FinalOutput
-				g.state.markCompleted()
-				g.renderOutput()
-				g.stopIndicatorAnimation()
-				g.state.clearRunning()
-				g.FocusInput()
+				g.state.outputDirty = true
+				g.finishRun(nil)
 			case appservice.EventFailed:
-				g.state.markCompleted()
-				g.stopIndicatorAnimation()
-				if isCanceledError(eventCopy.Err) {
-					g.state.errorText = ""
-					g.state.status = "Canceled."
-				} else {
-					g.state.errorText = runtimeErrorMessage(eventCopy.Err)
-				}
-				g.state.clearRunning()
-				g.FocusInput()
+				g.finishRun(eventCopy.Err)
 			}
 			g.render()
 		})

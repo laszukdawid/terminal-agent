@@ -363,6 +363,16 @@ func TestShouldAppendTaskFinalOutput(t *testing.T) {
 			want:  false,
 		},
 		{
+			name:  "direct raw truncated is not suppressed",
+			event: appservice.Event{DirectRawOutput: true, RawOutputTool: "unix", RawOutput: "x"},
+			state: &state{
+				taskSawLiveOutput:            true,
+				taskLiveOutputTools:          map[string]bool{"unix": true},
+				taskLiveOutputTruncatedTools: map[string]bool{"unix": true},
+			},
+			want: true,
+		},
+		{
 			name:  "raw fallback when nothing streamed",
 			event: appservice.Event{RawOutput: "x"},
 			state: &state{taskLiveOutputTools: map[string]bool{}},
@@ -392,10 +402,10 @@ func TestTaskTranscriptStreamingBuildsFencedBlocks(t *testing.T) {
 	s.appendTaskTranscriptLine("Running unix...")
 	s.taskSawLiveOutput = true
 	s.taskLiveOutputTools["unix"] = true
-	s.openTaskToolBlock(7)
-	s.output += "file1\n"
-	s.openTaskToolBlock(7) // same process: must not open a second fence
-	s.output += "file2\n"
+	s.openTaskToolBlock(7, 0)
+	s.appendTaskOutput("file1\n")
+	s.openTaskToolBlock(7, 0) // same process: must not open a second fence
+	s.appendTaskOutput("file2\n")
 	s.closeTaskToolBlock()
 	s.appendTaskFinalText("All done.")
 
@@ -410,6 +420,39 @@ func TestTaskTranscriptStreamingBuildsFencedBlocks(t *testing.T) {
 	}
 	if s.taskToolOpen {
 		t.Fatal("tool block should be closed after closeTaskToolBlock")
+	}
+}
+
+func TestAppendTaskOutputRespectsLineCap(t *testing.T) {
+	s := &state{}
+	s.resetTaskStreaming()
+	s.openTaskToolBlock(1, 2) // cap at 2 lines
+	s.appendTaskOutput("one\ntwo\nthree\nfour\n")
+
+	if !strings.Contains(s.output, "one") || !strings.Contains(s.output, "two") {
+		t.Fatalf("first two lines should be present:\n%s", s.output)
+	}
+	if strings.Contains(s.output, "three") {
+		t.Fatalf("capped output must drop later lines:\n%s", s.output)
+	}
+	if !strings.Contains(s.output, "truncated") {
+		t.Fatalf("expected truncation marker:\n%s", s.output)
+	}
+}
+
+func TestAppendTaskOutputUnlimitedForFinal(t *testing.T) {
+	s := &state{}
+	s.resetTaskStreaming()
+	s.openTaskToolBlock(1, 0) // final tool: unlimited
+	s.appendTaskOutput("a\nb\nc\nd\ne\nf\ng\n")
+
+	for _, want := range []string{"a", "g"} {
+		if !strings.Contains(s.output, want) {
+			t.Fatalf("unlimited block dropped %q:\n%s", want, s.output)
+		}
+	}
+	if strings.Contains(s.output, "truncated") {
+		t.Fatalf("unlimited block must not truncate:\n%s", s.output)
 	}
 }
 

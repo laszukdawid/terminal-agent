@@ -4,10 +4,6 @@ import (
 	"context"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/widget"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
@@ -23,7 +19,7 @@ func (g *App) submitTask(ctx context.Context, message string) {
 		Provider:    g.cfg.GetDefaultProvider(),
 		Model:       g.cfg.GetDefaultModelId(),
 		WorkingDir:  g.cfg.GetWorkingDir(),
-		AutoApprove: true,
+		AutoApprove: g.taskAutoApprove(),
 		Device:      g.cfg.GetDevice(),
 		Timeout:     g.cfg.GetTaskTimeout(),
 		Config:      g.cfg,
@@ -51,29 +47,39 @@ func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 			case appservice.EventTaskStatus:
 				g.state.status = taskStatusDisplay(eventCopy)
 				if isMeaningfulTaskStatus(eventCopy.Status) {
+					final, _ := eventCopy.ToolInput["final"].(bool)
+					g.state.taskCurrentToolFinal = final
 					g.state.appendTaskTranscriptLine(eventCopy.Text)
-					g.renderOutput()
-					g.popup.outputScroll.ScrollToBottom()
+					g.state.outputDirty = true
 				}
 
 			case appservice.EventToolProgress:
-				line := formatTaskToolProgress(eventCopy)
 				if eventCopy.Text != "" {
 					g.state.status = eventCopy.Text
 				}
-				g.state.appendTaskTranscriptLine(line)
-				g.renderOutput()
-				g.popup.outputScroll.ScrollToBottom()
+				g.state.appendTaskTranscriptLine(formatTaskToolProgress(eventCopy))
+				g.state.outputDirty = true
 
 			case appservice.EventOutputDelta:
 				g.state.taskSawLiveOutput = true
 				if eventCopy.ToolName != "" {
 					g.state.taskLiveOutputTools[eventCopy.ToolName] = true
 				}
-				g.state.openTaskToolBlock(eventCopy.ProcessID)
-				g.state.output += eventCopy.Text
-				g.renderOutput()
-				g.popup.outputScroll.ScrollToBottom()
+				// final/direct-output tools stream unlimited because their output is
+				// the run's answer (matching the CLI). Non-final live output is capped
+				// to GetTaskLiveOutputLimit lines. Large final output is bounded only
+				// by render throttling here; the proper fix is the monospace segmented
+				// transcript tracked in issue #55.
+				maxLines := 0
+				if !g.state.taskCurrentToolFinal {
+					maxLines = g.cfg.GetTaskLiveOutputLimit()
+				}
+				g.state.openTaskToolBlock(eventCopy.ProcessID, maxLines)
+				g.state.appendTaskOutput(eventCopy.Text)
+				if eventCopy.ToolName != "" && g.state.taskLiveLimiter != nil && g.state.taskLiveLimiter.Truncated() {
+					g.state.taskLiveOutputTruncatedTools[eventCopy.ToolName] = true
+				}
+				g.state.outputDirty = true
 				g.state.status = "responding"
 
 			case appservice.EventWarning:
@@ -92,30 +98,18 @@ func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 				}
 
 			case appservice.EventClarificationNeeded:
-				g.showTaskClarification(eventCopy.Clarification)
+				g.requestClarification(eventCopy.Clarification)
 
 			case appservice.EventCompleted:
 				g.state.closeTaskToolBlock()
 				if shouldAppendTaskFinalOutput(eventCopy, g.state) {
 					g.state.appendTaskFinalText(taskFinalOutputText(eventCopy))
 				}
-				g.state.markCompleted()
-				g.renderOutput()
-				g.stopIndicatorAnimation()
-				g.state.clearRunning()
-				g.FocusInput()
+				g.state.outputDirty = true
+				g.finishRun(nil)
 
 			case appservice.EventFailed:
-				g.state.markCompleted()
-				g.stopIndicatorAnimation()
-				if isCanceledError(eventCopy.Err) {
-					g.state.errorText = ""
-					g.state.status = "Canceled."
-				} else {
-					g.state.errorText = runtimeErrorMessage(eventCopy.Err)
-				}
-				g.state.clearRunning()
-				g.FocusInput()
+				g.finishRun(eventCopy.Err)
 			}
 			g.render()
 		})
@@ -126,10 +120,20 @@ func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 // final/raw text to the transcript, given what already streamed live. It avoids
 // duplicating direct raw output that was already shown for a tool.
 func shouldAppendTaskFinalOutput(event appservice.Event, s *state) bool {
-	if event.DirectRawOutput && event.RawOutputTool != "" && s.taskLiveOutputTools[event.RawOutputTool] {
+	// Suppress direct raw output only when it already streamed in full. If the
+	// live stream was truncated, fall through and append the complete result so
+	// nothing is lost (mirrors the CLI's TruncatedTool de-dupe).
+	truncated := s.taskLiveOutputTruncatedTools[event.RawOutputTool]
+	if event.DirectRawOutput && event.RawOutputTool != "" &&
+		s.taskLiveOutputTools[event.RawOutputTool] && !truncated {
 		return false
 	}
-	return event.FinalOutput != "" || (!s.taskSawLiveOutput && event.RawOutput != "")
+	if event.FinalOutput != "" {
+		return true
+	}
+	// Fall back to raw output when none streamed, or when what streamed was
+	// truncated and would otherwise be the only (partial) copy shown.
+	return event.RawOutput != "" && (!s.taskSawLiveOutput || truncated)
 }
 
 // taskFinalOutputText returns the completion text to append: the final answer
@@ -174,39 +178,3 @@ func formatTaskToolProgress(event appservice.Event) string {
 	return event.ToolName + ": " + event.Text
 }
 
-// showTaskClarification presents the ask_user clarification dialog. Send replies
-// with the entered answer; Cancel cancels the run rather than replying with an
-// ambiguous empty answer.
-func (g *App) showTaskClarification(clarification *appservice.TaskClarificationEvent) {
-	if clarification == nil {
-		return
-	}
-
-	question := widget.NewLabel(clarification.Question)
-	question.Wrapping = fyne.TextWrapWord
-
-	answer := widget.NewMultiLineEntry()
-	answer.SetPlaceHolder("Type your answer")
-	answer.Wrapping = fyne.TextWrapWord
-
-	var dlg dialog.Dialog
-	sendButton := widget.NewButton("Send", func() {
-		dlg.Hide()
-		if err := clarification.Reply(answer.Text); err != nil {
-			g.state.errorText = runtimeErrorMessage(err)
-			g.render()
-		}
-	})
-	sendButton.Importance = widget.HighImportance
-	cancelButton := widget.NewButton("Cancel", func() {
-		dlg.Hide()
-		g.cancel()
-	})
-
-	footer := container.NewHBox(layout.NewSpacer(), cancelButton, sendButton)
-	content := container.NewVBox(question, answer, footer)
-
-	dlg = dialog.NewCustomWithoutButtons("Clarification", content, g.popup.window)
-	dlg.Resize(fyne.NewSize(480, 0))
-	dlg.Show()
-}
