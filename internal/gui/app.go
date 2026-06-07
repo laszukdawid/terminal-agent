@@ -227,7 +227,6 @@ func (g *App) render() {
 	model := g.cfg.GetDefaultModelId()
 	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
 	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
-	g.popup.setClock(time.Now().Format(clockFormat))
 
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
 	if showAnswer {
@@ -240,7 +239,7 @@ func (g *App) render() {
 	} else {
 		g.popup.setResponseHeading(sectionResp)
 	}
-	g.popup.setMeta(metaText(g.state, provider, model))
+	g.popup.setMeta(metaText(g.state))
 
 	g.popup.setStatus(displayStatus(g.state), g.state.isRunning, g.state.spinnerFrame)
 
@@ -258,7 +257,7 @@ func (g *App) render() {
 	}
 	g.popup.setListenButton(voiceEnabled, g.state.voiceState)
 	if voiceBlockedByRunning {
-		g.popup.listenButton.SetText("BUSY")
+		g.popup.setListenWord(listenWordBusy)
 	}
 
 	if hasCopyableResponse(g.state) {
@@ -327,24 +326,23 @@ const (
 )
 
 // metaText builds the observable-execution metadata row shown at the bottom of
-// the response panel: runtime, completion timestamp, and the active model. It
-// reports "running…" while a response streams and stays empty until there is a
-// completed response so the row never shows stale or fabricated numbers.
-func metaText(s *state, provider, model string) string {
+// the response panel: runtime and completion timestamp. It reports "running…"
+// while a response streams and stays empty until there is a completed response
+// so the row never shows stale or fabricated numbers.
+func metaText(s *state) string {
 	if s.isRunning {
 		return "running…"
 	}
 	if s.errorText != "" || s.output == "" {
 		return ""
 	}
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 2)
 	if s.elapsed > 0 {
 		parts = append(parts, "◷ "+formatElapsed(s.elapsed))
 	}
 	if !s.completedAt.IsZero() {
 		parts = append(parts, s.completedAt.Format(clockFormat))
 	}
-	parts = append(parts, provider+" / "+model)
 	return strings.Join(parts, metaSeparator)
 }
 
@@ -355,20 +353,28 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
+// maxCwdChars bounds the working-directory label so it stays inside the
+// sidebar status panel; longer paths are shown tail-first with a leading "…".
+const maxCwdChars = 22
+
 // displayCwd renders the working directory in terminal "~/"-relative form for
-// the sidebar connection status.
+// the sidebar connection status, truncated to fit the status panel.
 func displayCwd(dir string) string {
 	if dir == "" {
 		return "~/"
 	}
+	path := dir
 	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(dir, home) {
 		rel := strings.TrimPrefix(dir, home)
 		if rel == "" {
 			return "~/"
 		}
-		return "~" + rel
+		path = "~" + rel
 	}
-	return dir
+	if len(path) > maxCwdChars {
+		path = "…" + path[len(path)-(maxCwdChars-1):]
+	}
+	return path
 }
 
 func hasCopyableResponse(s *state) bool {

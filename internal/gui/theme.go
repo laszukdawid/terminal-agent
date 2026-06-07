@@ -75,7 +75,7 @@ func (brandTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Col
 	case theme.ColorNameMenuBackground:
 		return brandBackground
 	case theme.ColorNameOverlayBackground:
-		return brandBackground
+		return brandElevatedPanel
 	case theme.ColorNameScrollBar:
 		return brandBorder
 	case theme.ColorNameSeparator:

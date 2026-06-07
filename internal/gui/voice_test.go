@@ -22,7 +22,7 @@ func TestVoiceToggleStartsRecording(t *testing.T) {
 
 	g.scheduler.read(func() {
 		assert.Equal(t, voice.StateRecording, g.state.voiceState)
-		assert.Equal(t, "LISTENING", g.popup.listenButton.Text)
+		assert.Equal(t, listenWordRecording, g.popup.listenWord)
 	})
 }
 
@@ -96,7 +96,7 @@ func TestVoiceButtonDisabledWhileAskIsRunning(t *testing.T) {
 
 	g.scheduler.read(func() {
 		assert.True(t, g.popup.listenButton.Disabled())
-		assert.Equal(t, "BUSY", g.popup.listenButton.Text)
+		assert.Equal(t, listenWordBusy, g.popup.listenWord)
 	})
 }
 

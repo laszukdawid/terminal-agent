@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -16,7 +17,75 @@ const (
 	navIconLeft   float32 = 14
 	navMarkerW    float32 = 3
 	statusDotSize float32 = 9
+
+	// panelPadV/panelPadH are the breathing room between a bordered panel's
+	// edge and its content. The brand favors generous, calm spacing inside
+	// crisp bordered panels rather than content hugging the border.
+	panelPadV float32 = 10
+	panelPadH float32 = 14
+
+	// listenLetterGap is the slight tracking applied between letters of the
+	// LISTEN caption. Monospace can't sub-divide a cell, so the caption is laid
+	// out letter-by-letter with this pixel gap for fine control.
+	listenLetterGap float32 = 3
 )
+
+// hStrut is a fixed-width transparent spacer for putting deliberate horizontal
+// space between inline elements (e.g. the input hint and the SEND button).
+func hStrut(w float32) fyne.CanvasObject {
+	return container.NewGridWrap(fyne.NewSize(w, 1), canvas.NewRectangle(color.Transparent))
+}
+
+// vCenter vertically centers content at its natural height inside a taller
+// row, so it gets even space above and below instead of stretching to fill.
+func vCenter(content fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewVBox(layout.NewSpacer(), content, layout.NewSpacer())
+}
+
+// letterRowLayout lays objects left-to-right with a fixed pixel gap between
+// them and vertically centers each. It backs letter-spaced captions where a
+// full monospace space would be too wide.
+type letterRowLayout struct {
+	gap float32
+}
+
+func (l *letterRowLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var width, height float32
+	for i, o := range objects {
+		s := o.MinSize()
+		if i > 0 {
+			width += l.gap
+		}
+		width += s.Width
+		height = max(height, s.Height)
+	}
+	return fyne.NewSize(width, height)
+}
+
+func (l *letterRowLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	var x float32
+	for i, o := range objects {
+		s := o.MinSize()
+		if i > 0 {
+			x += l.gap
+		}
+		o.Resize(s)
+		o.Move(fyne.NewPos(x, (size.Height-s.Height)/2))
+		x += s.Width
+	}
+}
+
+// letterRow renders text as individual letters with letterLetterGap tracking.
+func letterRow(text string, col color.Color, size float32) *fyne.Container {
+	objects := make([]fyne.CanvasObject, 0, len(text))
+	for _, r := range text {
+		t := canvas.NewText(string(r), col)
+		t.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+		t.TextSize = size
+		objects = append(objects, t)
+	}
+	return container.New(&letterRowLayout{gap: listenLetterGap}, objects...)
+}
 
 // brandSeparator is a 1px rule in the muted panel-border color. It reads as a
 // horizontal line inside vertical containers and as a vertical divider when
@@ -42,7 +111,8 @@ func borderedBox(content fyne.CanvasObject, stroke color.Color) *fyne.Container 
 	rect.StrokeColor = stroke
 	rect.StrokeWidth = 1
 	rect.CornerRadius = 5
-	return container.NewStack(rect, content)
+	padded := container.New(layout.NewCustomPaddedLayout(panelPadV, panelPadV, panelPadH, panelPadH), content)
+	return container.NewStack(rect, padded)
 }
 
 // newStatusDot is the small filled "●" indicator used by the model pill and the

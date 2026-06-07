@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"slices"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -25,13 +26,16 @@ const (
 	maxWindowHeight     float32 = 900
 	maxInputRows                = 3
 	compactOutputHeight float32 = 150
-	sidebarWidth        float32 = 176
+	sidebarWidth        float32 = 208
 	navIconSize         float32 = 16
 	micRingSize         float32 = 54
 	statusIndicatorSize float32 = 18
 
 	providerStatusWidth  float32 = 28
 	providerStatusHeight float32 = 24
+	promptCursorWidth    float32 = 3
+	promptCursorMinAlpha uint8   = 0x22
+	promptCursorDuration         = 650 * time.Millisecond
 
 	wordmarkText   = "TERMINAL AGENT"
 	promptGlyph    = ">_"
@@ -41,9 +45,17 @@ const (
 	sectionErr     = "ERROR"
 	sendButtonText = "SEND  ›"
 	stopButtonText = "STOP  ■"
-	sendHintText   = "Ctrl + Enter to send"
+	sendHintText   = "Enter to send"
 	tagline1       = "Your terminal."
 	tagline2       = "My context."
+
+	// Listen control state words. The visible caption applies letter spacing
+	// (see spaced); the raw words are shared with tests.
+	listenWordIdle      = "LISTEN"
+	listenWordRecording = "LISTENING"
+	listenWordWorking   = "WORKING"
+	listenWordOff       = "MIC OFF"
+	listenWordBusy      = "BUSY"
 )
 
 // asciiMascot is the line-based terminal agent that anchors the bottom of the
@@ -83,14 +95,15 @@ type popupWindow struct {
 	modelLabel      *widget.Label
 
 	listenButton   *widget.Button
+	listenLabel    *fyne.Container
+	listenWord     string
 	listenSubtitle *canvas.Text
 	micRing        *canvas.Circle
 
 	copyButton   *widget.Button
 	exportButton *widget.Button
 
-	clockLabel *canvas.Text
-	cwdLabel   *canvas.Text
+	cwdLabel *canvas.Text
 
 	testButton *widget.Button
 
@@ -112,7 +125,17 @@ type popupEntry struct {
 	onEscape        func()
 	onSubmit        func()
 	onVoiceToggle   func()
+	onFocusChanged  func(bool)
 	voiceTriggerKey fyne.KeyName
+	focusCursor     *canvas.Rectangle
+	cursorAnim      *fyne.Animation
+}
+
+type settingsTextEntry struct {
+	widget.Entry
+	onFocusChanged func(bool)
+	focusCursor    *canvas.Rectangle
+	cursorAnim     *fyne.Animation
 }
 
 type providerStatusIcon struct {
@@ -226,6 +249,162 @@ func newPopupEntry(app fyne.App) *popupEntry {
 	return entry
 }
 
+func newSettingsTextEntry(initial string) *settingsTextEntry {
+	entry := &settingsTextEntry{}
+	entry.ExtendBaseWidget(entry)
+	entry.Wrapping = fyne.TextWrap(fyne.TextTruncateClip)
+	entry.SetText(initial)
+	return entry
+}
+
+func (e *settingsTextEntry) FocusGained() {
+	e.Entry.FocusGained()
+	if e.onFocusChanged != nil {
+		e.onFocusChanged(true)
+	}
+}
+
+func (e *settingsTextEntry) FocusLost() {
+	e.Entry.FocusLost()
+	if e.onFocusChanged != nil {
+		e.onFocusChanged(false)
+	}
+}
+
+func (e *settingsTextEntry) withFocusCursor() fyne.CanvasObject {
+	cursor := canvas.NewRectangle(brandAccentGreen)
+	cursor.Hide()
+	e.focusCursor = cursor
+
+	wrapped := container.New(&settingsCursorLayout{entry: e, cursor: cursor}, e, cursor)
+	previousCursorChanged := e.OnCursorChanged
+	e.OnCursorChanged = func() {
+		if previousCursorChanged != nil {
+			previousCursorChanged()
+		}
+		e.positionFocusCursor()
+	}
+	e.onFocusChanged = func(focused bool) {
+		if focused {
+			e.startFocusCursor()
+		} else {
+			e.stopFocusCursor()
+		}
+		e.positionFocusCursor()
+	}
+	return wrapped
+}
+
+func (e *settingsTextEntry) positionFocusCursor() {
+	if e.focusCursor == nil {
+		return
+	}
+	textSize := fyne.MeasureText("M", theme.TextSize(), e.TextStyle)
+	e.focusCursor.Resize(fyne.NewSize(promptCursorWidth, textSize.Height))
+	e.focusCursor.Move(e.CursorPosition())
+	e.focusCursor.Refresh()
+}
+
+func (e *settingsTextEntry) startFocusCursor() {
+	if e.focusCursor == nil || e.cursorAnim != nil {
+		return
+	}
+	e.focusCursor.FillColor = brandAccentGreen
+	e.focusCursor.Show()
+	e.cursorAnim = fyne.NewAnimation(promptCursorDuration, func(progress float32) {
+		alpha := promptCursorMinAlpha + uint8(float32(0xFF-promptCursorMinAlpha)*progress)
+		e.focusCursor.FillColor = color.NRGBA{R: brandAccentGreen.R, G: brandAccentGreen.G, B: brandAccentGreen.B, A: alpha}
+		e.focusCursor.Refresh()
+	})
+	e.cursorAnim.AutoReverse = true
+	e.cursorAnim.RepeatCount = fyne.AnimationRepeatForever
+	e.cursorAnim.Start()
+}
+
+func (e *settingsTextEntry) stopFocusCursor() {
+	if e.cursorAnim != nil {
+		e.cursorAnim.Stop()
+		e.cursorAnim = nil
+	}
+	if e.focusCursor != nil {
+		e.focusCursor.Hide()
+	}
+}
+
+func (e *popupEntry) FocusGained() {
+	e.Entry.FocusGained()
+	if e.onFocusChanged != nil {
+		e.onFocusChanged(true)
+	}
+}
+
+func (e *popupEntry) FocusLost() {
+	e.Entry.FocusLost()
+	if e.onFocusChanged != nil {
+		e.onFocusChanged(false)
+	}
+}
+
+func (e *popupEntry) withFocusCursor() fyne.CanvasObject {
+	cursor := canvas.NewRectangle(brandAccentGreen)
+	cursor.Hide()
+	e.focusCursor = cursor
+
+	wrapped := container.New(&promptCursorLayout{entry: e, cursor: cursor}, e, cursor)
+	previousCursorChanged := e.OnCursorChanged
+	e.OnCursorChanged = func() {
+		if previousCursorChanged != nil {
+			previousCursorChanged()
+		}
+		e.positionFocusCursor()
+	}
+	e.onFocusChanged = func(focused bool) {
+		if focused {
+			e.startFocusCursor()
+		} else {
+			e.stopFocusCursor()
+		}
+		e.positionFocusCursor()
+	}
+	return wrapped
+}
+
+func (e *popupEntry) positionFocusCursor() {
+	if e.focusCursor == nil {
+		return
+	}
+	textSize := fyne.MeasureText("M", theme.TextSize(), e.TextStyle)
+	e.focusCursor.Resize(fyne.NewSize(promptCursorWidth, textSize.Height))
+	e.focusCursor.Move(e.CursorPosition())
+	e.focusCursor.Refresh()
+}
+
+func (e *popupEntry) startFocusCursor() {
+	if e.focusCursor == nil || e.cursorAnim != nil {
+		return
+	}
+	e.focusCursor.FillColor = brandAccentGreen
+	e.focusCursor.Show()
+	e.cursorAnim = fyne.NewAnimation(promptCursorDuration, func(progress float32) {
+		alpha := promptCursorMinAlpha + uint8(float32(0xFF-promptCursorMinAlpha)*progress)
+		e.focusCursor.FillColor = color.NRGBA{R: brandAccentGreen.R, G: brandAccentGreen.G, B: brandAccentGreen.B, A: alpha}
+		e.focusCursor.Refresh()
+	})
+	e.cursorAnim.AutoReverse = true
+	e.cursorAnim.RepeatCount = fyne.AnimationRepeatForever
+	e.cursorAnim.Start()
+}
+
+func (e *popupEntry) stopFocusCursor() {
+	if e.cursorAnim != nil {
+		e.cursorAnim.Stop()
+		e.cursorAnim = nil
+	}
+	if e.focusCursor != nil {
+		e.focusCursor.Hide()
+	}
+}
+
 func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 	switch key.Name {
 	case e.voiceTriggerKey:
@@ -251,6 +430,36 @@ func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 		return
 	}
 	e.Entry.TypedKey(key)
+}
+
+type promptCursorLayout struct {
+	entry  *popupEntry
+	cursor *canvas.Rectangle
+}
+
+func (l *promptCursorLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return l.entry.MinSize()
+}
+
+func (l *promptCursorLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	l.entry.Resize(size)
+	l.entry.Move(fyne.NewPos(0, 0))
+	l.entry.positionFocusCursor()
+}
+
+type settingsCursorLayout struct {
+	entry  *settingsTextEntry
+	cursor *canvas.Rectangle
+}
+
+func (l *settingsCursorLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return l.entry.MinSize()
+}
+
+func (l *settingsCursorLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	l.entry.Resize(size)
+	l.entry.Move(fyne.NewPos(0, 0))
+	l.entry.positionFocusCursor()
 }
 
 func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
@@ -300,13 +509,13 @@ func (p *popupWindow) buildOutput() {
 	outputField := widget.NewRichText()
 	outputField.Wrapping = fyne.TextWrapWord
 	p.outputField = outputField
-	p.outputBody = container.NewPadded(outputField)
+	p.outputBody = outputField
 
 	errorLabel := widget.NewLabel("")
 	errorLabel.Wrapping = fyne.TextWrapBreak
 	errorLabel.Importance = widget.DangerImportance
 	p.errorLabel = errorLabel
-	p.errorBody = container.NewPadded(errorLabel)
+	p.errorBody = errorLabel
 	p.errorBody.Hide()
 
 	outputStack := container.NewStack(p.outputBody, p.errorBody)
@@ -390,16 +599,23 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 		nav.Add(p.testButton)
 	}
 
+	// The listen toggle and connection status share one bordered panel, divided
+	// by a thin rule, mirroring the brand's lower-sidebar status card.
+	listenPanel := borderedBox(container.NewVBox(
+		p.buildListenControl(),
+		brandSeparator(),
+		p.buildConnectionStatus(),
+	), brandBorder)
+
 	content := container.NewVBox(
 		nav,
 		layout.NewSpacer(),
-		p.buildListenControl(),
-		layout.NewSpacer(),
-		p.buildConnectionStatus(),
+		listenPanel,
 	)
 
 	bg := canvas.NewRectangle(brandPanel)
-	panel := container.NewStack(bg, container.NewPadded(content))
+	padded := container.New(layout.NewCustomPaddedLayout(panelPadV, panelPadV, panelPadH, panelPadH), content)
+	panel := container.NewStack(bg, padded)
 	return container.New(&fixedWidthLayout{width: sidebarWidth}, panel)
 }
 
@@ -409,49 +625,41 @@ func (p *popupWindow) buildListenControl() fyne.CanvasObject {
 	ring.StrokeWidth = 1.5
 	p.micRing = ring
 
-	micImg := canvas.NewImageFromResource(lineIcon("mic", iconPathMic, brandAccentGreen))
-	micImg.FillMode = canvas.ImageFillContain
-	micImg.SetMinSize(fyne.NewSize(22, 22))
-
-	ringStack := container.NewGridWrap(
+	// The mic ring is itself the toggle button: an icon-only, borderless button
+	// sized to the ring, with the ring stroke drawn over it.
+	p.listenButton = widget.NewButtonWithIcon("", lineIcon("mic", iconPathMic, brandAccentGreen), nil)
+	p.listenButton.Importance = widget.LowImportance
+	mic := container.NewGridWrap(
 		fyne.NewSize(micRingSize, micRingSize),
-		container.NewStack(ring, container.NewCenter(micImg)),
+		container.NewStack(p.listenButton, ring),
 	)
 
-	p.listenButton = widget.NewButton("LISTEN", nil)
-	p.listenButton.Importance = widget.LowImportance
+	// LISTEN is a caption (not the button label) so it can be letter-spaced and
+	// sit tight against the subtitle below it.
+	p.listenLabel = letterRow(listenWordIdle, brandPrimaryText, theme.TextSize()+1)
+	p.listenWord = listenWordIdle
 
 	p.listenSubtitle = canvas.NewText("Press to toggle mic", brandSecondaryText)
 	p.listenSubtitle.Alignment = fyne.TextAlignCenter
 	p.listenSubtitle.TextSize = theme.TextSize() - 2
 
-	return container.NewVBox(
-		container.NewCenter(ringStack),
-		container.NewCenter(p.listenButton),
+	caption := container.NewVBox(
+		container.NewCenter(p.listenLabel),
 		container.NewCenter(p.listenSubtitle),
+	)
+
+	return container.NewVBox(
+		container.NewCenter(mic),
+		caption,
 	)
 }
 
 func (p *popupWindow) buildConnectionStatus() fyne.CanvasObject {
-	connected := canvas.NewText("CONNECTED", brandMutedGreen)
-	connected.TextStyle = fyne.TextStyle{Monospace: true}
-	connected.TextSize = theme.TextSize() - 1
+	p.cwdLabel = canvas.NewText("~/", brandMutedGreen)
+	p.cwdLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	p.cwdLabel.TextSize = theme.TextSize() - 1
 
-	host := canvas.NewText("localhost", brandSecondaryText)
-	host.TextSize = theme.TextSize() - 2
-
-	p.cwdLabel = canvas.NewText("~/", brandSecondaryText)
-	p.cwdLabel.TextSize = theme.TextSize() - 2
-
-	p.clockLabel = canvas.NewText("", brandSecondaryText)
-	p.clockLabel.TextSize = theme.TextSize() - 2
-
-	return container.NewVBox(
-		container.NewHBox(newStatusDot(brandAccentGreen), connected),
-		host,
-		p.cwdLabel,
-		p.clockLabel,
-	)
+	return container.NewVBox(p.cwdLabel)
 }
 
 func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
@@ -462,19 +670,21 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	prompt.TextSize = theme.TextSize() + 3
 
 	hint := canvas.NewText(sendHintText, brandSecondaryText)
-	hint.TextSize = theme.TextSize() - 2
+	hint.TextStyle = fyne.TextStyle{Monospace: true}
+	hint.TextSize = theme.TextSize() - 3
+	inputWithCursor := p.input.withFocusCursor()
 
 	inputRow := container.NewBorder(
 		nil, nil,
-		container.NewVBox(layout.NewSpacer(), prompt, layout.NewSpacer()),
-		container.NewHBox(container.NewVBox(layout.NewSpacer(), hint, layout.NewSpacer()), p.actionButton),
-		container.NewVBox(layout.NewSpacer(), p.input, layout.NewSpacer()),
+		vCenter(prompt),
+		container.NewHBox(vCenter(hint), hStrut(12), vCenter(p.actionButton)),
+		vCenter(inputWithCursor),
 	)
-	inputPanel := borderedBox(container.NewPadded(inputRow), brandBorderBright)
+	inputPanel := borderedBox(inputRow, brandBorderBright)
 
 	p.responseHeading = brandSectionLabel(sectionResp)
 
-	metaRow := container.NewVBox(brandSeparator(), container.NewPadded(p.metaLabel))
+	metaRow := container.NewVBox(brandSeparator(), p.metaLabel)
 	responsePanelInner := container.NewBorder(nil, metaRow, nil, nil, p.outputScroll)
 	responsePanel := borderedBox(responsePanelInner, brandBorder)
 
@@ -502,12 +712,15 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 
 	askGroup := container.NewVBox(askHeading, inputPanel)
 
-	return container.NewBorder(
+	workspace := container.NewBorder(
 		askGroup,
 		p.buildMascotPanel(),
 		nil, nil,
 		p.responseSection,
 	)
+	// Inset the whole workspace from the sidebar divider and window edges so the
+	// section headings and panels are not flush against the border.
+	return container.New(layout.NewCustomPaddedLayout(panelPadV, panelPadV, panelPadH, panelPadH), workspace)
 }
 
 func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
@@ -533,11 +746,11 @@ func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
 
 	row := container.NewBorder(
 		nil, nil,
-		container.NewHBox(mascotLines, widget.NewLabel("  "), tagline),
+		container.NewHBox(mascotLines, hStrut(16), tagline),
 		nil,
 		dottedTail,
 	)
-	return borderedBox(container.NewPadded(row), brandBorder)
+	return borderedBox(row, brandBorder)
 }
 
 func (p *popupWindow) wireInteractions(app fyne.App) {
@@ -590,20 +803,20 @@ func (p *popupWindow) wireInteractions(app fyne.App) {
 func (p *popupWindow) setListenButton(enabled bool, state voice.State) {
 	switch state {
 	case voice.StateRecording:
-		p.listenButton.SetText("LISTENING")
+		p.setListenWord(listenWordRecording)
 		p.listenSubtitle.Text = "Press to stop"
 		p.micRing.StrokeColor = brandAccentGreen
 	case voice.StateTranscribing:
-		p.listenButton.SetText("WORKING")
+		p.setListenWord(listenWordWorking)
 		p.listenSubtitle.Text = "Transcribing…"
 		p.micRing.StrokeColor = brandMutedGreen
 	default:
 		if enabled {
-			p.listenButton.SetText("LISTEN")
+			p.setListenWord(listenWordIdle)
 			p.listenSubtitle.Text = "Press to toggle mic"
 			p.micRing.StrokeColor = brandAccentGreen
 		} else {
-			p.listenButton.SetText("MIC OFF")
+			p.setListenWord(listenWordOff)
 			p.listenSubtitle.Text = "Check settings"
 			p.micRing.StrokeColor = brandBorder
 		}
@@ -615,6 +828,16 @@ func (p *popupWindow) setListenButton(enabled bool, state voice.State) {
 	} else {
 		p.listenButton.Disable()
 	}
+}
+
+// setListenWord sets the letter-spaced LISTEN caption to word.
+func (p *popupWindow) setListenWord(word string) {
+	if p.listenWord == word {
+		return
+	}
+	p.listenWord = word
+	p.listenLabel.Objects = letterRow(word, brandPrimaryText, theme.TextSize()+1).Objects
+	p.listenLabel.Refresh()
 }
 
 func (p *popupWindow) setMeta(text string) {
@@ -631,14 +854,6 @@ func (p *popupWindow) setResponseHeading(text string) {
 	}
 	p.responseHeading.Text = text
 	p.responseHeading.Refresh()
-}
-
-func (p *popupWindow) setClock(text string) {
-	if p.clockLabel.Text == text {
-		return
-	}
-	p.clockLabel.Text = text
-	p.clockLabel.Refresh()
 }
 
 func (p *popupWindow) setCwd(text string) {
@@ -828,8 +1043,7 @@ func (p *popupWindow) showTestDialog(tests []devTest) {
 func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	win := p.window
 	currentEnvResult := options.EnvResult
-	modelEntry := widget.NewEntry()
-	modelEntry.SetText(options.InitialModel)
+	modelEntry := newSettingsTextEntry(options.InitialModel)
 	errorLabel := widget.NewLabel("")
 	errorLabel.Wrapping = fyne.TextWrapWord
 	errorLabel.Importance = widget.DangerImportance
@@ -873,8 +1087,8 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	// aligned, and makes both inputs start at the same x with the same width.
 	// Hint rows use an empty label cell so each hint aligns under its input.
 	form := container.New(layout.NewFormLayout(),
-		providerLabelBox, providerInput,
-		modelLabel, modelEntry,
+		providerLabelBox, providerInput.withFocusCursor(),
+		modelLabel, modelEntry.withFocusCursor(),
 		widget.NewLabel(""), modelHint,
 	)
 	environmentSummary := environmentSummaryText(currentEnvResult)
