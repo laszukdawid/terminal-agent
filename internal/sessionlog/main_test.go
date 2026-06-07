@@ -39,8 +39,9 @@ func readRecords(t *testing.T, path string) []Record {
 
 func TestNewWritesMetaHeaderAndFilename(t *testing.T) {
 	dir := t.TempDir()
+	user := t.Name()
 
-	rec := New(dir, Meta{Kind: "task", User: "alice", Provider: "openai", Model: "gpt-4o-mini", Command: "do the thing"})
+	rec := New(dir, Meta{Kind: "task", User: user, Provider: "openai", Model: "gpt-4o-mini", Command: "do the thing"})
 
 	if rec.RunID() == "" {
 		t.Fatal("expected a generated run id")
@@ -69,7 +70,7 @@ func TestNewWritesMetaHeaderAndFilename(t *testing.T) {
 	if meta.Seq != 1 {
 		t.Fatalf("expected meta seq 1, got %d", meta.Seq)
 	}
-	if meta.Meta == nil || meta.Meta.User != "alice" || meta.Meta.Provider != "openai" {
+	if meta.Meta == nil || meta.Meta.User != user || meta.Meta.Provider != "openai" {
 		t.Fatalf("meta header missing provenance: %+v", meta.Meta)
 	}
 	if meta.Meta.RunID != rec.RunID() {

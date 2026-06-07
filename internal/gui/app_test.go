@@ -1,6 +1,10 @@
 package gui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestDisplayStatusUsesShortErrorStatus(t *testing.T) {
 	s := &state{
@@ -51,5 +55,29 @@ func TestHasCopyableResponseIncludesErrors(t *testing.T) {
 	}
 	if hasCopyableResponse(&state{question: "question only"}) {
 		t.Fatal("hasCopyableResponse() should be false without output or error")
+	}
+}
+
+func TestExportContentIncludesQuestionAndResponse(t *testing.T) {
+	completedAt := time.Date(2026, 6, 7, 14, 30, 0, 0, time.UTC)
+	g := &App{
+		cfg: voiceGUIConfig{},
+		state: &state{
+			question:    "What is Terminal Agent?",
+			completedAt: completedAt,
+		},
+	}
+
+	got := g.exportContent("# Summary\n\nTerminal Agent is a CLI-first AI assistant.")
+	wantParts := []string{
+		"provider/model: openai / gpt-4o-mini",
+		"generated: 2026-06-07 14:30:00",
+		"# Ask\n\nWhat is Terminal Agent?",
+		"---\n\n# Response\n\n# Summary\n\nTerminal Agent is a CLI-first AI assistant.",
+	}
+	for _, want := range wantParts {
+		if !strings.Contains(got, want) {
+			t.Fatalf("exportContent() missing %q in:\n%s", want, got)
+		}
 	}
 }

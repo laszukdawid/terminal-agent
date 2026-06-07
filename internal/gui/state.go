@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/voice"
 )
@@ -15,10 +16,12 @@ type state struct {
 	errorText    string
 	isRunning    bool
 	isVisible    bool
-	showRequest  bool
 	cancelFunc   context.CancelFunc
 	voiceState   voice.State
 	voiceError   string
+	startTime    time.Time
+	completedAt  time.Time
+	elapsed      time.Duration
 }
 
 func (s *state) resetOutput() {
@@ -27,7 +30,8 @@ func (s *state) resetOutput() {
 	s.status = ""
 	s.spinnerFrame = 0
 	s.errorText = ""
-	s.showRequest = false
+	s.completedAt = time.Time{}
+	s.elapsed = 0
 }
 
 func (s *state) setRunning(cancel context.CancelFunc) {
@@ -36,6 +40,15 @@ func (s *state) setRunning(cancel context.CancelFunc) {
 	s.status = "thinking"
 	s.spinnerFrame = 0
 	s.errorText = ""
+	s.startTime = time.Now()
+}
+
+// markCompleted records the elapsed runtime for the response metadata row.
+func (s *state) markCompleted() {
+	s.completedAt = time.Now()
+	if !s.startTime.IsZero() {
+		s.elapsed = s.completedAt.Sub(s.startTime)
+	}
 }
 
 func (s *state) clearRunning() {
