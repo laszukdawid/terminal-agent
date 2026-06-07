@@ -86,7 +86,7 @@ You will be asked to confirm each execution step, and the agent may also ask fol
 
 Action strings use a function-style format, e.g. `unix("aws login sso")` or `file_edit("README.md", operation="write")`. String values use glob matching against the full value: `*` matches any sequence, `?` matches a single character, and character classes like `[ab]` or `[a-z]` are supported. Escape glob metacharacters with `\` when you want a literal match, for example `unix("ls -d \\*/")`. To constrain keys, use `allowKeys=["region", "profile", "read*"]`, and key values can use the same glob syntax, e.g. `region="us-*"`.
 
-Simple read-only Unix commands and pipelines composed only of read-only commands, such as `ls -la | grep go | wc -l`, run without confirmation by default. Commands with redirection, shell control operators, command substitution, assignments, unknown commands, or write-capable actions such as `find -delete` still require confirmation unless allowed or auto-approved.
+Parser-verified safe Unix command sequences, such as `ls -la | grep go | wc -l` or `cd docs; find . -type f`, run without confirmation by default. Commands with redirection, unsafe shell control operators, command substitution, assignments, unknown commands, unbounded loops, or write-capable actions such as `find -delete` still require confirmation unless allowed or auto-approved.
 
 See [Approval Logic](../approval-logic.md) for the complete confirmation and permission decision flow.
 

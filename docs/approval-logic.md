@@ -62,13 +62,16 @@ Default policy is only a fallback. A matching `deny` rule blocks even a read too
 
 ## Read-Only Unix Auto-Approval
 
-`unix` is generally an execute tool, but some Unix commands are read-only. Terminal Agent uses `mvdan.cc/sh` to parse the shell command and auto-approves only commands that satisfy all of these conditions:
+`unix` is generally an execute tool, but some shell programs are safe enough to run without prompting. Terminal Agent uses `mvdan.cc/sh` to parse the shell command and auto-approves only commands that satisfy all of these conditions:
 
-- The command parses as exactly one shell statement.
-- The statement is a simple command or a pipeline of simple commands.
+- The command parses as a shell program made only of approved statement types.
 - Every command in the pipeline is in the read-only allowlist.
+- Sequential commands joined with `;` or `&&` are each independently approved.
+- `cd <dir>` is allowed only when `<dir>` is static, exists, and resolves inside the task root; later statements are checked from that new directory.
+- Static `for ... in ...; do ...; done` loops are allowed only when the iteration list is static and the body is otherwise approved.
 - Every word is static shell syntax: literals, normal single-quoted strings, or normal double-quoted strings with only static content.
-- There are no redirections, background execution, negation, coprocs, disown markers, shell control operators, command substitutions, process substitutions, parameter expansions, arithmetic expansions, variable assignments, subshells, blocks, loops, conditionals, or function declarations.
+- `echo` may use the active static `for` loop variable, e.g. `for i in 1 2 3; do echo "$i"; done`.
+- There are no redirections, background execution, negation, coprocs, disown markers, unapproved shell control operators, command substitutions, process substitutions, parameter expansions outside the narrow static-loop `echo` case, arithmetic expansions, variable assignments, subshells, blocks, unbounded `while`/`until` loops, conditionals, or function declarations.
 - Command-specific write-capable flags are absent.
 
 Examples that run without prompting by default:
@@ -78,6 +81,9 @@ ls -la
 find . -type f | sort | head -20
 ls -la | grep go | wc -l
 env FOO=bar
+cd docs; find . -type f
+cd docs && pwd && find . -type f
+for i in 1 2 3; do echo "$i"; pwd; done
 ```
 
 Examples that still prompt unless explicitly allowed or auto-approved:
@@ -86,11 +92,13 @@ Examples that still prompt unless explicitly allowed or auto-approved:
 find . -delete
 find . -exec rm {} \;
 ls > out.txt
+cd /tmp; find .
 ls && rm file
 ls; rm file
 cat <(rm file)
 FOO=bar ls
 cat file | tee out.txt
+while pwd; do echo ok; done
 ```
 
 The read-only Unix classifier is intentionally conservative. False negatives are acceptable: if a safe command is not recognized, Terminal Agent asks for confirmation instead of running it automatically.

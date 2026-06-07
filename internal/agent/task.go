@@ -434,7 +434,7 @@ func (r *taskExecutionState) progressReporter(toolName string) func(string) {
 func (r *taskExecutionState) autoAllowsTool(tool tools.Tool, input map[string]any) bool {
 	if tool.Name() == tools.ToolNameUnix {
 		command, _ := input["command"].(string)
-		return isReadOnlyUnixCommand(command)
+		return isReadOnlyUnixCommandInDirs(command, r.state.Dirs)
 	}
 
 	switch permissionCategoryFor(tool) {
