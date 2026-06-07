@@ -40,7 +40,8 @@ type state struct {
 
 	// mode is the selected sidebar tab. It deliberately persists across runs and
 	// is not cleared by resetOutput so the chosen tab stays selected.
-	mode guiMode
+	mode      guiMode
+	modeViews map[guiMode]modeViewState
 
 	// Per-run Task streaming state. taskSawLiveOutput records whether any live
 	// tool output streamed this run; taskLiveOutputTools tracks which tools
@@ -51,6 +52,69 @@ type state struct {
 	taskLiveOutputTools map[string]bool
 	taskToolOpen        bool
 	taskToolProcessID   int
+}
+
+type modeViewState struct {
+	input        string
+	question     string
+	output       string
+	status       string
+	spinnerFrame int
+	errorText    string
+	completedAt  time.Time
+	elapsed      time.Duration
+
+	taskSawLiveOutput   bool
+	taskLiveOutputTools map[string]bool
+	taskToolOpen        bool
+	taskToolProcessID   int
+}
+
+func (s *state) saveModeView() {
+	if s.modeViews == nil {
+		s.modeViews = map[guiMode]modeViewState{}
+	}
+	liveOutputTools := map[string]bool{}
+	for tool, seen := range s.taskLiveOutputTools {
+		liveOutputTools[tool] = seen
+	}
+	s.modeViews[s.mode] = modeViewState{
+		input:               s.input,
+		question:            s.question,
+		output:              s.output,
+		status:              s.status,
+		spinnerFrame:        s.spinnerFrame,
+		errorText:           s.errorText,
+		completedAt:         s.completedAt,
+		elapsed:             s.elapsed,
+		taskSawLiveOutput:   s.taskSawLiveOutput,
+		taskLiveOutputTools: liveOutputTools,
+		taskToolOpen:        s.taskToolOpen,
+		taskToolProcessID:   s.taskToolProcessID,
+	}
+}
+
+func (s *state) restoreModeView(mode guiMode) {
+	view := modeViewState{}
+	if s.modeViews != nil {
+		view = s.modeViews[mode]
+	}
+	s.mode = mode
+	s.input = view.input
+	s.question = view.question
+	s.output = view.output
+	s.status = view.status
+	s.spinnerFrame = view.spinnerFrame
+	s.errorText = view.errorText
+	s.completedAt = view.completedAt
+	s.elapsed = view.elapsed
+	s.taskSawLiveOutput = view.taskSawLiveOutput
+	s.taskLiveOutputTools = map[string]bool{}
+	for tool, seen := range view.taskLiveOutputTools {
+		s.taskLiveOutputTools[tool] = seen
+	}
+	s.taskToolOpen = view.taskToolOpen
+	s.taskToolProcessID = view.taskToolProcessID
 }
 
 func (s *state) resetOutput() {

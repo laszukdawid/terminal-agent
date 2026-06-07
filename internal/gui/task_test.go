@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2/test"
 
@@ -98,6 +99,9 @@ func TestSetModeTogglesModeAndSidebar(t *testing.T) {
 	if g.popup.inputHeading.Text != sectionTask {
 		t.Fatalf("input heading = %q, want %q", g.popup.inputHeading.Text, sectionTask)
 	}
+	if g.popup.actionSubtitle.Text != autoApproveHintText {
+		t.Fatalf("action subtitle = %q, want %q", g.popup.actionSubtitle.Text, autoApproveHintText)
+	}
 
 	g.setMode(guiModeAsk)
 	if g.state.mode != guiModeAsk {
@@ -109,6 +113,50 @@ func TestSetModeTogglesModeAndSidebar(t *testing.T) {
 	if g.popup.inputHeading.Text != sectionAsk {
 		t.Fatalf("input heading = %q, want %q", g.popup.inputHeading.Text, sectionAsk)
 	}
+	if g.popup.actionSubtitle.Text != "" {
+		t.Fatalf("action subtitle after Ask = %q, want empty", g.popup.actionSubtitle.Text)
+	}
+}
+
+func TestSetModeRestoresModeSpecificInputOutputAndExport(t *testing.T) {
+	g, _ := newRecordingApp(t)
+
+	g.state.input = "ask input"
+	g.state.question = "ask question"
+	g.state.output = "ask response"
+	g.state.completedAt = completedAtForTest()
+	g.render()
+
+	g.setMode(guiModeTask)
+	if g.state.input != "" || g.state.question != "" || g.state.output != "" {
+		t.Fatalf("new Task view should be empty: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.output)
+	}
+
+	g.state.input = "task input"
+	g.state.question = "task question"
+	g.state.output = "task response"
+	g.state.completedAt = completedAtForTest()
+	g.render()
+
+	g.setMode(guiModeAsk)
+	if g.state.input != "ask input" || g.state.question != "ask question" || g.state.output != "ask response" {
+		t.Fatalf("Ask view was not restored: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.output)
+	}
+	if got := g.exportContent(g.state.output); !strings.Contains(got, "# Ask\n\nask question") {
+		t.Fatalf("Ask export used wrong mode/question:\n%s", got)
+	}
+
+	g.setMode(guiModeTask)
+	if g.state.input != "task input" || g.state.question != "task question" || g.state.output != "task response" {
+		t.Fatalf("Task view was not restored: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.output)
+	}
+	if got := g.exportContent(g.state.output); !strings.Contains(got, "# Task\n\ntask question") {
+		t.Fatalf("Task export used wrong mode/question:\n%s", got)
+	}
+}
+
+func completedAtForTest() time.Time {
+	return time.Date(2026, 6, 7, 12, 0, 0, 0, time.UTC)
 }
 
 func TestSetModeIgnoredWhileRunning(t *testing.T) {

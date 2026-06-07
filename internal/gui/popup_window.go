@@ -54,18 +54,19 @@ const (
 	hostReceiveStart float32 = 0.7
 	hostShakeFreq            = 9.0
 
-	wordmarkText   = "TERMINAL AGENT"
-	promptGlyph    = ">_"
-	inputPrompt    = ">"
-	sectionAsk     = "ASK THE TERMINAL AGENT"
-	sectionTask    = "TASK THE TERMINAL AGENT TO DO"
-	sectionResp    = "RESPONSE"
-	sectionErr     = "ERROR"
-	sendButtonText = "SEND  ›"
-	stopButtonText = "STOP  ■"
-	sendHintText   = "Enter to send"
-	tagline1       = "Your terminal."
-	tagline2       = "My context."
+	wordmarkText        = "TERMINAL AGENT"
+	promptGlyph         = ">_"
+	inputPrompt         = ">"
+	sectionAsk          = "ASK THE TERMINAL AGENT"
+	sectionTask         = "TASK THE TERMINAL AGENT TO DO"
+	sectionResp         = "RESPONSE"
+	sectionErr          = "ERROR"
+	sendButtonText      = "SEND  ›"
+	stopButtonText      = "STOP  ■"
+	sendHintText        = "Enter to send"
+	autoApproveHintText = "Auto Approve"
+	tagline1            = "Your terminal."
+	tagline2            = "My context."
 
 	// Listen control state words. The visible caption applies letter spacing
 	// (see spaced); the raw words are shared with tests.
@@ -81,8 +82,9 @@ var spinnerFrames = []string{"|", "/", "-", "\\"}
 type popupWindow struct {
 	window fyne.Window
 
-	input        *popupEntry
-	actionButton *widget.Button
+	input          *popupEntry
+	actionButton   *widget.Button
+	actionSubtitle *canvas.Text
 
 	inputHeading    *canvas.Text
 	navAsk          *navRow
@@ -742,12 +744,18 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	hint := canvas.NewText(sendHintText, brandSecondaryText)
 	hint.TextStyle = fyne.TextStyle{Monospace: true}
 	hint.TextSize = theme.TextSize() - 3
+	p.actionSubtitle = canvas.NewText("", brandSecondaryText)
+	p.actionSubtitle.Alignment = fyne.TextAlignCenter
+	p.actionSubtitle.TextStyle = fyne.TextStyle{Monospace: true}
+	p.actionSubtitle.TextSize = theme.TextSize() - 4
+	p.actionSubtitle.Hide()
 	inputWithCursor := p.input.withFocusCursor()
+	actionControl := container.NewVBox(p.actionButton, p.actionSubtitle)
 
 	inputRow := container.NewBorder(
 		nil, nil,
 		vCenter(prompt),
-		container.NewHBox(vCenter(hint), hStrut(12), vCenter(p.actionButton)),
+		container.NewHBox(vCenter(hint), hStrut(12), vCenter(actionControl)),
 		vCenter(inputWithCursor),
 	)
 	inputPanel := borderedBox(inputRow, brandBorderBright)
@@ -1001,6 +1009,19 @@ func (p *popupWindow) setInputHeading(text string) {
 	}
 	p.inputHeading.Text = text
 	p.inputHeading.Refresh()
+}
+
+func (p *popupWindow) setActionSubtitle(text string) {
+	if p.actionSubtitle == nil || p.actionSubtitle.Text == text {
+		return
+	}
+	p.actionSubtitle.Text = text
+	if text == "" {
+		p.actionSubtitle.Hide()
+	} else {
+		p.actionSubtitle.Show()
+	}
+	p.actionSubtitle.Refresh()
 }
 
 func (p *popupWindow) setResponseHeading(text string) {

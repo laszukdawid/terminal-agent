@@ -250,8 +250,14 @@ func (g *App) render() {
 
 	if g.state.isRunning {
 		g.popup.actionButton.SetText(stopButtonText)
+		g.popup.setActionSubtitle("")
 	} else {
 		g.popup.actionButton.SetText(sendButtonText)
+		if g.state.mode == guiModeTask {
+			g.popup.setActionSubtitle(autoApproveHintText)
+		} else {
+			g.popup.setActionSubtitle("")
+		}
 	}
 	g.popup.actionButton.Enable()
 
@@ -324,7 +330,8 @@ func (g *App) setMode(mode guiMode) {
 	if g.state.isRunning || g.state.mode == mode {
 		return
 	}
-	g.state.mode = mode
+	g.state.saveModeView()
+	g.state.restoreModeView(mode)
 	g.popup.setMode(mode)
 	g.render()
 }
