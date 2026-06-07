@@ -13,9 +13,15 @@ const (
 	awkOptionAssign      = "-v"
 	awkOptionFile        = "-f"
 	awkOptionFieldSep    = "-F"
+	sedLongOptionFile    = "--file"
+	sedLongOptionInPlace = "--in-place"
+	sedOptionExpression  = "-e"
+	sedOptionFile        = "-f"
+	sedOptionInPlace     = "-i"
 	unixCommandCD        = "cd"
 	unixBracketTestClose = "]"
 	parentRelPath        = ".."
+	sedSubstituteCommand = 's'
 )
 
 type readOnlyCommandPolicy struct {
@@ -50,6 +56,7 @@ var readOnlyUnixCommands = map[string]readOnlyCommandPolicy{
 	"pwd":       {},
 	"realpath":  {},
 	"rg":        {},
+	"sed":       {validateArgs: sedAllowsArgs},
 	"sha256sum": {},
 	"sort":      {},
 	"stat":      {},
@@ -359,6 +366,112 @@ func awkAllowsArgs(args []string) bool {
 func awkProgramAllowsReadOnly(program string) bool {
 	for _, fragment := range unsafeAwkProgramFragments {
 		if strings.Contains(program, fragment) {
+			return false
+		}
+	}
+	return true
+}
+
+func sedAllowsArgs(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	sawScript := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == sedOptionInPlace || strings.HasPrefix(arg, sedOptionInPlace) || strings.HasPrefix(arg, sedLongOptionInPlace):
+			return false
+		case arg == sedOptionFile || strings.HasPrefix(arg, sedOptionFile) || arg == sedLongOptionFile:
+			return false
+		case arg == sedOptionExpression:
+			i++
+			if i >= len(args) || !sedScriptAllowsReadOnly(args[i]) {
+				return false
+			}
+			sawScript = true
+			continue
+		case isSafeSedOption(arg):
+			continue
+		case strings.HasPrefix(arg, "-"):
+			return false
+		}
+
+		if !sawScript {
+			if !sedScriptAllowsReadOnly(arg) {
+				return false
+			}
+			sawScript = true
+		}
+	}
+	return sawScript
+}
+
+func isSafeSedOption(arg string) bool {
+	if arg == "" || arg[0] != '-' || strings.HasPrefix(arg, "--") {
+		return false
+	}
+	for _, flag := range arg[1:] {
+		switch flag {
+		case 'E', 'r', 'n':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func sedScriptAllowsReadOnly(script string) bool {
+	commands := strings.FieldsFunc(script, func(r rune) bool { return r == ';' || r == '\n' })
+	if len(commands) == 0 {
+		return false
+	}
+	for _, command := range commands {
+		if !sedSubstitutionAllowsReadOnly(strings.TrimSpace(command)) {
+			return false
+		}
+	}
+	return true
+}
+
+func sedSubstitutionAllowsReadOnly(command string) bool {
+	if len(command) < 3 || command[0] != sedSubstituteCommand {
+		return false
+	}
+	delimiter := rune(command[1])
+	if delimiter == '\\' || delimiter == '\n' {
+		return false
+	}
+	delimiters := 0
+	escaped := false
+	for i, r := range command[2:] {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == delimiter {
+			delimiters++
+			if delimiters == 2 {
+				return sedSubstitutionFlagsAllowReadOnly(command[i+3:])
+			}
+		}
+	}
+	return false
+}
+
+func sedSubstitutionFlagsAllowReadOnly(flags string) bool {
+	for _, flag := range flags {
+		switch {
+		case flag >= '0' && flag <= '9':
+			continue
+		case flag == 'g' || flag == 'i' || flag == 'I' || flag == 'm' || flag == 'M' || flag == 'p':
+			continue
+		default:
 			return false
 		}
 	}

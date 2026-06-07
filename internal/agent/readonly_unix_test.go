@@ -33,6 +33,9 @@ func TestIsReadOnlyUnixCommandInDirsWithoutPathContext(t *testing.T) {
 		{name: "path helpers", command: "basename ./foo/bar | dirname ./foo/bar | realpath .", want: true},
 		{name: "checksum and lookup", command: "sha256sum go.mod | cut -d ' ' -f 1", want: true},
 		{name: "diff which tree", command: "diff go.mod go.mod | which go | tree .", want: true},
+		{name: "sed substitution", command: `rg -l package . | sed 's#^./##g'`, want: true},
+		{name: "sed extended expression", command: `printf '%s\n' hello | sed -E 's/(h)ello/\1i/'`, want: true},
+		{name: "sed multiple expressions", command: `printf '%s\n' hello | sed -e 's/h/H/' -e 's/o/O/'`, want: true},
 		{name: "semicolon safe commands", command: "pwd; ls", want: true},
 		{name: "find delete", command: "find . -delete", want: false},
 		{name: "find exec", command: `find . -exec rm {} \;`, want: false},
@@ -58,6 +61,11 @@ func TestIsReadOnlyUnixCommandInDirsWithoutPathContext(t *testing.T) {
 		{name: "awk system with spacing", command: `awk 'BEGIN{system ("rm file")}'`, want: false},
 		{name: "awk output redirection", command: `awk '{print $0 > "out.txt"}'`, want: false},
 		{name: "awk external script", command: `awk -f script.awk input.txt`, want: false},
+		{name: "sed in place", command: `sed -i 's/a/b/' file.txt`, want: false},
+		{name: "sed external script", command: `sed -f script.sed file.txt`, want: false},
+		{name: "sed execute flag", command: `sed 's/.*/rm file/e'`, want: false},
+		{name: "sed write flag", command: `sed 's/a/b/w out.txt'`, want: false},
+		{name: "sed non substitution command", command: `sed 'w out.txt' file.txt`, want: false},
 	}
 
 	for _, tt := range tests {
