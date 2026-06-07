@@ -107,6 +107,9 @@ terminal-agent/
 └── Taskfile.dist.yaml        # Development tasks
 ```
 
+For diagrams of how these components connect and how the event-driven
+ask/chat/task workflows operate, see the [Architecture](architecture.md) page.
+
 ### Docker Environment
 
 For integration testing and consistent development environments, Terminal Agent uses Docker:
