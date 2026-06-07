@@ -167,10 +167,11 @@ func (f *fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 // green text/icon; inactive rows highlight on hover.
 type navRow struct {
 	widget.BaseWidget
-	label   string
-	active  bool
-	onTap   func()
-	hovered bool
+	label    string
+	iconPath string
+	active   bool
+	onTap    func()
+	hovered  bool
 
 	bg     *canvas.Rectangle
 	marker *canvas.Rectangle
@@ -179,7 +180,7 @@ type navRow struct {
 }
 
 func newNavRow(label, iconPath string, active bool, onTap func()) *navRow {
-	n := &navRow{label: label, active: active, onTap: onTap}
+	n := &navRow{label: label, iconPath: iconPath, active: active, onTap: onTap}
 
 	textColor := brandSecondaryText
 	if active {
@@ -206,6 +207,36 @@ func newNavRow(label, iconPath string, active bool, onTap func()) *navRow {
 
 	n.ExtendBaseWidget(n)
 	return n
+}
+
+// setActive toggles the row's active styling after construction so the sidebar
+// can switch the selected tab without rebuilding the window. It regenerates the
+// icon resource in the active/inactive color (the stroke color is baked into
+// the resource) and updates the background, left marker, and label.
+func (n *navRow) setActive(active bool) {
+	if n.active == active {
+		return
+	}
+	n.active = active
+
+	textColor := brandSecondaryText
+	if active {
+		textColor = brandAccentGreen
+		n.bg.FillColor = brandElevatedPanel
+		n.marker.FillColor = brandAccentGreen
+	} else {
+		n.bg.FillColor = color.Transparent
+		n.marker.FillColor = color.Transparent
+	}
+
+	n.icon.Resource = lineIcon("nav-"+n.label, n.iconPath, textColor)
+	n.text.Color = textColor
+	n.text.TextStyle = fyne.TextStyle{Monospace: true, Bold: active}
+
+	n.bg.Refresh()
+	n.marker.Refresh()
+	n.icon.Refresh()
+	n.text.Refresh()
 }
 
 func (n *navRow) Tapped(*fyne.PointEvent) {

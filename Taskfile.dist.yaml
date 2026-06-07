@@ -100,6 +100,17 @@ tasks:
       - go run cmd/agent-gui/main.go
     silent: false
 
+  screenshots:gui:
+    desc: 'Render GUI screenshots into docs (override dir: task screenshots:gui OUT=/abs/path)'
+    vars:
+      OUT: '{{.OUT | default (printf "%s/docs/assets/screenshots" .USER_WORKING_DIR)}}'
+    cmds:
+      # OUT must be absolute: `go test` runs in the package directory, so a
+      # relative path would land inside internal/gui instead of the repo root.
+      - GUI_SCREENSHOTS='{{.OUT}}' go test ./internal/gui/ -run TestCaptureScreenshots
+      - echo "GUI screenshots written to {{.OUT}}"
+    silent: false
+
   integration:fedora:
     desc: Install Fedora desktop integration for the popup GUI
     cmds:

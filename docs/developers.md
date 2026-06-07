@@ -155,6 +155,90 @@ Documentation is written in Markdown and stored in the `docs/` directory. To upd
 1. Edit the relevant Markdown files
 2. If adding new pages, update the navigation in `docs/Readme.md`
 
+## GUI Screenshots
+
+The popup GUI is rendered to PNG files without a display server or a live LLM
+provider, so the images below can be regenerated deterministically to reflect
+the current look. They double as documentation, PR illustrations, and quick
+visual checks of GUI changes.
+
+### Current look
+
+**Ask mode** — a question and its rendered markdown answer:
+
+![Terminal Agent GUI in Ask mode](assets/screenshots/gui-ask.png)
+
+**Task mode** — an agentic run, showing the tool-call transcript and final answer:
+
+![Terminal Agent GUI in Task mode](assets/screenshots/gui-task.png)
+
+**Settings** — the provider/model dialog:
+
+![Terminal Agent GUI settings dialog](assets/screenshots/gui-settings.png)
+
+### Regenerating the screenshots
+
+```sh
+# Re-renders the images into docs/assets/screenshots/ (committed doc assets)
+task screenshots:gui
+
+# Or choose a different output directory (must be an ABSOLUTE path)
+task screenshots:gui OUT=/tmp/ta-shots
+```
+
+The committed files are:
+
+| File (`docs/assets/screenshots/`) | State |
+|------|-------|
+| `gui-ask.png` | Ask mode with a rendered markdown response |
+| `gui-task.png` | Task mode transcript (tool-call line + final answer) |
+| `gui-settings.png` | Settings dialog (provider/model) |
+
+### How it works
+
+The task runs a single env-gated test, `TestCaptureScreenshots` in
+`internal/gui/screenshot_test.go`. The test:
+
+1. Builds the real `gui.App` with a Fyne test app (`test.NewApp()`), so the
+   actual widgets, layout, and brand theme are exercised.
+2. Drives `App`/`state` into each scenario (mode, input text, output, or the
+   Settings dialog) and calls `render()`.
+3. Captures the window with `win.Canvas().Capture()` (Fyne's software renderer)
+   and writes the image with `png.Encode`.
+
+The test is skipped during normal runs (`task test`) and only executes when the
+`GUI_SCREENSHOTS` environment variable points at an output directory. The
+Taskfile sets that variable to `docs/assets/screenshots` for you.
+
+> **Important:** `GUI_SCREENSHOTS` must be an absolute path. `go test` runs in
+> the package directory, so a relative path would write into `internal/gui/`
+> instead of the repo root. The `task screenshots:gui` wrapper always passes an
+> absolute path.
+
+### Adding or changing a captured state
+
+Edit `TestCaptureScreenshots`: set the desired `App`/`state` fields (or show a
+dialog), call `g.render()`, then call the local `capture("gui-name.png")`
+helper. Use stable, descriptive `gui-*` names since the files are referenced by
+name from the docs above.
+
+### Known limitation: fenced code blocks
+
+The pinned Fyne fork's **software** rasterizer crashes when drawing the brand
+theme's fenced code blocks (a zero-stroke rounded-rectangle underflow), so the
+captured states deliberately avoid ` ``` ` code fences. At runtime the Task
+transcript wraps live tool stdout/stderr in a fenced block; that styling renders
+correctly under the real **GL** renderer but cannot be captured headlessly.
+`gui-task.png` therefore shows the transcript without the fenced live-output
+box.
+
+To capture the true fenced rendering, run the real binary and screenshot the
+window with your OS tools:
+
+```sh
+task run:gui      # then capture the window with the OS screenshot tool
+```
+
 ## Building for Release
 
 To build for release:

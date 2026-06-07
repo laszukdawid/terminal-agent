@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ type App struct {
 	cfg             config.Config
 	state           *state
 	popup           *popupWindow
+	pending         *pendingInteraction
 	quit            func()
 	stopIndicator   chan struct{}
 	version         string
@@ -51,7 +53,7 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		fyneApp:       fyneApp,
 		service:       service,
 		cfg:           cfg,
-		state:         &state{},
+		state:         &state{mode: guiModeAsk},
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
 		version:       options.Version,
@@ -103,6 +105,9 @@ func (g *App) Show() {
 
 func (g *App) Hide() {
 	g.cancelVoice()
+	// Hide/Quit are run-termination paths too: tear down any pending interaction
+	// so a clarification dialog can never outlive the run (or the window).
+	g.dismissInteraction()
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
@@ -116,6 +121,7 @@ func (g *App) Hide() {
 
 func (g *App) Quit() {
 	g.cancelVoice()
+	g.dismissInteraction()
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
@@ -134,11 +140,22 @@ func (g *App) startIndicator() {
 			select {
 			case <-ticker.C:
 				fyne.Do(func() {
-					if !g.state.isRunning || g.state.status != "responding" {
+					if !g.state.isRunning {
 						return
 					}
-					g.state.spinnerFrame = (g.state.spinnerFrame + 1) % len(spinnerFrames)
-					g.popup.setStatus(g.state.status, g.state.isRunning, g.state.spinnerFrame)
+					// Coalesced output flush: Task streaming marks state dirty and
+					// lets this ticker render at its cadence instead of re-parsing the
+					// whole transcript on every chunk. Ask never sets outputDirty, so
+					// this is a no-op for Ask.
+					if g.state.outputDirty {
+						g.state.outputDirty = false
+						g.renderOutput()
+						g.popup.outputScroll.ScrollToBottom()
+					}
+					if g.state.status == "responding" {
+						g.state.spinnerFrame = (g.state.spinnerFrame + 1) % len(spinnerFrames)
+						g.popup.setStatus(g.state.status, g.state.isRunning, g.state.spinnerFrame)
+					}
 				})
 			case <-stop:
 				return
@@ -172,6 +189,8 @@ func (g *App) wire() {
 	g.popup.onCopy = g.copyOutput
 	g.popup.onExport = g.exportOutput
 	g.popup.onSettings = g.openSettings
+	g.popup.onSelectAsk = func() { g.setMode(guiModeAsk) }
+	g.popup.onSelectTask = func() { g.setMode(guiModeTask) }
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -247,8 +266,14 @@ func (g *App) render() {
 
 	if g.state.isRunning {
 		g.popup.actionButton.SetText(stopButtonText)
+		g.popup.setActionSubtitle("")
 	} else {
 		g.popup.actionButton.SetText(sendButtonText)
+		if g.state.mode == guiModeTask {
+			g.popup.setActionSubtitle(autoApproveHintText)
+		} else {
+			g.popup.setActionSubtitle("")
+		}
 	}
 	g.popup.actionButton.Enable()
 
@@ -313,6 +338,99 @@ func (g *App) renderResponse() {
 // renderOutput pushes the current response into the view.
 func (g *App) renderOutput() {
 	g.popup.setOutput(g.state.output)
+}
+
+// setMode switches the active sidebar tab. Switching is ignored while a request
+// is in flight to avoid ambiguous ownership of the running stream.
+func (g *App) setMode(mode guiMode) {
+	if g.state.isRunning || g.state.mode == mode {
+		return
+	}
+	g.state.saveModeView()
+	g.state.restoreModeView(mode)
+	g.popup.setMode(mode)
+	g.render()
+}
+
+// beginRun performs the shared setup both modes need before dispatching to the
+// service, and returns the cancellable context for the run.
+func (g *App) beginRun(message string) context.Context {
+	g.state.resetOutput()
+	g.state.question = message
+	ctx, cancel := context.WithCancel(context.Background())
+	g.state.setRunning(cancel)
+	g.renderOutput()
+	g.startIndicator()
+	g.render()
+	return ctx
+}
+
+// failRunSetup unwinds an in-flight run when the service rejects the request
+// before any events are produced.
+func (g *App) failRunSetup(err error) {
+	g.stopIndicatorAnimation()
+	g.state.clearRunning()
+	g.state.errorText = runtimeErrorMessage(err)
+	g.render()
+}
+
+// finishRun is the single chokepoint for run termination, shared by Ask and
+// Task. It dismisses any pending interaction, records timing, stops the
+// indicator, applies cancel/error display, clears running state, and refocuses
+// input. A nil err means successful completion.
+func (g *App) finishRun(err error) {
+	g.dismissInteraction()
+	// finishRun owns the final output flush: any coalesced (dirty) transcript
+	// content is rendered here so terminal callers never have to remember to.
+	if g.state.outputDirty {
+		g.state.outputDirty = false
+		g.renderOutput()
+	}
+	g.state.markCompleted()
+	g.stopIndicatorAnimation()
+	if err != nil {
+		if isCanceledError(err) {
+			g.state.errorText = ""
+			g.state.status = "Canceled."
+		} else {
+			g.state.errorText = runtimeErrorMessage(err)
+		}
+	}
+	g.state.clearRunning()
+	g.FocusInput()
+}
+
+// taskAutoApprove reports whether GUI Task runs auto-approve actions. Today it is
+// always true; permission prompts are a future release, at which point this
+// becomes config/UI-driven and EventConfirmationNeeded graduates from a backstop
+// into a real confirmation dialog routed through the interaction controller.
+func (g *App) taskAutoApprove() bool {
+	return true
+}
+
+// inputHeadingForMode returns the input section heading for the active mode.
+func inputHeadingForMode(mode guiMode) string {
+	if mode == guiModeTask {
+		return sectionTask
+	}
+	return sectionAsk
+}
+
+// emptyInputMessage returns the validation message shown for an empty submit.
+func emptyInputMessage(mode guiMode) string {
+	if mode == guiModeTask {
+		return "Task cannot be empty."
+	}
+	return "Question cannot be empty."
+}
+
+// exportPromptHeadingForMode returns the request section heading used in the
+// exported markdown ("# Ask" / "# Task").
+func exportPromptHeadingForMode(mode guiMode) string {
+	if mode == guiModeTask {
+		return "Task"
+	}
+	return "Ask"
 }
 
 func displayStatus(s *state) string {
