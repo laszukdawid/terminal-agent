@@ -38,6 +38,7 @@ const (
 	promptCursorWidth    float32 = 3
 	promptCursorMinAlpha uint8   = 0x22
 	promptCursorDuration         = 650 * time.Millisecond
+	inputTextInset       float32 = 24
 
 	// Mascot "walking" wiggle and the data-transfer dots, played while a request
 	// is in flight.
@@ -57,6 +58,7 @@ const (
 	promptGlyph    = ">_"
 	inputPrompt    = ">"
 	sectionAsk     = "ASK THE TERMINAL AGENT"
+	sectionTask    = "TASK THE TERMINAL AGENT TO DO"
 	sectionResp    = "RESPONSE"
 	sectionErr     = "ERROR"
 	sendButtonText = "SEND  ›"
@@ -82,6 +84,9 @@ type popupWindow struct {
 	input        *popupEntry
 	actionButton *widget.Button
 
+	inputHeading    *canvas.Text
+	navAsk          *navRow
+	navTask         *navRow
 	responseHeading *canvas.Text
 	responseSection *fyne.Container
 	outputField     *widget.RichText
@@ -127,6 +132,8 @@ type popupWindow struct {
 	onCopy        func()
 	onExport      func()
 	onSettings    func()
+	onSelectAsk   func()
+	onSelectTask  func()
 	onTest        func()
 	onInput       func(string)
 	onQuit        func()
@@ -142,6 +149,7 @@ type popupEntry struct {
 	voiceTriggerKey fyne.KeyName
 	focusCursor     *canvas.Rectangle
 	cursorAnim      *fyne.Animation
+	visibleTopRow   int
 }
 
 type settingsTextEntry struct {
@@ -388,8 +396,41 @@ func (e *popupEntry) positionFocusCursor() {
 	}
 	textSize := fyne.MeasureText("M", theme.TextSize(), e.TextStyle)
 	e.focusCursor.Resize(fyne.NewSize(promptCursorWidth, textSize.Height))
-	e.focusCursor.Move(e.CursorPosition())
+	e.updateVisibleTopRow()
+	pos := e.CursorPosition()
+	pos.Y -= float32(e.visibleTopRow) * textSize.Height
+	if pos.Y < 0 {
+		pos.Y = 0
+	}
+	maxY := e.Size().Height - textSize.Height
+	if maxY > 0 && pos.Y > maxY {
+		pos.Y = maxY
+	}
+	e.focusCursor.Move(pos)
 	e.focusCursor.Refresh()
+}
+
+func (e *popupEntry) updateVisibleTopRow() {
+	rowCount := promptInputRowCount(e.Text, e.Size().Width)
+	if cursorRows := e.CursorRow + 1; cursorRows > rowCount {
+		rowCount = cursorRows
+	}
+	maxTopRow := rowCount - maxInputRows
+	if maxTopRow < 0 {
+		maxTopRow = 0
+	}
+	if e.visibleTopRow > maxTopRow {
+		e.visibleTopRow = maxTopRow
+	}
+	if e.CursorRow < e.visibleTopRow {
+		e.visibleTopRow = e.CursorRow
+	}
+	if e.CursorRow >= e.visibleTopRow+maxInputRows {
+		e.visibleTopRow = e.CursorRow - maxInputRows + 1
+	}
+	if e.visibleTopRow < 0 {
+		e.visibleTopRow = 0
+	}
 }
 
 func (e *popupEntry) startFocusCursor() {
@@ -590,7 +631,21 @@ func (p *popupWindow) buildTopBar() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
-	nav := container.NewVBox(newNavRow("CHAT", iconPathChat, true, nil))
+	// ASK and TASK are the two live modes. ASK keeps the chat-bubble icon from
+	// the original single-mode sidebar; TASK gets the action "zap" glyph. The
+	// rows own only their styling and fire selection callbacks; App decides what
+	// Ask/Task mean and owns the mode state.
+	p.navAsk = newNavRow("ASK", iconPathChat, true, func() {
+		if p.onSelectAsk != nil {
+			p.onSelectAsk()
+		}
+	})
+	p.navTask = newNavRow("TASK", iconPathTask, false, func() {
+		if p.onSelectTask != nil {
+			p.onSelectTask()
+		}
+	})
+	nav := container.NewVBox(p.navAsk, p.navTask)
 	// HISTORY, ENV and TOOLS are not wired up yet, so they are only shown in
 	// dev mode where we can build them out without exposing dead nav entries.
 	if devMode {
@@ -678,7 +733,7 @@ func (p *popupWindow) buildConnectionStatus() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
-	askHeading := brandSectionLabel(sectionAsk)
+	p.inputHeading = brandSectionLabel(sectionAsk)
 
 	prompt := canvas.NewText(inputPrompt, brandAccentGreen)
 	prompt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
@@ -725,7 +780,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	)
 	p.responseSection.Hide()
 
-	askGroup := container.NewVBox(askHeading, inputPanel)
+	askGroup := container.NewVBox(p.inputHeading, inputPanel)
 
 	workspace := container.NewBorder(
 		askGroup,
@@ -926,6 +981,26 @@ func (p *popupWindow) setMeta(text string) {
 	}
 	p.metaLabel.Text = text
 	p.metaLabel.Refresh()
+}
+
+// setMode updates the sidebar active row and the input section heading to match
+// the selected mode, without rebuilding the workspace or window.
+func (p *popupWindow) setMode(mode guiMode) {
+	if p.navAsk != nil {
+		p.navAsk.setActive(mode == guiModeAsk)
+	}
+	if p.navTask != nil {
+		p.navTask.setActive(mode == guiModeTask)
+	}
+	p.setInputHeading(inputHeadingForMode(mode))
+}
+
+func (p *popupWindow) setInputHeading(text string) {
+	if p.inputHeading == nil || p.inputHeading.Text == text {
+		return
+	}
+	p.inputHeading.Text = text
+	p.inputHeading.Refresh()
 }
 
 func (p *popupWindow) setResponseHeading(text string) {
@@ -1236,14 +1311,12 @@ func environmentSummaryText(result EnvironmentLoadResult) string {
 }
 
 func (p *popupWindow) resizeInput(value string) {
-	rows := strings.Count(value, "\n") + 1
-	if rows < 1 {
-		rows = 1
-	}
-	if rows > maxInputRows {
-		rows = maxInputRows
-	}
+	rows := promptInputRows(value, p.input.Size().Width)
 	p.input.SetMinRowsVisible(rows)
+	p.input.Refresh()
+	if content := p.window.Content(); content != nil {
+		content.Refresh()
+	}
 	win := p.window
 	current := win.Canvas().Size()
 	height := current.Height
@@ -1254,6 +1327,35 @@ func (p *popupWindow) resizeInput(value string) {
 		height = maxWindowHeight
 	}
 	win.Resize(fyne.NewSize(max(current.Width, defaultWindowWidth), height))
+}
+
+func promptInputRows(value string, width float32) int {
+	rows := promptInputRowCount(value, width)
+	if rows > maxInputRows {
+		rows = maxInputRows
+	}
+	return rows
+}
+
+func promptInputRowCount(value string, width float32) int {
+	charWidth := fyne.MeasureText("M", theme.TextSize(), fyne.TextStyle{Monospace: true}).Width
+	cols := int((width - inputTextInset) / charWidth)
+	if cols < 1 {
+		cols = 1
+	}
+
+	rows := 0
+	for _, line := range strings.Split(value, "\n") {
+		lineRows := int(math.Ceil(float64(len([]rune(line))) / float64(cols)))
+		if lineRows < 1 {
+			lineRows = 1
+		}
+		rows += lineRows
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	return rows
 }
 
 func max(a, b float32) float32 {

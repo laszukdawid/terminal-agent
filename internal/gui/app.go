@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,7 +52,7 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		fyneApp:       fyneApp,
 		service:       service,
 		cfg:           cfg,
-		state:         &state{},
+		state:         &state{mode: guiModeAsk},
 		quit:          fyneApp.Quit,
 		stopIndicator: make(chan struct{}),
 		version:       options.Version,
@@ -172,6 +173,8 @@ func (g *App) wire() {
 	g.popup.onCopy = g.copyOutput
 	g.popup.onExport = g.exportOutput
 	g.popup.onSettings = g.openSettings
+	g.popup.onSelectAsk = func() { g.setMode(guiModeAsk) }
+	g.popup.onSelectTask = func() { g.setMode(guiModeTask) }
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -313,6 +316,64 @@ func (g *App) renderResponse() {
 // renderOutput pushes the current response into the view.
 func (g *App) renderOutput() {
 	g.popup.setOutput(g.state.output)
+}
+
+// setMode switches the active sidebar tab. Switching is ignored while a request
+// is in flight to avoid ambiguous ownership of the running stream.
+func (g *App) setMode(mode guiMode) {
+	if g.state.isRunning || g.state.mode == mode {
+		return
+	}
+	g.state.mode = mode
+	g.popup.setMode(mode)
+	g.render()
+}
+
+// beginRun performs the shared setup both modes need before dispatching to the
+// service, and returns the cancellable context for the run.
+func (g *App) beginRun(message string) context.Context {
+	g.state.resetOutput()
+	g.state.question = message
+	ctx, cancel := context.WithCancel(context.Background())
+	g.state.setRunning(cancel)
+	g.renderOutput()
+	g.startIndicator()
+	g.render()
+	return ctx
+}
+
+// failRunSetup unwinds an in-flight run when the service rejects the request
+// before any events are produced.
+func (g *App) failRunSetup(err error) {
+	g.stopIndicatorAnimation()
+	g.state.clearRunning()
+	g.state.errorText = runtimeErrorMessage(err)
+	g.render()
+}
+
+// inputHeadingForMode returns the input section heading for the active mode.
+func inputHeadingForMode(mode guiMode) string {
+	if mode == guiModeTask {
+		return sectionTask
+	}
+	return sectionAsk
+}
+
+// emptyInputMessage returns the validation message shown for an empty submit.
+func emptyInputMessage(mode guiMode) string {
+	if mode == guiModeTask {
+		return "Task cannot be empty."
+	}
+	return "Question cannot be empty."
+}
+
+// exportPromptHeadingForMode returns the request section heading used in the
+// exported markdown ("# Ask" / "# Task").
+func exportPromptHeadingForMode(mode guiMode) string {
+	if mode == guiModeTask {
+		return "Task"
+	}
+	return "Ask"
 }
 
 func displayStatus(s *state) string {

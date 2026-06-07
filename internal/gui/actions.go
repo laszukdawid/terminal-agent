@@ -19,19 +19,24 @@ func (g *App) submit() {
 
 	message := strings.TrimSpace(g.popup.input.Text)
 	if message == "" {
-		g.state.errorText = "Question cannot be empty."
+		g.state.errorText = emptyInputMessage(g.state.mode)
 		g.render()
 		return
 	}
 
-	g.state.resetOutput()
-	g.state.question = message
-	ctx, cancel := context.WithCancel(context.Background())
-	g.state.setRunning(cancel)
-	g.renderOutput()
-	g.startIndicator()
-	g.render()
+	ctx := g.beginRun(message)
 
+	switch g.state.mode {
+	case guiModeTask:
+		g.submitTask(ctx, message)
+	default:
+		g.submitAsk(ctx, message)
+	}
+}
+
+// submitAsk dispatches an Ask run. It preserves the original Ask request fields
+// exactly, including memory and streaming.
+func (g *App) submitAsk(ctx context.Context, message string) {
 	events, err := g.service.AskEvents(ctx, appservice.AskRequest{
 		Message:    message,
 		Provider:   g.cfg.GetDefaultProvider(),
@@ -43,10 +48,7 @@ func (g *App) submit() {
 		Config:     g.cfg,
 	})
 	if err != nil {
-		g.stopIndicatorAnimation()
-		g.state.clearRunning()
-		g.state.errorText = runtimeErrorMessage(err)
-		g.render()
+		g.failRunSetup(err)
 		return
 	}
 
@@ -100,5 +102,6 @@ func (g *App) exportContent(body string) string {
 	if question == "" {
 		return header + body + "\n"
 	}
-	return header + "# Ask\n\n" + question + "\n\n---\n\n# Response\n\n" + body + "\n"
+	promptHeading := exportPromptHeadingForMode(g.state.mode)
+	return header + "# " + promptHeading + "\n\n" + question + "\n\n---\n\n# Response\n\n" + body + "\n"
 }
