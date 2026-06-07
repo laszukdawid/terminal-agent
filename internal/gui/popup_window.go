@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"math"
 	"slices"
 	"strings"
 
@@ -29,6 +30,7 @@ const (
 	statusIndicatorSize  float32 = 18
 	providerStatusWidth  float32 = 28
 	providerStatusHeight float32 = 24
+	inputTextInset       float32 = 24
 )
 
 var spinnerFrames = []string{"|", "/", "-", "\\"}
@@ -639,14 +641,12 @@ func environmentSummaryText(result EnvironmentLoadResult) string {
 }
 
 func (p *popupWindow) resizeInput(value string) {
-	rows := strings.Count(value, "\n") + 1
-	if rows < 1 {
-		rows = 1
-	}
-	if rows > maxInputRows {
-		rows = maxInputRows
-	}
+	rows := promptInputRows(value, p.input.Size().Width)
 	p.input.SetMinRowsVisible(rows)
+	p.input.Refresh()
+	if content := p.window.Content(); content != nil {
+		content.Refresh()
+	}
 	current := p.window.Canvas().Size()
 	height := current.Height
 	if height < minWindowHeight {
@@ -656,6 +656,30 @@ func (p *popupWindow) resizeInput(value string) {
 		height = maxWindowHeight
 	}
 	p.window.Resize(fyne.NewSize(max(current.Width, defaultWindowWidth), height))
+}
+
+func promptInputRows(value string, width float32) int {
+	charWidth := fyne.MeasureText("M", theme.TextSize(), fyne.TextStyle{Monospace: true}).Width
+	cols := int((width - inputTextInset) / charWidth)
+	if cols < 1 {
+		cols = 1
+	}
+
+	rows := 0
+	for _, line := range strings.Split(value, "\n") {
+		lineRows := int(math.Ceil(float64(len([]rune(line))) / float64(cols)))
+		if lineRows < 1 {
+			lineRows = 1
+		}
+		rows += lineRows
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	if rows > maxInputRows {
+		rows = maxInputRows
+	}
+	return rows
 }
 
 func withBackground(content fyne.CanvasObject, fill color.Color) fyne.CanvasObject {

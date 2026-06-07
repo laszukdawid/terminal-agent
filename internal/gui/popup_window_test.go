@@ -1,6 +1,35 @@
 package gui
 
-import "testing"
+import (
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
+)
+
+func TestPromptInputRowsExpandsForNewlinesAndWrappedText(t *testing.T) {
+	charWidth := fyne.MeasureText("M", theme.TextSize(), fyne.TextStyle{Monospace: true}).Width
+	widthForTenColumns := inputTextInset + charWidth*10
+
+	tests := []struct {
+		name  string
+		value string
+		want  int
+	}{
+		{name: "single line", value: "short", want: 1},
+		{name: "explicit newline", value: "one\ntwo", want: 2},
+		{name: "wrapped line", value: "12345678901", want: 2},
+		{name: "capped", value: "one\ntwo\nthree\nfour", want: maxInputRows},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := promptInputRows(tt.value, widthForTenColumns); got != tt.want {
+				t.Fatalf("promptInputRows(%q) = %d, want %d", tt.value, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestUnwrapMarkdownFence(t *testing.T) {
 	tests := []struct {
