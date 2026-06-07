@@ -349,6 +349,29 @@ func TestConfirmToolAutoApproveSkipsPrompt(t *testing.T) {
 	}
 }
 
+func TestConfirmToolAutoAllowsSafeCdSequence(t *testing.T) {
+	rootDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(rootDir, "assets"), 0o755))
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	requester := taskUserConfirmationRequester{interaction: interaction}
+	run := &taskExecutionState{
+		state:         &TaskState{Dirs: TaskDirs{RootDir: rootDir, CurrentDir: rootDir}},
+		confirmations: NewConfirmationManager(nil, nil, requester.RequestUserConfirmation, nil),
+	}
+	response := connector.LlmResponseWithTools{
+		ToolName: tools.ToolNameUnix,
+		ToolInput: map[string]any{
+			"command": "cd " + rootDir + " && find assets -maxdepth 1 -type f -printf '%f'",
+		},
+	}
+
+	allowed, err := run.confirmTool(tools.NewUnixTool(nil), response)
+
+	require.NoError(t, err)
+	assert.True(t, allowed)
+	assert.Empty(t, interaction.confirmations)
+}
+
 func TestFinalizeSummaryUsesRenderedTemplate(t *testing.T) {
 	conn := &summaryCaptureConnector{}
 	sysPrompt := "task system prompt"
