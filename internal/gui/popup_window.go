@@ -63,7 +63,6 @@ const (
 	sectionErr          = "ERROR"
 	sendButtonText      = "SEND  ›"
 	stopButtonText      = "STOP  ■"
-	sendHintText        = "Enter to send"
 	autoApproveHintText = "Auto Approve"
 	tagline1            = "Your terminal."
 	tagline2            = "My context."
@@ -741,9 +740,6 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	prompt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	prompt.TextSize = theme.TextSize() + 3
 
-	hint := canvas.NewText(sendHintText, brandSecondaryText)
-	hint.TextStyle = fyne.TextStyle{Monospace: true}
-	hint.TextSize = theme.TextSize() - 3
 	p.actionSubtitle = canvas.NewText("", brandSecondaryText)
 	p.actionSubtitle.Alignment = fyne.TextAlignCenter
 	p.actionSubtitle.TextStyle = fyne.TextStyle{Monospace: true}
@@ -755,7 +751,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	inputRow := container.NewBorder(
 		nil, nil,
 		vCenter(prompt),
-		container.NewHBox(vCenter(hint), hStrut(12), vCenter(actionControl)),
+		vCenter(actionControl),
 		vCenter(inputWithCursor),
 	)
 	inputPanel := borderedBox(inputRow, brandBorderBright)
