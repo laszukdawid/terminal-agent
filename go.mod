@@ -134,4 +134,4 @@ require (
 
 replace fyne.io/x/fyne => github.com/laszukdawid/fyne-x v0.0.0-20260530141525-4d4183a91890
 
-replace fyne.io/fyne/v2 => github.com/laszukdawid/fyne/v2 v2.7.5-0.20260607152115-ea47d57a7d0e
+replace fyne.io/fyne/v2 => github.com/laszukdawid/fyne/v2 v2.7.5-0.20260607171718-879f5f5fcb82
