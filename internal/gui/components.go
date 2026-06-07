@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"math"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -280,3 +281,218 @@ func (r *navRowRenderer) Refresh() {
 	r.row.icon.Refresh()
 	r.row.text.Refresh()
 }
+
+const (
+	// dataLane visuals: a faint dotted "wire" with a bold packet that travels
+	// along it during a request. Dots near the packet swell and brighten.
+	laneMargin     float32 = 6
+	laneMinWidth   float32 = 90
+	laneMinHeight  float32 = 16
+	laneDotBaseR   float32 = 1.4
+	laneDotMidR    float32 = 2.0
+	laneDotBoldR   float32 = 2.9
+	laneDotMidDist float32 = 14
+	lanePacketSize float32 = 8
+)
+
+// dataLane draws a row of dots (the wire between the agent and the host) and a
+// bold packet that can be moved along it to visualize data transfer. When idle
+// it is just a faint evenly-spaced dotted rule.
+type dataLane struct {
+	widget.BaseWidget
+	dots     []*canvas.Circle
+	packet   *canvas.Rectangle
+	progress float32
+	active   bool
+	w, h     float32
+}
+
+func newDataLane(dotCount int) *dataLane {
+	l := &dataLane{dots: make([]*canvas.Circle, dotCount)}
+	for i := range l.dots {
+		l.dots[i] = canvas.NewCircle(brandBorderBright)
+	}
+	l.packet = canvas.NewRectangle(brandAccentGreen)
+	l.packet.CornerRadius = 1.5
+	l.packet.Hide()
+	l.ExtendBaseWidget(l)
+	return l
+}
+
+// SetProgress moves the packet to progress in [0,1] along the lane and lights
+// up nearby dots. It marks the lane active so the packet is shown.
+func (l *dataLane) SetProgress(progress float32) {
+	l.progress = progress
+	l.active = true
+	l.relayout()
+	l.Refresh()
+}
+
+// SetIdle hides the packet and restores the faint dotted rule.
+func (l *dataLane) SetIdle() {
+	l.active = false
+	l.relayout()
+	l.Refresh()
+}
+
+func (l *dataLane) relayout() {
+	n := len(l.dots)
+	if n == 0 || l.w <= 0 {
+		return
+	}
+	span := l.w - 2*laneMargin
+	if span < 0 {
+		span = 0
+	}
+	cy := l.h / 2
+	head := laneMargin + l.progress*span
+
+	for i, dot := range l.dots {
+		var x float32 = laneMargin
+		if n > 1 {
+			x += span * float32(i) / float32(n-1)
+		}
+		r, col := laneDotStyle(absF(x-head), l.active)
+		dot.FillColor = col
+		dot.Resize(fyne.NewSize(2*r, 2*r))
+		dot.Move(fyne.NewPos(x-r, cy-r))
+		dot.Refresh()
+	}
+
+	if l.active {
+		l.packet.Resize(fyne.NewSize(lanePacketSize, lanePacketSize))
+		l.packet.Move(fyne.NewPos(head-lanePacketSize/2, cy-lanePacketSize/2))
+		l.packet.Show()
+	} else {
+		l.packet.Hide()
+	}
+	l.packet.Refresh()
+}
+
+// laneDotStyle returns the radius and color for a dot at distPx pixels from the
+// packet head; dots near the packet are larger and brighter.
+func laneDotStyle(distPx float32, active bool) (float32, color.Color) {
+	if !active {
+		return laneDotBaseR, brandBorderBright
+	}
+	switch {
+	case distPx <= lanePacketSize:
+		return laneDotBoldR, brandAccentGreen
+	case distPx <= laneDotMidDist:
+		return laneDotMidR, brandMutedGreen
+	default:
+		return laneDotBaseR, brandBorderBright
+	}
+}
+
+func absF(v float32) float32 { return float32(math.Abs(float64(v))) }
+
+func (l *dataLane) CreateRenderer() fyne.WidgetRenderer {
+	objects := make([]fyne.CanvasObject, 0, len(l.dots)+1)
+	for _, dot := range l.dots {
+		objects = append(objects, dot)
+	}
+	objects = append(objects, l.packet)
+	return &dataLaneRenderer{lane: l, objects: objects}
+}
+
+type dataLaneRenderer struct {
+	lane    *dataLane
+	objects []fyne.CanvasObject
+}
+
+func (r *dataLaneRenderer) Destroy() {}
+
+func (r *dataLaneRenderer) Layout(size fyne.Size) {
+	r.lane.w = size.Width
+	r.lane.h = size.Height
+	r.lane.relayout()
+}
+
+func (r *dataLaneRenderer) MinSize() fyne.Size { return fyne.NewSize(laneMinWidth, laneMinHeight) }
+
+func (r *dataLaneRenderer) Objects() []fyne.CanvasObject { return r.objects }
+
+func (r *dataLaneRenderer) Refresh() { canvas.Refresh(r.lane) }
+
+const (
+	// Host (receiving) node geometry and receive reaction. The node sits in a
+	// fixed box large enough for the icon to swell and shake on packet arrival.
+	hostNodeSize         float32 = 40
+	hostIconBase         float32 = 30
+	hostIconGrow         float32 = 5
+	hostShakeAmp         float32 = 2.5
+	hostActiveLevelStart float32 = 0.3
+)
+
+// hostNode is the receiving host/server. It rests at a fixed size and, as a
+// packet arrives, swells slightly and jitters horizontally (a "shake"),
+// returning to rest as the packet leaves.
+type hostNode struct {
+	widget.BaseWidget
+	image     *canvas.Image
+	idleRes   fyne.Resource
+	activeRes fyne.Resource
+	size      float32
+	dx        float32
+	w, h      float32
+}
+
+func newHostNode(idle, active fyne.Resource) *hostNode {
+	n := &hostNode{idleRes: idle, activeRes: active, size: hostIconBase}
+	n.image = canvas.NewImageFromResource(idle)
+	n.image.FillMode = canvas.ImageFillContain
+	n.ExtendBaseWidget(n)
+	return n
+}
+
+// SetState reacts to a packet: level in [0,1] is arrival proximity (drives size
+// and shake amplitude), and shake in [-1,1] is the oscillation phase.
+func (n *hostNode) SetState(level, shake float32) {
+	if level < 0 {
+		level = 0
+	} else if level > 1 {
+		level = 1
+	}
+	n.size = hostIconBase + level*hostIconGrow
+	n.dx = shake * hostShakeAmp * level
+	res := n.idleRes
+	if level >= hostActiveLevelStart {
+		res = n.activeRes
+	}
+	if n.image.Resource != res {
+		n.image.Resource = res
+	}
+	n.reposition()
+	n.Refresh()
+}
+
+func (n *hostNode) reposition() {
+	if n.w <= 0 {
+		return
+	}
+	n.image.Resize(fyne.NewSize(n.size, n.size))
+	n.image.Move(fyne.NewPos((n.w-n.size)/2+n.dx, (n.h-n.size)/2))
+}
+
+func (n *hostNode) CreateRenderer() fyne.WidgetRenderer {
+	return &hostNodeRenderer{node: n}
+}
+
+type hostNodeRenderer struct {
+	node *hostNode
+}
+
+func (r *hostNodeRenderer) Destroy() {}
+
+func (r *hostNodeRenderer) Layout(size fyne.Size) {
+	r.node.w = size.Width
+	r.node.h = size.Height
+	r.node.reposition()
+}
+
+func (r *hostNodeRenderer) MinSize() fyne.Size { return fyne.NewSize(hostNodeSize, hostNodeSize) }
+
+func (r *hostNodeRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.node.image} }
+
+func (r *hostNodeRenderer) Refresh() { canvas.Refresh(r.node) }

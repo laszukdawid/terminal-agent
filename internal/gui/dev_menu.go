@@ -2,9 +2,15 @@ package gui
 
 import (
 	"context"
+	"time"
 
+	"fyne.io/fyne/v2"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
 )
+
+// animationDemoDuration is how long the dev-only "waiting" animation demo runs
+// before settling, unless cancelled first with STOP.
+const animationDemoDuration = 90 * time.Second
 
 // openTestMenu shows the dev-only test dialog. Each entry exercises a GUI
 // rendering path without requiring the user to manually reproduce it.
@@ -20,7 +26,50 @@ func (g *App) openTestMenu() {
 			name: "Invalid provider error",
 			run:  g.showInvalidProviderError,
 		},
+		{
+			name: "Waiting animation (no LLM)",
+			run:  g.runAnimationDemo,
+		},
 	})
+}
+
+// runAnimationDemo drives the in-flight UI state (status indicator, walking
+// mascot and data-transfer dots) without contacting any provider, so the
+// waiting animation can be observed at length. STOP cancels it early.
+func (g *App) runAnimationDemo() {
+	if g.state.isRunning {
+		g.cancel()
+	}
+
+	g.state.resetOutput()
+	g.state.question = "Dev: waiting animation"
+	ctx, cancel := context.WithCancel(context.Background())
+	g.state.setRunning(cancel)
+	g.state.status = "responding"
+	g.startIndicator()
+	g.render()
+
+	go func() {
+		timer := time.NewTimer(animationDemoDuration)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+		canceled := ctx.Err() != nil
+		fyne.Do(func() {
+			g.stopIndicatorAnimation()
+			g.state.clearRunning()
+			if canceled {
+				g.state.status = "Canceled."
+			} else {
+				g.state.output = "Animation demo finished."
+			}
+			g.renderResponse()
+			g.render()
+			g.FocusInput()
+		})
+	}()
 }
 
 // showCannedOutput places static content in the response area as if a run had

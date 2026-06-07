@@ -96,5 +96,9 @@ func (g *App) exportContent(body string) string {
 		g.cfg.GetDefaultModelId(),
 		g.state.completedAt.Format("2006-01-02 15:04:05"),
 	)
-	return header + body + "\n"
+	question := strings.TrimSpace(g.state.question)
+	if question == "" {
+		return header + body + "\n"
+	}
+	return header + "# Ask\n\n" + question + "\n\n---\n\n# Response\n\n" + body + "\n"
 }

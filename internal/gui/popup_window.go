@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ const (
 	sidebarWidth        float32 = 208
 	navIconSize         float32 = 16
 	micRingSize         float32 = 54
+	mascotSize          float32 = 76
 	statusIndicatorSize float32 = 18
 
 	providerStatusWidth  float32 = 28
@@ -36,6 +38,20 @@ const (
 	promptCursorWidth    float32 = 3
 	promptCursorMinAlpha uint8   = 0x22
 	promptCursorDuration         = 650 * time.Millisecond
+
+	// Mascot "walking" wiggle and the data-transfer dots, played while a request
+	// is in flight.
+	mascotFrameCount   = 12
+	mascotAntennaSwing = 2.4
+	mascotLegSwing     = 3.6
+	mascotAnimDuration = 1300 * time.Millisecond
+	mascotDotCount     = 20
+
+	// Host receive reaction: when the packet's position (the triangle wave)
+	// crosses hostReceiveStart, the host begins reacting; the shake oscillates
+	// at hostShakeFreq cycles across the animation loop.
+	hostReceiveStart float32 = 0.7
+	hostShakeFreq            = 9.0
 
 	wordmarkText   = "TERMINAL AGENT"
 	promptGlyph    = ">_"
@@ -57,17 +73,6 @@ const (
 	listenWordOff       = "MIC OFF"
 	listenWordBusy      = "BUSY"
 )
-
-// asciiMascot is the line-based terminal agent that anchors the bottom of the
-// workspace. It is intentionally simple and monochrome per the brand mascot
-// guidance (a tiny process living inside the session, not a glossy avatar).
-var asciiMascot = []string{
-	"  ╭─────╮",
-	" ╶┤ o o ├╴",
-	"  │  ◡  │",
-	"  ╰┬───┬╯",
-	"   ╵   ╵",
-}
 
 var spinnerFrames = []string{"|", "/", "-", "\\"}
 
@@ -102,6 +107,14 @@ type popupWindow struct {
 
 	copyButton   *widget.Button
 	exportButton *widget.Button
+
+	mascotImage *canvas.Image
+	robotIdle   fyne.Resource
+	robotFrames []fyne.Resource
+	mascotFrame int
+	dataLane    *dataLane
+	host        *hostNode
+	mascotAnim  *fyne.Animation
 
 	cwdLabel *canvas.Text
 
@@ -577,17 +590,19 @@ func (p *popupWindow) buildTopBar() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
-	nav := container.NewVBox(
-		newNavRow("CHAT", iconPathChat, true, nil),
-		newNavRow("HISTORY", iconPathHistory, false, nil),
-		newNavRow("ENV", iconPathEnv, false, nil),
-		newNavRow("TOOLS", iconPathTools, false, nil),
-		newNavRow("SETTINGS", iconPathSettings, false, func() {
-			if p.onSettings != nil {
-				p.onSettings()
-			}
-		}),
-	)
+	nav := container.NewVBox(newNavRow("CHAT", iconPathChat, true, nil))
+	// HISTORY, ENV and TOOLS are not wired up yet, so they are only shown in
+	// dev mode where we can build them out without exposing dead nav entries.
+	if devMode {
+		nav.Add(newNavRow("HISTORY", iconPathHistory, false, nil))
+		nav.Add(newNavRow("ENV", iconPathEnv, false, nil))
+		nav.Add(newNavRow("TOOLS", iconPathTools, false, nil))
+	}
+	nav.Add(newNavRow("SETTINGS", iconPathSettings, false, func() {
+		if p.onSettings != nil {
+			p.onSettings()
+		}
+	}))
 
 	if devMode {
 		p.testButton = widget.NewButton("Test", func() {
@@ -724,13 +739,18 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
-	mascotLines := container.NewVBox()
-	for _, line := range asciiMascot {
-		t := canvas.NewText(line, brandAccentGreen)
-		t.TextStyle = fyne.TextStyle{Monospace: true}
-		t.TextSize = theme.TextSize() - 1
-		mascotLines.Add(t)
+	p.robotIdle = robotMascot(brandAccentGreen)
+	p.robotFrames = make([]fyne.Resource, mascotFrameCount)
+	for i := range p.robotFrames {
+		s := math.Sin(2 * math.Pi * float64(i) / float64(mascotFrameCount))
+		// Legs scissor in opposition and the antenna sways with them: a walk.
+		p.robotFrames[i] = robotMascotFrame(brandAccentGreen, mascotAntennaSwing*s, mascotLegSwing*s, -mascotLegSwing*s)
 	}
+
+	p.mascotImage = canvas.NewImageFromResource(p.robotIdle)
+	p.mascotImage.FillMode = canvas.ImageFillContain
+	p.mascotImage.SetMinSize(fyne.NewSize(mascotSize, mascotSize))
+	mascot := container.NewGridWrap(fyne.NewSize(mascotSize, mascotSize), p.mascotImage)
 
 	t1 := canvas.NewText(tagline1, brandMutedGreen)
 	t1.TextStyle = fyne.TextStyle{Monospace: true}
@@ -738,19 +758,79 @@ func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
 	t2.TextStyle = fyne.TextStyle{Monospace: true}
 	tagline := container.NewVBox(layout.NewSpacer(), t1, t2, layout.NewSpacer())
 
-	dots := canvas.NewText(strings.Repeat(". ", 28), brandBorderBright)
-	dots.TextSize = theme.TextSize() - 1
-	tail := canvas.NewText(promptGlyph, brandAccentGreen)
-	tail.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
-	dottedTail := container.NewHBox(layout.NewSpacer(), container.NewCenter(dots), container.NewCenter(tail))
+	// The wire between the agent and the host, with a packet that travels along
+	// it during a request (see tickMascot); idle it is a faint dotted rule.
+	p.dataLane = newDataLane(mascotDotCount)
+
+	// Receiving end: the host/model the agent sends to (not the >_ mark, which
+	// is the agent's own identity). It shakes and swells as the packet arrives.
+	p.host = newHostNode(serverIcon(brandMutedGreen), serverIcon(brandAccentGreen))
 
 	row := container.NewBorder(
 		nil, nil,
-		container.NewHBox(mascotLines, hStrut(16), tagline),
-		nil,
-		dottedTail,
+		container.NewHBox(container.NewCenter(mascot), hStrut(16), tagline),
+		container.NewHBox(hStrut(10), container.NewCenter(p.host)),
+		p.dataLane,
 	)
 	return borderedBox(row, brandBorder)
+}
+
+// startMascotAnimation plays the walking wiggle and data-transfer dots while a
+// request is in flight. It is idempotent.
+func (p *popupWindow) startMascotAnimation() {
+	if p.mascotImage == nil {
+		return
+	}
+	if p.mascotAnim == nil {
+		p.mascotAnim = fyne.NewAnimation(mascotAnimDuration, p.tickMascot)
+		p.mascotAnim.Curve = fyne.AnimationLinear
+		p.mascotAnim.RepeatCount = fyne.AnimationRepeatForever
+	}
+	p.mascotAnim.Start()
+}
+
+// stopMascotAnimation halts the animation and restores the resting mascot and
+// the faint idle dotted rule.
+func (p *popupWindow) stopMascotAnimation() {
+	if p.mascotAnim != nil {
+		p.mascotAnim.Stop()
+	}
+	if p.mascotImage != nil {
+		p.mascotFrame = 0
+		p.mascotImage.Resource = p.robotIdle
+		p.mascotImage.Refresh()
+	}
+	if p.dataLane != nil {
+		p.dataLane.SetIdle()
+	}
+	if p.host != nil {
+		p.host.SetState(0, 0)
+	}
+}
+
+// tickMascot advances the walking mascot frame and sends the packet along the
+// data lane for a given animation progress in [0,1).
+func (p *popupWindow) tickMascot(progress float32) {
+	frame := int(progress*float32(mascotFrameCount)) % mascotFrameCount
+	if frame != p.mascotFrame {
+		p.mascotFrame = frame
+		p.mascotImage.Resource = p.robotFrames[frame]
+		p.mascotImage.Refresh()
+	}
+
+	// Triangle wave: the packet runs to the host and back, suggesting data sent
+	// and received.
+	tri := 1 - float32(math.Abs(float64(2*progress-1)))
+	if p.dataLane != nil {
+		p.dataLane.SetProgress(tri)
+	}
+	// The host reacts as the packet nears it, peaking on arrival, with a fast
+	// jitter for the "shake".
+	if p.host != nil {
+		level := (tri - hostReceiveStart) / (1 - hostReceiveStart)
+		shake := float32(math.Sin(float64(progress) * 2 * math.Pi * hostShakeFreq))
+		p.host.SetState(level, shake)
+	}
 }
 
 func (p *popupWindow) wireInteractions(app fyne.App) {
@@ -871,8 +951,8 @@ func (p *popupWindow) setOutput(content string) {
 		return
 	}
 	p.lastRendered = content
-	segs := renderMarkdown(decorateDollarMarkers(unwrapMarkdownFence(content)))
-	p.outputField.Segments = colorizeDollarMarkers(segs)
+	p.outputField.ParseMarkdown(decorateDollarMarkers(unwrapMarkdownFence(content)))
+	p.outputField.Segments = colorizeDollarMarkers(p.outputField.Segments)
 	p.outputField.Refresh()
 }
 

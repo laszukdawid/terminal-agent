@@ -124,6 +124,7 @@ func (g *App) Quit() {
 }
 
 func (g *App) startIndicator() {
+	g.popup.startMascotAnimation()
 	stop := make(chan struct{})
 	g.stopIndicator = stop
 	go func() {
@@ -147,6 +148,7 @@ func (g *App) startIndicator() {
 }
 
 func (g *App) stopIndicatorAnimation() {
+	g.popup.stopMascotAnimation()
 	select {
 	case <-g.stopIndicator:
 	default:

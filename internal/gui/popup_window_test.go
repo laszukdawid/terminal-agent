@@ -1,6 +1,27 @@
 package gui
 
-import "testing"
+import (
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+)
+
+func TestBuildOutputWrapsGeneralResponseText(t *testing.T) {
+	p := &popupWindow{}
+
+	p.buildOutput()
+
+	if p.outputScroll.Direction != container.ScrollVerticalOnly {
+		t.Fatalf("outputScroll.Direction = %v, want %v", p.outputScroll.Direction, container.ScrollVerticalOnly)
+	}
+	if p.outputField.Wrapping != fyne.TextWrapWord {
+		t.Fatalf("outputField.Wrapping = %v, want %v", p.outputField.Wrapping, fyne.TextWrapWord)
+	}
+	if p.errorLabel.Wrapping != fyne.TextWrapBreak {
+		t.Fatalf("errorLabel.Wrapping = %v, want %v", p.errorLabel.Wrapping, fyne.TextWrapBreak)
+	}
+}
 
 func TestUnwrapMarkdownFence(t *testing.T) {
 	tests := []struct {
