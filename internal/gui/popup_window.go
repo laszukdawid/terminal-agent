@@ -19,55 +19,87 @@ import (
 )
 
 const (
-	defaultWindowWidth   float32 = 720
-	defaultWindowHeight  float32 = 280
-	minWindowHeight      float32 = 240
-	maxWindowHeight      float32 = 760
-	maxInputRows                 = 3
-	compactOutputHeight  float32 = 110
-	statusMinWidth       float32 = 130
-	statusIndicatorSize  float32 = 18
+	defaultWindowWidth  float32 = 860
+	defaultWindowHeight float32 = 600
+	minWindowHeight     float32 = 520
+	maxWindowHeight     float32 = 900
+	maxInputRows                = 3
+	compactOutputHeight float32 = 150
+	sidebarWidth        float32 = 176
+	navIconSize         float32 = 16
+	micRingSize         float32 = 54
+	statusIndicatorSize float32 = 18
+
 	providerStatusWidth  float32 = 28
 	providerStatusHeight float32 = 24
+
+	wordmarkText   = "TERMINAL AGENT"
+	promptGlyph    = ">_"
+	inputPrompt    = ">"
+	sectionAsk     = "ASK THE TERMINAL AGENT"
+	sectionResp    = "RESPONSE"
+	sectionErr     = "ERROR"
+	sendButtonText = "SEND  ›"
+	stopButtonText = "STOP  ■"
+	sendHintText   = "Ctrl + Enter to send"
+	tagline1       = "Your terminal."
+	tagline2       = "My context."
 )
+
+// asciiMascot is the line-based terminal agent that anchors the bottom of the
+// workspace. It is intentionally simple and monochrome per the brand mascot
+// guidance (a tiny process living inside the session, not a glossy avatar).
+var asciiMascot = []string{
+	"  ╭─────╮",
+	" ╶┤ o o ├╴",
+	"  │  ◡  │",
+	"  ╰┬───┬╯",
+	"   ╵   ╵",
+}
 
 var spinnerFrames = []string{"|", "/", "-", "\\"}
 
 type popupWindow struct {
-	window          fyne.Window
-	input           *popupEntry
-	inputCard       fyne.CanvasObject
-	requestHeading  *widget.Label
-	answerHeading   *widget.Label
-	answerHeader    *fyne.Container
-	answerMeta      *fyne.Container
-	questionCard    fyne.CanvasObject
-	questionLabel   *canvas.Text
+	window fyne.Window
+
+	input        *popupEntry
+	actionButton *widget.Button
+
+	responseHeading *canvas.Text
+	responseSection *fyne.Container
 	outputField     *widget.RichText
 	outputBody      fyne.CanvasObject
 	errorLabel      *widget.Label
 	errorBody       fyne.CanvasObject
 	outputScroll    *container.Scroll
+	metaLabel       *canvas.Text
 	lastRendered    string
 	lastError       string
+
 	headerStatus    *widget.Label
 	headerBrain     *canvas.Text
 	headerSpinner   *canvas.Text
 	headerStatusBox fyne.CanvasObject
 	modelLabel      *widget.Label
-	actionButton    *widget.Button
-	listenButton    *widget.Button
-	copyButton      *widget.Button
-	settingsButton  *widget.Button
-	testButton      *widget.Button
-	answerPanel     *fyne.Container
+
+	listenButton   *widget.Button
+	listenSubtitle *canvas.Text
+	micRing        *canvas.Circle
+
+	copyButton   *widget.Button
+	exportButton *widget.Button
+
+	clockLabel *canvas.Text
+	cwdLabel   *canvas.Text
+
+	testButton *widget.Button
 
 	onSubmit      func()
-	onShiftEnter  func()
 	onEscape      func()
 	onAction      func()
 	onVoiceToggle func()
 	onCopy        func()
+	onExport      func()
 	onSettings    func()
 	onTest        func()
 	onInput       func(string)
@@ -222,206 +254,399 @@ func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 }
 
 func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
-	window := app.NewWindow("Terminal Agent")
-	window.Resize(fyne.NewSize(defaultWindowWidth, defaultWindowHeight))
-	window.SetFixedSize(false)
-	window.CenterOnScreen()
+	win := app.NewWindow("Terminal Agent")
+	win.Resize(fyne.NewSize(defaultWindowWidth, defaultWindowHeight))
+	win.SetFixedSize(false)
+	win.CenterOnScreen()
 
+	p := &popupWindow{window: win}
+
+	p.buildInput(app)
+	p.buildOutput()
+	p.buildStatus()
+
+	topBar := p.buildTopBar()
+	sidebar := p.buildSidebar(devMode)
+	workspace := p.buildWorkspace()
+
+	body := container.NewBorder(
+		container.NewVBox(topBar, brandSeparator()),
+		nil,
+		container.NewBorder(nil, nil, nil, brandVSeparator(), sidebar),
+		nil,
+		workspace,
+	)
+	win.SetContent(container.NewPadded(body))
+
+	p.wireInteractions(app)
+	return p
+}
+
+// buildInput creates the terminal-style prompt entry and the in-field SEND
+// action. SEND lives inside the prompt panel so it is unambiguous which text
+// is being sent (per brand guidance); there is no separate bottom submit.
+func (p *popupWindow) buildInput(app fyne.App) {
 	input := newPopupEntry(app)
-	input.SetPlaceHolder("Ask Terminal Agent")
+	input.SetPlaceHolder("what model is this?")
 	input.SetMinRowsVisible(1)
+	p.input = input
 
-	requestHeading := widget.NewLabelWithStyle("Request", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	answerHeading := widget.NewLabelWithStyle("Response", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	questionLabel := canvas.NewText("", color.Black)
-	questionLabel.Alignment = fyne.TextAlignLeading
-	questionLabel.TextSize = theme.TextSize()
+	action := widget.NewButton(sendButtonText, nil)
+	action.Importance = widget.HighImportance
+	p.actionButton = action
+}
 
+func (p *popupWindow) buildOutput() {
 	outputField := widget.NewRichText()
 	outputField.Wrapping = fyne.TextWrapWord
-	outputBody := withBackground(outputField, color.NRGBA{R: 248, G: 249, B: 251, A: 255})
+	p.outputField = outputField
+	p.outputBody = container.NewPadded(outputField)
+
 	errorLabel := widget.NewLabel("")
 	errorLabel.Wrapping = fyne.TextWrapBreak
 	errorLabel.Importance = widget.DangerImportance
-	errorBody := withBackground(errorLabel, color.NRGBA{R: 255, G: 245, B: 245, A: 255})
-	errorBody.Hide()
-	outputStack := container.NewStack(outputBody, errorBody)
-	outputScroll := container.NewVScroll(outputStack)
-	outputScroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
+	p.errorLabel = errorLabel
+	p.errorBody = container.NewPadded(errorLabel)
+	p.errorBody.Hide()
 
+	outputStack := container.NewStack(p.outputBody, p.errorBody)
+	scroll := container.NewVScroll(outputStack)
+	scroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
+	p.outputScroll = scroll
+
+	p.metaLabel = canvas.NewText("", brandSecondaryText)
+	p.metaLabel.TextSize = theme.TextSize() - 2
+}
+
+func (p *popupWindow) buildStatus() {
 	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	headerStatus.Alignment = fyne.TextAlignCenter
-	headerStatus.Wrapping = fyne.TextWrapOff
 	headerStatus.Importance = widget.MediumImportance
-	headerBrain := canvas.NewText("🧠", theme.PrimaryColor())
-	headerBrain.Alignment = fyne.TextAlignCenter
-	headerBrain.TextSize = theme.TextSize() + 2
-	headerBrain.Hide()
-	headerSpinner := canvas.NewText(spinnerFrames[0], theme.PrimaryColor())
-	headerSpinner.Alignment = fyne.TextAlignCenter
-	headerSpinner.TextSize = theme.TextSize() + 4
-	headerSpinner.Hide()
+	headerStatus.Wrapping = fyne.TextWrapOff
+	p.headerStatus = headerStatus
 
-	modelLabel := widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true})
+	brain := canvas.NewText("🧠", brandAccentGreen)
+	brain.Alignment = fyne.TextAlignCenter
+	brain.TextSize = theme.TextSize() + 2
+	brain.Hide()
+	p.headerBrain = brain
 
-	actionButton := widget.NewButton("Submit", nil)
-	listenButton := widget.NewButton("Listen", nil)
-	copyButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
-	settingsButton := widget.NewButton("Settings", nil)
-	copyButton.Disable()
+	spinner := canvas.NewText(spinnerFrames[0], brandAccentGreen)
+	spinner.Alignment = fyne.TextAlignCenter
+	spinner.TextSize = theme.TextSize() + 4
+	spinner.Hide()
+	p.headerSpinner = spinner
 
-	var testButton *widget.Button
-	if devMode {
-		testButton = widget.NewButton("Test", nil)
-	}
-
-	questionCard := withBackground(questionLabel, color.NRGBA{R: 232, G: 235, B: 239, A: 255})
-	questionCard.Hide()
-	inputCard := withBackground(input, theme.Color(theme.ColorNameInputBackground))
-	outputCard := outputScroll
-
-	answerHeader := container.NewHBox(
-		answerHeading,
-		layout.NewSpacer(),
-		copyButton,
-	)
-	answerMeta := container.NewVBox(requestHeading, questionCard, answerHeader)
-	answerPanel := container.NewBorder(answerMeta, nil, nil, nil, outputCard)
-	toolbar := container.NewHBox(listenButton, actionButton, layout.NewSpacer())
-	if testButton != nil {
-		toolbar.Add(testButton)
-	}
-	toolbar.Add(settingsButton)
 	statusSlot := container.NewGridWrap(
-		fyne.NewSize(statusMinWidth, max(headerStatus.MinSize().Height, statusIndicatorSize)),
+		fyne.NewSize(140, max(headerStatus.MinSize().Height, statusIndicatorSize)),
 		container.NewCenter(headerStatus),
 	)
-	headerStatusBox := container.NewMax(statusSlot, container.NewCenter(headerBrain), container.NewCenter(headerSpinner))
+	p.headerStatusBox = container.NewStack(statusSlot, container.NewCenter(brain), container.NewCenter(spinner))
+}
 
-	content := container.NewBorder(
-		container.New(
-			layout.NewVBoxLayout(),
-			container.NewHBox(
-				widget.NewLabelWithStyle("Terminal Agent", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				layout.NewSpacer(),
-				headerStatusBox,
-				layout.NewSpacer(),
-				modelLabel,
-			),
-			inputCard,
-		),
-		toolbar,
-		nil,
-		nil,
-		answerPanel,
+func (p *popupWindow) buildTopBar() fyne.CanvasObject {
+	mark := canvas.NewText(promptGlyph, brandAccentGreen)
+	mark.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	mark.TextSize = theme.TextSize() + 4
+
+	word := canvas.NewText(wordmarkText, brandPrimaryText)
+	word.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	word.TextSize = theme.TextSize() + 1
+
+	wordmark := container.NewHBox(mark, word)
+
+	modelDot := newStatusDot(brandAccentGreen)
+	p.modelLabel = widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true, Monospace: true})
+	modelPill := container.NewHBox(modelDot, p.modelLabel)
+
+	return container.NewHBox(
+		wordmark,
+		layout.NewSpacer(),
+		p.headerStatusBox,
+		layout.NewSpacer(),
+		modelPill,
+	)
+}
+
+func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
+	nav := container.NewVBox(
+		newNavRow("CHAT", iconPathChat, true, nil),
+		newNavRow("HISTORY", iconPathHistory, false, nil),
+		newNavRow("ENV", iconPathEnv, false, nil),
+		newNavRow("TOOLS", iconPathTools, false, nil),
+		newNavRow("SETTINGS", iconPathSettings, false, func() {
+			if p.onSettings != nil {
+				p.onSettings()
+			}
+		}),
 	)
 
-	window.SetContent(container.NewPadded(content))
-
-	p := &popupWindow{
-		window:          window,
-		input:           input,
-		inputCard:       inputCard,
-		questionCard:    questionCard,
-		requestHeading:  requestHeading,
-		answerHeading:   answerHeading,
-		answerHeader:    answerHeader,
-		answerMeta:      answerMeta,
-		questionLabel:   questionLabel,
-		outputField:     outputField,
-		outputBody:      outputBody,
-		errorLabel:      errorLabel,
-		errorBody:       errorBody,
-		outputScroll:    outputScroll,
-		headerStatus:    headerStatus,
-		headerBrain:     headerBrain,
-		headerSpinner:   headerSpinner,
-		headerStatusBox: headerStatusBox,
-		modelLabel:      modelLabel,
-		actionButton:    actionButton,
-		listenButton:    listenButton,
-		copyButton:      copyButton,
-		settingsButton:  settingsButton,
-		testButton:      testButton,
-		answerPanel:     answerPanel,
+	if devMode {
+		p.testButton = widget.NewButton("Test", func() {
+			if p.onTest != nil {
+				p.onTest()
+			}
+		})
+		p.testButton.Importance = widget.LowImportance
+		nav.Add(p.testButton)
 	}
-	input.onEscape = func() {
+
+	content := container.NewVBox(
+		nav,
+		layout.NewSpacer(),
+		p.buildListenControl(),
+		layout.NewSpacer(),
+		p.buildConnectionStatus(),
+	)
+
+	bg := canvas.NewRectangle(brandPanel)
+	panel := container.NewStack(bg, container.NewPadded(content))
+	return container.New(&fixedWidthLayout{width: sidebarWidth}, panel)
+}
+
+func (p *popupWindow) buildListenControl() fyne.CanvasObject {
+	ring := canvas.NewCircle(color.Transparent)
+	ring.StrokeColor = brandAccentGreen
+	ring.StrokeWidth = 1.5
+	p.micRing = ring
+
+	micImg := canvas.NewImageFromResource(lineIcon("mic", iconPathMic, brandAccentGreen))
+	micImg.FillMode = canvas.ImageFillContain
+	micImg.SetMinSize(fyne.NewSize(22, 22))
+
+	ringStack := container.NewGridWrap(
+		fyne.NewSize(micRingSize, micRingSize),
+		container.NewStack(ring, container.NewCenter(micImg)),
+	)
+
+	p.listenButton = widget.NewButton("LISTEN", nil)
+	p.listenButton.Importance = widget.LowImportance
+
+	p.listenSubtitle = canvas.NewText("Press to toggle mic", brandSecondaryText)
+	p.listenSubtitle.Alignment = fyne.TextAlignCenter
+	p.listenSubtitle.TextSize = theme.TextSize() - 2
+
+	return container.NewVBox(
+		container.NewCenter(ringStack),
+		container.NewCenter(p.listenButton),
+		container.NewCenter(p.listenSubtitle),
+	)
+}
+
+func (p *popupWindow) buildConnectionStatus() fyne.CanvasObject {
+	connected := canvas.NewText("CONNECTED", brandMutedGreen)
+	connected.TextStyle = fyne.TextStyle{Monospace: true}
+	connected.TextSize = theme.TextSize() - 1
+
+	host := canvas.NewText("localhost", brandSecondaryText)
+	host.TextSize = theme.TextSize() - 2
+
+	p.cwdLabel = canvas.NewText("~/", brandSecondaryText)
+	p.cwdLabel.TextSize = theme.TextSize() - 2
+
+	p.clockLabel = canvas.NewText("", brandSecondaryText)
+	p.clockLabel.TextSize = theme.TextSize() - 2
+
+	return container.NewVBox(
+		container.NewHBox(newStatusDot(brandAccentGreen), connected),
+		host,
+		p.cwdLabel,
+		p.clockLabel,
+	)
+}
+
+func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
+	askHeading := brandSectionLabel(sectionAsk)
+
+	prompt := canvas.NewText(inputPrompt, brandAccentGreen)
+	prompt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	prompt.TextSize = theme.TextSize() + 3
+
+	hint := canvas.NewText(sendHintText, brandSecondaryText)
+	hint.TextSize = theme.TextSize() - 2
+
+	inputRow := container.NewBorder(
+		nil, nil,
+		container.NewVBox(layout.NewSpacer(), prompt, layout.NewSpacer()),
+		container.NewHBox(container.NewVBox(layout.NewSpacer(), hint, layout.NewSpacer()), p.actionButton),
+		container.NewVBox(layout.NewSpacer(), p.input, layout.NewSpacer()),
+	)
+	inputPanel := borderedBox(container.NewPadded(inputRow), brandBorderBright)
+
+	p.responseHeading = brandSectionLabel(sectionResp)
+
+	metaRow := container.NewVBox(brandSeparator(), container.NewPadded(p.metaLabel))
+	responsePanelInner := container.NewBorder(nil, metaRow, nil, nil, p.outputScroll)
+	responsePanel := borderedBox(responsePanelInner, brandBorder)
+
+	p.copyButton = newCommandButton("COPY", iconPathCopy, func() {
+		if p.onCopy != nil {
+			p.onCopy()
+		}
+	})
+	p.copyButton.Disable()
+	p.exportButton = newCommandButton("EXPORT", iconPathExport, func() {
+		if p.onExport != nil {
+			p.onExport()
+		}
+	})
+	p.exportButton.Disable()
+	outputActions := container.NewHBox(p.copyButton, brandActionDivider(), p.exportButton)
+
+	p.responseSection = container.NewBorder(
+		container.NewVBox(p.responseHeading),
+		outputActions,
+		nil, nil,
+		responsePanel,
+	)
+	p.responseSection.Hide()
+
+	askGroup := container.NewVBox(askHeading, inputPanel)
+
+	return container.NewBorder(
+		askGroup,
+		p.buildMascotPanel(),
+		nil, nil,
+		p.responseSection,
+	)
+}
+
+func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
+	mascotLines := container.NewVBox()
+	for _, line := range asciiMascot {
+		t := canvas.NewText(line, brandAccentGreen)
+		t.TextStyle = fyne.TextStyle{Monospace: true}
+		t.TextSize = theme.TextSize() - 1
+		mascotLines.Add(t)
+	}
+
+	t1 := canvas.NewText(tagline1, brandMutedGreen)
+	t1.TextStyle = fyne.TextStyle{Monospace: true}
+	t2 := canvas.NewText(tagline2, brandMutedGreen)
+	t2.TextStyle = fyne.TextStyle{Monospace: true}
+	tagline := container.NewVBox(layout.NewSpacer(), t1, t2, layout.NewSpacer())
+
+	dots := canvas.NewText(strings.Repeat(". ", 28), brandBorderBright)
+	dots.TextSize = theme.TextSize() - 1
+	tail := canvas.NewText(promptGlyph, brandAccentGreen)
+	tail.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	dottedTail := container.NewHBox(layout.NewSpacer(), container.NewCenter(dots), container.NewCenter(tail))
+
+	row := container.NewBorder(
+		nil, nil,
+		container.NewHBox(mascotLines, widget.NewLabel("  "), tagline),
+		nil,
+		dottedTail,
+	)
+	return borderedBox(container.NewPadded(row), brandBorder)
+}
+
+func (p *popupWindow) wireInteractions(app fyne.App) {
+	win := p.window
+
+	p.input.onEscape = func() {
 		if p.onEscape != nil {
 			p.onEscape()
 		}
 	}
-	input.onSubmit = func() {
+	p.input.onSubmit = func() {
 		if p.onSubmit != nil {
 			p.onSubmit()
 		}
 	}
-	input.onVoiceToggle = func() {
+	p.input.onVoiceToggle = func() {
 		if p.onVoiceToggle != nil {
 			p.onVoiceToggle()
 		}
 	}
-	input.OnChanged = func(value string) {
+	p.input.OnChanged = func(value string) {
 		p.resizeInput(value)
 		if p.onInput != nil {
 			p.onInput(value)
 		}
 	}
-	actionButton.OnTapped = func() {
+	p.actionButton.OnTapped = func() {
 		if p.onAction != nil {
 			p.onAction()
 		}
-		p.window.Canvas().Focus(p.input)
+		win.Canvas().Focus(p.input)
 	}
-	listenButton.OnTapped = func() {
+	p.listenButton.OnTapped = func() {
 		if p.onVoiceToggle != nil {
 			p.onVoiceToggle()
 		}
-		p.window.Canvas().Focus(p.input)
-	}
-	copyButton.OnTapped = func() {
-		if p.onCopy != nil {
-			p.onCopy()
-		}
-	}
-	settingsButton.OnTapped = func() {
-		if p.onSettings != nil {
-			p.onSettings()
-		}
-	}
-	if testButton != nil {
-		testButton.OnTapped = func() {
-			if p.onTest != nil {
-				p.onTest()
-			}
-		}
+		win.Canvas().Focus(p.input)
 	}
 
-	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyL, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
-		p.window.Canvas().Focus(p.input)
+	win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyL, Modifier: fyne.KeyModifierShortcutDefault}, func(fyne.Shortcut) {
+		win.Canvas().Focus(p.input)
 	})
-	window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyQ, Modifier: fyne.KeyModifierShortcutDefault}, func(shortcut fyne.Shortcut) {
+	win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyQ, Modifier: fyne.KeyModifierShortcutDefault}, func(fyne.Shortcut) {
 		if p.onQuit != nil {
 			p.onQuit()
 		}
 	})
-
-	return p
 }
 
 func (p *popupWindow) setListenButton(enabled bool, state voice.State) {
 	switch state {
 	case voice.StateRecording:
-		p.listenButton.SetText("Stop")
+		p.listenButton.SetText("LISTENING")
+		p.listenSubtitle.Text = "Press to stop"
+		p.micRing.StrokeColor = brandAccentGreen
 	case voice.StateTranscribing:
-		p.listenButton.SetText("Cancel")
+		p.listenButton.SetText("WORKING")
+		p.listenSubtitle.Text = "Transcribing…"
+		p.micRing.StrokeColor = brandMutedGreen
 	default:
-		p.listenButton.SetText("Listen")
+		if enabled {
+			p.listenButton.SetText("LISTEN")
+			p.listenSubtitle.Text = "Press to toggle mic"
+			p.micRing.StrokeColor = brandAccentGreen
+		} else {
+			p.listenButton.SetText("MIC OFF")
+			p.listenSubtitle.Text = "Check settings"
+			p.micRing.StrokeColor = brandBorder
+		}
 	}
+	p.micRing.Refresh()
+	p.listenSubtitle.Refresh()
 	if enabled {
 		p.listenButton.Enable()
 	} else {
 		p.listenButton.Disable()
 	}
+}
+
+func (p *popupWindow) setMeta(text string) {
+	if p.metaLabel.Text == text {
+		return
+	}
+	p.metaLabel.Text = text
+	p.metaLabel.Refresh()
+}
+
+func (p *popupWindow) setResponseHeading(text string) {
+	if p.responseHeading.Text == text {
+		return
+	}
+	p.responseHeading.Text = text
+	p.responseHeading.Refresh()
+}
+
+func (p *popupWindow) setClock(text string) {
+	if p.clockLabel.Text == text {
+		return
+	}
+	p.clockLabel.Text = text
+	p.clockLabel.Refresh()
+}
+
+func (p *popupWindow) setCwd(text string) {
+	if p.cwdLabel.Text == text {
+		return
+	}
+	p.cwdLabel.Text = text
+	p.cwdLabel.Refresh()
 }
 
 func (p *popupWindow) setOutput(content string) {
@@ -431,7 +656,8 @@ func (p *popupWindow) setOutput(content string) {
 		return
 	}
 	p.lastRendered = content
-	p.outputField.Segments = renderMarkdown(unwrapMarkdownFence(content))
+	segs := renderMarkdown(decorateDollarMarkers(unwrapMarkdownFence(content)))
+	p.outputField.Segments = colorizeDollarMarkers(segs)
 	p.outputField.Refresh()
 }
 
@@ -469,10 +695,85 @@ func unwrapMarkdownFence(content string) string {
 	return inner[:len(inner)-4]
 }
 
+// decorateDollarMarkers prefixes prose paragraphs with the terminal "$" output
+// marker from the brand response styling. It deliberately skips lines that
+// carry markdown block syntax (headings, lists, quotes, tables, code fences,
+// and indented code) so the marker never corrupts structured output; those
+// blocks render normally. Continuation lines inside a paragraph are left as-is
+// so they indent under the marked first line rather than repeating "$".
+func decorateDollarMarkers(content string) string {
+	lines := strings.Split(content, "\n")
+	inFence := false
+	atParagraphStart := true
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			inFence = !inFence
+			atParagraphStart = false
+			continue
+		}
+		if inFence {
+			continue
+		}
+		if trimmed == "" {
+			atParagraphStart = true
+			continue
+		}
+		if atParagraphStart && isProseLine(line) {
+			lines[i] = "$ " + line
+		}
+		atParagraphStart = false
+	}
+	return strings.Join(lines, "\n")
+}
+
+// colorizeDollarMarkers recolors the leading "$" output marker of each marked
+// prose segment to the brand accent green, matching the terminal response
+// styling in the mock while leaving the body text in the default color.
+func colorizeDollarMarkers(segs []widget.RichTextSegment) []widget.RichTextSegment {
+	out := make([]widget.RichTextSegment, 0, len(segs)+4)
+	for _, seg := range segs {
+		ts, ok := seg.(*widget.TextSegment)
+		if !ok || !strings.HasPrefix(ts.Text, "$ ") {
+			out = append(out, seg)
+			continue
+		}
+		marker := &widget.TextSegment{Text: "$", Style: ts.Style}
+		marker.Style.ColorName = theme.ColorNamePrimary
+		rest := &widget.TextSegment{Text: ts.Text[1:], Style: ts.Style}
+		out = append(out, marker, rest)
+	}
+	return out
+}
+
+// isProseLine reports whether a line is plain prose that should receive a "$"
+// marker, as opposed to a markdown block element that must be left untouched.
+func isProseLine(line string) bool {
+	if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+		return false // indented code / nested block
+	}
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	switch trimmed[0] {
+	case '#', '-', '*', '+', '>', '|', '`', '=':
+		return false
+	}
+	// Ordered list item: "1." / "2)" etc.
+	if trimmed[0] >= '0' && trimmed[0] <= '9' {
+		rest := strings.TrimLeft(trimmed, "0123456789")
+		if strings.HasPrefix(rest, ".") || strings.HasPrefix(rest, ")") {
+			return false
+		}
+	}
+	return true
+}
+
 func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int) {
-	p.headerBrain.Color = theme.PrimaryColor()
+	p.headerBrain.Color = brandAccentGreen
 	p.headerBrain.Refresh()
-	p.headerSpinner.Color = theme.PrimaryColor()
+	p.headerSpinner.Color = brandAccentGreen
 	p.headerSpinner.Refresh()
 	p.headerBrain.Hide()
 	p.headerSpinner.Hide()
@@ -504,6 +805,7 @@ func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int)
 // and closes the dialog. The dialog is only reachable when the GUI is started
 // in dev mode.
 func (p *popupWindow) showTestDialog(tests []devTest) {
+	win := p.window
 	var dlg dialog.Dialog
 	buttons := make([]fyne.CanvasObject, 0, len(tests))
 	for _, t := range tests {
@@ -518,12 +820,13 @@ func (p *popupWindow) showTestDialog(tests []devTest) {
 		buttons = append(buttons, btn)
 	}
 	content := container.NewVBox(buttons...)
-	dlg = dialog.NewCustom("Test", "Close", content, p.window)
+	dlg = dialog.NewCustom("Test", "Close", content, win)
 	dlg.Resize(fyne.NewSize(360, 0))
 	dlg.Show()
 }
 
 func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
+	win := p.window
 	currentEnvResult := options.EnvResult
 	modelEntry := widget.NewEntry()
 	modelEntry.SetText(options.InitialModel)
@@ -543,7 +846,7 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		return l
 	}
 	modelHint := newHint()
-	providerStatus := newProviderStatusIcon(p.window.Canvas())
+	providerStatus := newProviderStatusIcon(win.Canvas())
 
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
@@ -616,7 +919,7 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	content := container.NewVBox(contentObjects...)
 	updateHints(options.InitialProvider)
 
-	dlg = dialog.NewCustomWithoutButtons("Settings", content, p.window)
+	dlg = dialog.NewCustomWithoutButtons("Settings", content, win)
 	if options.OnClosed != nil {
 		dlg.SetOnClosed(options.OnClosed)
 	}
@@ -647,7 +950,8 @@ func (p *popupWindow) resizeInput(value string) {
 		rows = maxInputRows
 	}
 	p.input.SetMinRowsVisible(rows)
-	current := p.window.Canvas().Size()
+	win := p.window
+	current := win.Canvas().Size()
 	height := current.Height
 	if height < minWindowHeight {
 		height = minWindowHeight
@@ -655,13 +959,7 @@ func (p *popupWindow) resizeInput(value string) {
 	if height > maxWindowHeight {
 		height = maxWindowHeight
 	}
-	p.window.Resize(fyne.NewSize(max(current.Width, defaultWindowWidth), height))
-}
-
-func withBackground(content fyne.CanvasObject, fill color.Color) fyne.CanvasObject {
-	rect := canvas.NewRectangle(fill)
-	rect.CornerRadius = theme.Size(theme.SizeNameInputRadius)
-	return container.NewPadded(container.NewStack(rect, container.NewPadded(content)))
+	win.Resize(fyne.NewSize(max(current.Width, defaultWindowWidth), height))
 }
 
 func max(a, b float32) float32 {

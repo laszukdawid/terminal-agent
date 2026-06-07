@@ -60,6 +60,7 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 	if options.Voice.Schedule != nil {
 		gui.voiceSchedule = options.Voice.Schedule
 	}
+	fyneApp.Settings().SetTheme(newBrandTheme())
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
 	}
@@ -167,6 +168,7 @@ func (g *App) wire() {
 		g.submit()
 	}
 	g.popup.onCopy = g.copyOutput
+	g.popup.onExport = g.exportOutput
 	g.popup.onSettings = g.openSettings
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
@@ -183,7 +185,6 @@ func (g *App) wire() {
 	g.popup.onQuit = g.Quit
 	g.popup.onInput = func(value string) {
 		g.state.input = value
-		g.state.showRequest = g.state.question != "" && value != g.state.question
 		if g.state.errorText != "" {
 			g.state.errorText = ""
 			g.render()
@@ -218,51 +219,37 @@ func (g *App) wire() {
 
 func (g *App) render() {
 	g.popup.input.SetText(g.state.input)
-	g.popup.questionLabel.Text = g.state.question
-	g.popup.questionLabel.Refresh()
 	if !g.state.isRunning {
 		g.renderResponse()
 	}
-	g.popup.modelLabel.SetText(g.cfg.GetDefaultProvider() + " / " + g.cfg.GetDefaultModelId())
+
+	provider := g.cfg.GetDefaultProvider()
+	model := g.cfg.GetDefaultModelId()
+	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
+	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
+	g.popup.setClock(time.Now().Format(clockFormat))
+
 	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
-	showMeta := g.state.showRequest || showAnswer
-	if showMeta {
-		g.popup.answerPanel.Show()
-	} else {
-		g.popup.answerPanel.Hide()
-	}
-	if showMeta {
-		g.popup.answerMeta.Show()
-	} else {
-		g.popup.answerMeta.Hide()
-	}
 	if showAnswer {
-		g.popup.answerHeader.Show()
+		g.popup.responseSection.Show()
 	} else {
-		g.popup.answerHeader.Hide()
+		g.popup.responseSection.Hide()
 	}
 	if g.state.errorText != "" {
-		g.popup.answerHeading.SetText("Error")
+		g.popup.setResponseHeading(sectionErr)
 	} else {
-		g.popup.answerHeading.SetText("Response")
+		g.popup.setResponseHeading(sectionResp)
 	}
-	if g.state.showRequest {
-		g.popup.requestHeading.Show()
-		g.popup.questionCard.Show()
-	} else {
-		g.popup.requestHeading.Hide()
-		g.popup.questionCard.Hide()
-	}
+	g.popup.setMeta(metaText(g.state, provider, model))
 
 	g.popup.setStatus(displayStatus(g.state), g.state.isRunning, g.state.spinnerFrame)
 
 	if g.state.isRunning {
-		g.popup.actionButton.SetText("Cancel")
-		g.popup.actionButton.Enable()
+		g.popup.actionButton.SetText(stopButtonText)
 	} else {
-		g.popup.actionButton.SetText("Submit")
-		g.popup.actionButton.Enable()
+		g.popup.actionButton.SetText(sendButtonText)
 	}
+	g.popup.actionButton.Enable()
 
 	voiceEnabled := g.cfg.GetGUIVoiceEnabled() && g.voiceController != nil
 	voiceBlockedByRunning := g.state.isRunning && g.state.voiceState == voice.StateIdle
@@ -271,15 +258,16 @@ func (g *App) render() {
 	}
 	g.popup.setListenButton(voiceEnabled, g.state.voiceState)
 	if voiceBlockedByRunning {
-		g.popup.listenButton.SetText("Busy")
+		g.popup.listenButton.SetText("BUSY")
 	}
 
 	if hasCopyableResponse(g.state) {
 		g.popup.copyButton.Enable()
+		g.popup.exportButton.Enable()
 	} else {
 		g.popup.copyButton.Disable()
+		g.popup.exportButton.Disable()
 	}
-
 }
 
 func (g *App) openSettings() {
@@ -331,6 +319,56 @@ func displayStatus(s *state) string {
 		return "Error"
 	}
 	return s.status
+}
+
+const (
+	clockFormat   = "15:04:05"
+	metaSeparator = "    |    "
+)
+
+// metaText builds the observable-execution metadata row shown at the bottom of
+// the response panel: runtime, completion timestamp, and the active model. It
+// reports "running…" while a response streams and stays empty until there is a
+// completed response so the row never shows stale or fabricated numbers.
+func metaText(s *state, provider, model string) string {
+	if s.isRunning {
+		return "running…"
+	}
+	if s.errorText != "" || s.output == "" {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	if s.elapsed > 0 {
+		parts = append(parts, "◷ "+formatElapsed(s.elapsed))
+	}
+	if !s.completedAt.IsZero() {
+		parts = append(parts, s.completedAt.Format(clockFormat))
+	}
+	parts = append(parts, provider+" / "+model)
+	return strings.Join(parts, metaSeparator)
+}
+
+func formatElapsed(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1fs", d.Seconds())
+}
+
+// displayCwd renders the working directory in terminal "~/"-relative form for
+// the sidebar connection status.
+func displayCwd(dir string) string {
+	if dir == "" {
+		return "~/"
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(dir, home) {
+		rel := strings.TrimPrefix(dir, home)
+		if rel == "" {
+			return "~/"
+		}
+		return "~" + rel
+	}
+	return dir
 }
 
 func hasCopyableResponse(s *state) bool {

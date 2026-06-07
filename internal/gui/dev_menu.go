@@ -33,7 +33,7 @@ func (g *App) showCannedOutput(question, output string) {
 	g.state.resetOutput()
 	g.state.question = question
 	g.state.output = output
-	g.state.showRequest = true
+	g.state.markCompleted()
 	g.renderResponse()
 	g.render()
 }
@@ -48,7 +48,6 @@ func (g *App) showInvalidProviderError() {
 	question := "Dev test: invalid provider"
 	g.state.resetOutput()
 	g.state.question = question
-	g.state.showRequest = true
 
 	events, err := g.service.AskEvents(context.Background(), appservice.AskRequest{
 		Message:    question,
