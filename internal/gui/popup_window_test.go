@@ -4,10 +4,8 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 )
 
 func TestBuildOutputWrapsGeneralResponseText(t *testing.T) {
@@ -50,42 +48,18 @@ func TestPromptInputRowsExpandsForNewlinesAndWrappedText(t *testing.T) {
 	}
 }
 
-func TestPopupEntryFocusCursorStaysInsideScrolledPrompt(t *testing.T) {
-	entry := &popupEntry{}
-	entry.ExtendBaseWidget(entry)
-	entry.MultiLine = true
-	entry.focusCursor = canvas.NewRectangle(brandAccentGreen)
-	entry.CursorRow = maxInputRows + 1
-
-	textSize := fyne.MeasureText("M", theme.TextSize(), entry.TextStyle)
-	entry.Resize(fyne.NewSize(200, textSize.Height*maxInputRows))
-
-	entry.positionFocusCursor()
-
-	maxY := entry.Size().Height - entry.focusCursor.Size().Height
-	if got := entry.focusCursor.Position().Y; got < 0 || got > maxY {
-		t.Fatalf("focus cursor Y = %v, want within [0, %v]", got, maxY)
+func TestBrandThemeUsesAccentColorForNativeEntryCursor(t *testing.T) {
+	if got := newBrandTheme().Color(theme.ColorNamePrimary, theme.VariantDark); got != brandAccentGreen {
+		t.Fatalf("ColorNamePrimary = %v, want %v", got, brandAccentGreen)
 	}
 }
 
-func TestPopupEntryVisibleTopRowPersistsWhenCursorMovesWithinScrolledPrompt(t *testing.T) {
-	entry := &popupEntry{Entry: widget.Entry{Text: "one\ntwo\nthree\nfour"}}
-	entry.CursorRow = 3
-	entry.updateVisibleTopRow()
-	if entry.visibleTopRow != 1 {
-		t.Fatalf("visibleTopRow at bottom = %d, want 1", entry.visibleTopRow)
+func TestPromptEntryThemeForcesVisibleNativeCursorWidth(t *testing.T) {
+	if got := newBrandTheme().Size(theme.SizeNameInputBorder); got != 0 {
+		t.Fatalf("brand theme input border = %v, want 0", got)
 	}
-
-	entry.CursorRow = 2
-	entry.updateVisibleTopRow()
-	if entry.visibleTopRow != 1 {
-		t.Fatalf("visibleTopRow after moving up within window = %d, want 1", entry.visibleTopRow)
-	}
-
-	entry.CursorRow = 0
-	entry.updateVisibleTopRow()
-	if entry.visibleTopRow != 0 {
-		t.Fatalf("visibleTopRow after moving above window = %d, want 0", entry.visibleTopRow)
+	if got := (promptEntryTheme{Theme: newBrandTheme()}).Size(theme.SizeNameInputBorder); got != promptNativeCursorWidth {
+		t.Fatalf("prompt entry theme input border = %v, want %v", got, promptNativeCursorWidth)
 	}
 }
 

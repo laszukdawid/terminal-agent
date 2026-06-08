@@ -33,12 +33,10 @@ const (
 	mascotSize          float32 = 76
 	statusIndicatorSize float32 = 18
 
-	providerStatusWidth  float32 = 28
-	providerStatusHeight float32 = 24
-	promptCursorWidth    float32 = 3
-	promptCursorMinAlpha uint8   = 0x22
-	promptCursorDuration         = 650 * time.Millisecond
-	inputTextInset       float32 = 24
+	providerStatusWidth     float32 = 28
+	providerStatusHeight    float32 = 24
+	promptNativeCursorWidth float32 = 2
+	inputTextInset          float32 = 24
 
 	// Mascot "walking" wiggle and the data-transfer dots, played while a request
 	// is in flight.
@@ -148,16 +146,10 @@ type popupEntry struct {
 	onVoiceToggle   func()
 	onFocusChanged  func(bool)
 	voiceTriggerKey fyne.KeyName
-	focusCursor     *canvas.Rectangle
-	cursorAnim      *fyne.Animation
-	visibleTopRow   int
 }
 
 type settingsTextEntry struct {
 	widget.Entry
-	onFocusChanged func(bool)
-	focusCursor    *canvas.Rectangle
-	cursorAnim     *fyne.Animation
 }
 
 type providerStatusIcon struct {
@@ -279,80 +271,6 @@ func newSettingsTextEntry(initial string) *settingsTextEntry {
 	return entry
 }
 
-func (e *settingsTextEntry) FocusGained() {
-	e.Entry.FocusGained()
-	if e.onFocusChanged != nil {
-		e.onFocusChanged(true)
-	}
-}
-
-func (e *settingsTextEntry) FocusLost() {
-	e.Entry.FocusLost()
-	if e.onFocusChanged != nil {
-		e.onFocusChanged(false)
-	}
-}
-
-func (e *settingsTextEntry) withFocusCursor() fyne.CanvasObject {
-	cursor := canvas.NewRectangle(brandAccentGreen)
-	cursor.Hide()
-	e.focusCursor = cursor
-
-	wrapped := container.New(&settingsCursorLayout{entry: e, cursor: cursor}, e, cursor)
-	previousCursorChanged := e.OnCursorChanged
-	e.OnCursorChanged = func() {
-		if previousCursorChanged != nil {
-			previousCursorChanged()
-		}
-		e.positionFocusCursor()
-	}
-	e.onFocusChanged = func(focused bool) {
-		if focused {
-			e.startFocusCursor()
-		} else {
-			e.stopFocusCursor()
-		}
-		e.positionFocusCursor()
-	}
-	return wrapped
-}
-
-func (e *settingsTextEntry) positionFocusCursor() {
-	if e.focusCursor == nil {
-		return
-	}
-	textSize := fyne.MeasureText("M", theme.TextSize(), e.TextStyle)
-	e.focusCursor.Resize(fyne.NewSize(promptCursorWidth, textSize.Height))
-	e.focusCursor.Move(e.CursorPosition())
-	e.focusCursor.Refresh()
-}
-
-func (e *settingsTextEntry) startFocusCursor() {
-	if e.focusCursor == nil || e.cursorAnim != nil {
-		return
-	}
-	e.focusCursor.FillColor = brandAccentGreen
-	e.focusCursor.Show()
-	e.cursorAnim = fyne.NewAnimation(promptCursorDuration, func(progress float32) {
-		alpha := promptCursorMinAlpha + uint8(float32(0xFF-promptCursorMinAlpha)*progress)
-		e.focusCursor.FillColor = color.NRGBA{R: brandAccentGreen.R, G: brandAccentGreen.G, B: brandAccentGreen.B, A: alpha}
-		e.focusCursor.Refresh()
-	})
-	e.cursorAnim.AutoReverse = true
-	e.cursorAnim.RepeatCount = fyne.AnimationRepeatForever
-	e.cursorAnim.Start()
-}
-
-func (e *settingsTextEntry) stopFocusCursor() {
-	if e.cursorAnim != nil {
-		e.cursorAnim.Stop()
-		e.cursorAnim = nil
-	}
-	if e.focusCursor != nil {
-		e.focusCursor.Hide()
-	}
-}
-
 func (e *popupEntry) FocusGained() {
 	e.Entry.FocusGained()
 	if e.onFocusChanged != nil {
@@ -364,99 +282,6 @@ func (e *popupEntry) FocusLost() {
 	e.Entry.FocusLost()
 	if e.onFocusChanged != nil {
 		e.onFocusChanged(false)
-	}
-}
-
-func (e *popupEntry) withFocusCursor() fyne.CanvasObject {
-	cursor := canvas.NewRectangle(brandAccentGreen)
-	cursor.Hide()
-	e.focusCursor = cursor
-
-	wrapped := container.New(&promptCursorLayout{entry: e, cursor: cursor}, e, cursor)
-	previousCursorChanged := e.OnCursorChanged
-	e.OnCursorChanged = func() {
-		if previousCursorChanged != nil {
-			previousCursorChanged()
-		}
-		e.positionFocusCursor()
-	}
-	e.onFocusChanged = func(focused bool) {
-		if focused {
-			e.startFocusCursor()
-		} else {
-			e.stopFocusCursor()
-		}
-		e.positionFocusCursor()
-	}
-	return wrapped
-}
-
-func (e *popupEntry) positionFocusCursor() {
-	if e.focusCursor == nil {
-		return
-	}
-	textSize := fyne.MeasureText("M", theme.TextSize(), e.TextStyle)
-	e.focusCursor.Resize(fyne.NewSize(promptCursorWidth, textSize.Height))
-	e.updateVisibleTopRow()
-	pos := e.CursorPosition()
-	pos.Y -= float32(e.visibleTopRow) * textSize.Height
-	if pos.Y < 0 {
-		pos.Y = 0
-	}
-	maxY := e.Size().Height - textSize.Height
-	if maxY > 0 && pos.Y > maxY {
-		pos.Y = maxY
-	}
-	e.focusCursor.Move(pos)
-	e.focusCursor.Refresh()
-}
-
-func (e *popupEntry) updateVisibleTopRow() {
-	rowCount := promptInputRowCount(e.Text, e.Size().Width)
-	if cursorRows := e.CursorRow + 1; cursorRows > rowCount {
-		rowCount = cursorRows
-	}
-	maxTopRow := rowCount - maxInputRows
-	if maxTopRow < 0 {
-		maxTopRow = 0
-	}
-	if e.visibleTopRow > maxTopRow {
-		e.visibleTopRow = maxTopRow
-	}
-	if e.CursorRow < e.visibleTopRow {
-		e.visibleTopRow = e.CursorRow
-	}
-	if e.CursorRow >= e.visibleTopRow+maxInputRows {
-		e.visibleTopRow = e.CursorRow - maxInputRows + 1
-	}
-	if e.visibleTopRow < 0 {
-		e.visibleTopRow = 0
-	}
-}
-
-func (e *popupEntry) startFocusCursor() {
-	if e.focusCursor == nil || e.cursorAnim != nil {
-		return
-	}
-	e.focusCursor.FillColor = brandAccentGreen
-	e.focusCursor.Show()
-	e.cursorAnim = fyne.NewAnimation(promptCursorDuration, func(progress float32) {
-		alpha := promptCursorMinAlpha + uint8(float32(0xFF-promptCursorMinAlpha)*progress)
-		e.focusCursor.FillColor = color.NRGBA{R: brandAccentGreen.R, G: brandAccentGreen.G, B: brandAccentGreen.B, A: alpha}
-		e.focusCursor.Refresh()
-	})
-	e.cursorAnim.AutoReverse = true
-	e.cursorAnim.RepeatCount = fyne.AnimationRepeatForever
-	e.cursorAnim.Start()
-}
-
-func (e *popupEntry) stopFocusCursor() {
-	if e.cursorAnim != nil {
-		e.cursorAnim.Stop()
-		e.cursorAnim = nil
-	}
-	if e.focusCursor != nil {
-		e.focusCursor.Hide()
 	}
 }
 
@@ -485,36 +310,6 @@ func (e *popupEntry) TypedKey(key *fyne.KeyEvent) {
 		return
 	}
 	e.Entry.TypedKey(key)
-}
-
-type promptCursorLayout struct {
-	entry  *popupEntry
-	cursor *canvas.Rectangle
-}
-
-func (l *promptCursorLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	return l.entry.MinSize()
-}
-
-func (l *promptCursorLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	l.entry.Resize(size)
-	l.entry.Move(fyne.NewPos(0, 0))
-	l.entry.positionFocusCursor()
-}
-
-type settingsCursorLayout struct {
-	entry  *settingsTextEntry
-	cursor *canvas.Rectangle
-}
-
-func (l *settingsCursorLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	return l.entry.MinSize()
-}
-
-func (l *settingsCursorLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	l.entry.Resize(size)
-	l.entry.Move(fyne.NewPos(0, 0))
-	l.entry.positionFocusCursor()
 }
 
 func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
@@ -745,14 +540,14 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	p.actionSubtitle.TextStyle = fyne.TextStyle{Monospace: true}
 	p.actionSubtitle.TextSize = theme.TextSize() - 4
 	p.actionSubtitle.Hide()
-	inputWithCursor := p.input.withFocusCursor()
+	inputWithNativeCursor := container.NewThemeOverride(p.input, promptEntryTheme{Theme: newBrandTheme()})
 	actionControl := container.NewVBox(p.actionButton, p.actionSubtitle)
 
 	inputRow := container.NewBorder(
 		nil, nil,
 		vCenter(prompt),
 		vCenter(actionControl),
-		vCenter(inputWithCursor),
+		vCenter(inputWithNativeCursor),
 	)
 	inputPanel := borderedBox(inputRow, brandBorderBright)
 
@@ -1250,6 +1045,8 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	}
 
 	providerInput := newProviderEntry(options.InitialProvider, updateHints)
+	providerInputField := container.NewThemeOverride(providerInput, promptEntryTheme{Theme: newBrandTheme()})
+	modelInputField := container.NewThemeOverride(modelEntry, promptEntryTheme{Theme: newBrandTheme()})
 
 	providerLabel := widget.NewLabelWithStyle("Provider", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	providerLabelBox := container.NewHBox(providerLabel, providerStatus)
@@ -1259,8 +1056,8 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	// aligned, and makes both inputs start at the same x with the same width.
 	// Hint rows use an empty label cell so each hint aligns under its input.
 	form := container.New(layout.NewFormLayout(),
-		providerLabelBox, providerInput.withFocusCursor(),
-		modelLabel, modelEntry.withFocusCursor(),
+		providerLabelBox, providerInputField,
+		modelLabel, modelInputField,
 		widget.NewLabel(""), modelHint,
 	)
 	environmentSummary := environmentSummaryText(currentEnvResult)

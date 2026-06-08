@@ -32,9 +32,18 @@ var (
 // per-widget styling.
 type brandTheme struct{}
 
+type promptEntryTheme struct{ fyne.Theme }
+
 var _ fyne.Theme = brandTheme{}
 
 func newBrandTheme() fyne.Theme { return brandTheme{} }
+
+func (t promptEntryTheme) Size(name fyne.ThemeSizeName) float32 {
+	if name == theme.SizeNameInputBorder {
+		return promptNativeCursorWidth
+	}
+	return t.Theme.Size(name)
+}
 
 func (brandTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 	switch name {

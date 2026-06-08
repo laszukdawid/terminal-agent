@@ -1,12 +1,9 @@
 package gui
 
 import (
-	"image/color"
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	xwidget "fyne.io/x/fyne/widget"
@@ -20,9 +17,6 @@ type providerEntry struct {
 	shown []string
 	query string
 
-	onFocusChanged func(bool)
-	focusCursor    *canvas.Rectangle
-	cursorAnim     *fyne.Animation
 }
 
 // newProviderEntry builds an editable autocomplete field for choosing a
@@ -76,9 +70,6 @@ func newProviderEntry(initial string, onChange func(string)) *providerEntry {
 
 func (e *providerEntry) FocusGained() {
 	e.CompletionEntry.FocusGained()
-	if e.onFocusChanged != nil {
-		e.onFocusChanged(true)
-	}
 	if e.Text == "" {
 		e.shown = connector.SupportedProviders()
 		e.query = ""
@@ -89,84 +80,6 @@ func (e *providerEntry) FocusGained() {
 
 func (e *providerEntry) FocusLost() {
 	e.CompletionEntry.FocusLost()
-	if e.onFocusChanged != nil {
-		e.onFocusChanged(false)
-	}
-}
-
-func (e *providerEntry) withFocusCursor() fyne.CanvasObject {
-	cursor := canvas.NewRectangle(brandAccentGreen)
-	cursor.Hide()
-	e.focusCursor = cursor
-
-	wrapped := container.New(&providerCursorLayout{entry: e, cursor: cursor}, e, cursor)
-	previousCursorChanged := e.OnCursorChanged
-	e.OnCursorChanged = func() {
-		if previousCursorChanged != nil {
-			previousCursorChanged()
-		}
-		e.positionFocusCursor()
-	}
-	e.onFocusChanged = func(focused bool) {
-		if focused {
-			e.startFocusCursor()
-		} else {
-			e.stopFocusCursor()
-		}
-		e.positionFocusCursor()
-	}
-	return wrapped
-}
-
-func (e *providerEntry) positionFocusCursor() {
-	if e.focusCursor == nil {
-		return
-	}
-	textSize := fyne.MeasureText("M", theme.TextSize(), e.TextStyle)
-	e.focusCursor.Resize(fyne.NewSize(promptCursorWidth, textSize.Height))
-	e.focusCursor.Move(e.CursorPosition())
-	e.focusCursor.Refresh()
-}
-
-func (e *providerEntry) startFocusCursor() {
-	if e.focusCursor == nil || e.cursorAnim != nil {
-		return
-	}
-	e.focusCursor.FillColor = brandAccentGreen
-	e.focusCursor.Show()
-	e.cursorAnim = fyne.NewAnimation(promptCursorDuration, func(progress float32) {
-		alpha := promptCursorMinAlpha + uint8(float32(0xFF-promptCursorMinAlpha)*progress)
-		e.focusCursor.FillColor = color.NRGBA{R: brandAccentGreen.R, G: brandAccentGreen.G, B: brandAccentGreen.B, A: alpha}
-		e.focusCursor.Refresh()
-	})
-	e.cursorAnim.AutoReverse = true
-	e.cursorAnim.RepeatCount = fyne.AnimationRepeatForever
-	e.cursorAnim.Start()
-}
-
-func (e *providerEntry) stopFocusCursor() {
-	if e.cursorAnim != nil {
-		e.cursorAnim.Stop()
-		e.cursorAnim = nil
-	}
-	if e.focusCursor != nil {
-		e.focusCursor.Hide()
-	}
-}
-
-type providerCursorLayout struct {
-	entry  *providerEntry
-	cursor *canvas.Rectangle
-}
-
-func (l *providerCursorLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	return l.entry.MinSize()
-}
-
-func (l *providerCursorLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	l.entry.Resize(size)
-	l.entry.Move(fyne.NewPos(0, 0))
-	l.entry.positionFocusCursor()
 }
 
 // matchSegments splits text into RichText segments, emphasizing the first
