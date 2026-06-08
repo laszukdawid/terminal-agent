@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -45,6 +46,22 @@ func TestPromptInputRowsExpandsForNewlinesAndWrappedText(t *testing.T) {
 				t.Fatalf("promptInputRows(%q) = %d, want %d", tt.value, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResizeInputDoesNotOverrideManualWindowResize(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+
+	g := NewApp(&recordingService{}, voiceGUIConfig{}, AppOptions{FyneApp: a})
+	p := g.popup
+	manualSize := fyne.NewSize(defaultWindowWidth-140, minWindowHeight-80)
+	p.window.Resize(manualSize)
+
+	p.resizeInput("a short prompt")
+
+	if got := p.window.Canvas().Size(); got != manualSize {
+		t.Fatalf("window size after resizeInput = %v, want %v", got, manualSize)
 	}
 }
 

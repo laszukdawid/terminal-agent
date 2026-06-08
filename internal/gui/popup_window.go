@@ -1131,16 +1131,6 @@ func (p *popupWindow) resizeInput(value string) {
 	if content := p.window.Content(); content != nil {
 		content.Refresh()
 	}
-	win := p.window
-	current := win.Canvas().Size()
-	height := current.Height
-	if height < minWindowHeight {
-		height = minWindowHeight
-	}
-	if height > maxWindowHeight {
-		height = maxWindowHeight
-	}
-	win.Resize(fyne.NewSize(max(current.Width, defaultWindowWidth), height))
 }
 
 func promptInputRows(value string, width float32) int {
