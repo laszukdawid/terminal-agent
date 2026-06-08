@@ -550,6 +550,70 @@ func TestTaskWithOptionsResultEmitsStatusAndProgress(t *testing.T) {
 	assert.Equal(t, "halfway", progress[0].Message)
 }
 
+func TestFormatRunningToolStatusIncludesReadAndSearchDetails(t *testing.T) {
+	tests := []struct {
+		name      string
+		toolName  string
+		toolInput map[string]any
+		want      string
+	}{
+		{
+			name:      "read path",
+			toolName:  tools.ToolNameRead,
+			toolInput: map[string]any{"path": "internal/agent/task.go"},
+			want:      `Read: file="internal/agent/task.go"`,
+		},
+		{
+			name:      "read path with pagination",
+			toolName:  tools.ToolNameRead,
+			toolInput: map[string]any{"path": "internal/agent/task.go", "offset": 10, "limit": 20},
+			want:      `Read: file="internal/agent/task.go" offset=10 limit=20`,
+		},
+		{
+			name:      "file search pattern",
+			toolName:  tools.ToolNameFileSearch,
+			toolInput: map[string]any{"name_pattern": "*.go"},
+			want:      `Search: files="*.go"`,
+		},
+		{
+			name:      "file search contains and root",
+			toolName:  tools.ToolNameFileSearch,
+			toolInput: map[string]any{"contains": "TaskState", "root": "internal/agent"},
+			want:      `Search: with="TaskState" at="internal/agent"`,
+		},
+		{
+			name:      "file search pattern and contains",
+			toolName:  tools.ToolNameFileSearch,
+			toolInput: map[string]any{"name_pattern": "*.go", "contains": "TaskState"},
+			want:      `Search: files="*.go" with="TaskState"`,
+		},
+		{
+			name:      "file edit write",
+			toolName:  tools.ToolNameFileEdit,
+			toolInput: map[string]any{"operation": "write", "path": "README.md"},
+			want:      `Edit: op="write" file="README.md"`,
+		},
+		{
+			name:      "file edit replace",
+			toolName:  tools.ToolNameFileEdit,
+			toolInput: map[string]any{"operation": "replace", "path": "internal/agent/task.go"},
+			want:      `Edit: op="replace" file="internal/agent/task.go"`,
+		},
+		{
+			name:      "generic fallback",
+			toolName:  "progress_tool",
+			toolInput: map[string]any{},
+			want:      "Running progress_tool...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, formatRunningToolStatus(tt.toolName, tt.toolInput))
+		})
+	}
+}
+
 func TestTaskWithOptionsResultEmitsFailureStatusWithError(t *testing.T) {
 	utils.Logger = zap.NewNop()
 	t.Setenv("HOME", t.TempDir())
