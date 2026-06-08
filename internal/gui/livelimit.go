@@ -12,9 +12,8 @@ const liveOutputMaxLineChars = 120
 // liveOutputLimiter bounds live tool output to maxLines lines (0 = unlimited),
 // emitting a one-time truncation marker once the limit is hit. It is a port of
 // the CLI taskLiveOutputLimiter (internal/commands/task_live_output.go) so the
-// GUI and CLI truncate identically. The proper fix (a segmented transcript that
-// renders tool output as monospace text rather than markdown) is tracked in
-// GitHub issue #55.
+// GUI and CLI truncate identically; the segmented transcript consumes the
+// filtered chunks directly as monospace tool-output blocks.
 type liveOutputLimiter struct {
 	maxLines            int
 	maxLineChars        int

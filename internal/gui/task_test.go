@@ -128,29 +128,29 @@ func TestSetModeRestoresModeSpecificInputOutputAndExport(t *testing.T) {
 	g.render()
 
 	g.setMode(guiModeTask)
-	if g.state.input != "" || g.state.question != "" || g.state.output != "" {
-		t.Fatalf("new Task view should be empty: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.output)
+	if g.state.input != "" || g.state.question != "" || g.state.responseText() != "" {
+		t.Fatalf("new Task view should be empty: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.responseText())
 	}
 
 	g.state.input = "task input"
 	g.state.question = "task question"
-	g.state.output = "task response"
+	g.state.appendTaskFinalText("task response")
 	g.state.completedAt = completedAtForTest()
 	g.render()
 
 	g.setMode(guiModeAsk)
-	if g.state.input != "ask input" || g.state.question != "ask question" || g.state.output != "ask response" {
-		t.Fatalf("Ask view was not restored: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.output)
+	if g.state.input != "ask input" || g.state.question != "ask question" || g.state.responseText() != "ask response" {
+		t.Fatalf("Ask view was not restored: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.responseText())
 	}
-	if got := g.exportContent(g.state.output); !strings.Contains(got, "# Ask\n\nask question") {
+	if got := g.exportContent(g.state.responseText()); !strings.Contains(got, "# Ask\n\nask question") {
 		t.Fatalf("Ask export used wrong mode/question:\n%s", got)
 	}
 
 	g.setMode(guiModeTask)
-	if g.state.input != "task input" || g.state.question != "task question" || g.state.output != "task response" {
-		t.Fatalf("Task view was not restored: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.output)
+	if g.state.input != "task input" || g.state.question != "task question" || g.state.responseText() != "task response" {
+		t.Fatalf("Task view was not restored: input=%q question=%q output=%q", g.state.input, g.state.question, g.state.responseText())
 	}
-	if got := g.exportContent(g.state.output); !strings.Contains(got, "# Task\n\ntask question") {
+	if got := g.exportContent(g.state.responseText()); !strings.Contains(got, "# Task\n\ntask question") {
 		t.Fatalf("Task export used wrong mode/question:\n%s", got)
 	}
 }
@@ -394,7 +394,7 @@ func TestShouldAppendTaskFinalOutput(t *testing.T) {
 	}
 }
 
-func TestTaskTranscriptStreamingBuildsFencedBlocks(t *testing.T) {
+func TestTaskTranscriptStreamingSerializesToCurrentMarkdownShape(t *testing.T) {
 	s := &state{}
 	s.resetTaskStreaming()
 
@@ -409,7 +409,7 @@ func TestTaskTranscriptStreamingBuildsFencedBlocks(t *testing.T) {
 	s.closeTaskToolBlock()
 	s.appendTaskFinalText("All done.")
 
-	got := s.output
+	got := s.responseText()
 	if strings.Count(got, taskToolFenceMarker) != 2 {
 		t.Fatalf("expected exactly one fenced block (2 markers), got:\n%s", got)
 	}
@@ -429,14 +429,15 @@ func TestAppendTaskOutputRespectsLineCap(t *testing.T) {
 	s.openTaskToolBlock(1, 2) // cap at 2 lines
 	s.appendTaskOutput("one\ntwo\nthree\nfour\n")
 
-	if !strings.Contains(s.output, "one") || !strings.Contains(s.output, "two") {
-		t.Fatalf("first two lines should be present:\n%s", s.output)
+	got := s.responseText()
+	if !strings.Contains(got, "one") || !strings.Contains(got, "two") {
+		t.Fatalf("first two lines should be present:\n%s", got)
 	}
-	if strings.Contains(s.output, "three") {
-		t.Fatalf("capped output must drop later lines:\n%s", s.output)
+	if strings.Contains(got, "three") {
+		t.Fatalf("capped output must drop later lines:\n%s", got)
 	}
-	if !strings.Contains(s.output, "truncated") {
-		t.Fatalf("expected truncation marker:\n%s", s.output)
+	if !strings.Contains(got, "truncated") {
+		t.Fatalf("expected truncation marker:\n%s", got)
 	}
 }
 
@@ -446,13 +447,14 @@ func TestAppendTaskOutputUnlimitedForFinal(t *testing.T) {
 	s.openTaskToolBlock(1, 0) // final tool: unlimited
 	s.appendTaskOutput("a\nb\nc\nd\ne\nf\ng\n")
 
+	got := s.responseText()
 	for _, want := range []string{"a", "g"} {
-		if !strings.Contains(s.output, want) {
-			t.Fatalf("unlimited block dropped %q:\n%s", want, s.output)
+		if !strings.Contains(got, want) {
+			t.Fatalf("unlimited block dropped %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(s.output, "truncated") {
-		t.Fatalf("unlimited block must not truncate:\n%s", s.output)
+	if strings.Contains(got, "truncated") {
+		t.Fatalf("unlimited block must not truncate:\n%s", got)
 	}
 }
 
@@ -469,7 +471,41 @@ func TestResetOutputClearsTaskStreaming(t *testing.T) {
 	if s.taskSawLiveOutput || s.taskToolOpen || s.taskToolProcessID != 0 || len(s.taskLiveOutputTools) != 0 {
 		t.Fatal("resetOutput must clear per-run task streaming state")
 	}
+	if len(s.taskTranscript) != 0 {
+		t.Fatal("resetOutput must clear the task transcript blocks")
+	}
 	if s.mode != guiModeTask {
 		t.Fatal("resetOutput must not reset the selected mode")
+	}
+}
+
+func TestTaskOutputStreamingKeepsTranscriptInBlocks(t *testing.T) {
+	s := &state{}
+	s.resetTaskStreaming()
+	s.openTaskToolBlock(1, 0)
+	s.appendTaskOutput("hello\n")
+
+	if s.output != "" {
+		t.Fatalf("task streaming should not flatten into state.output, got %q", s.output)
+	}
+	if len(s.taskTranscript) != 1 || s.taskTranscript[0].Kind != transcriptBlockToolOutput {
+		t.Fatalf("unexpected transcript blocks: %#v", s.taskTranscript)
+	}
+	if len(s.taskTranscript[0].Chunks) != 1 || s.taskTranscript[0].Chunks[0] != "hello\n" {
+		t.Fatalf("tool output should be stored as chunks: %#v", s.taskTranscript[0].Chunks)
+	}
+}
+
+func TestTaskCompletionRawOutputAppendsToolOutputBlock(t *testing.T) {
+	s := &state{}
+	s.resetTaskStreaming()
+
+	s.appendTaskCompletionOutput(appservice.Event{RawOutput: "# not markdown\n"})
+
+	if len(s.taskTranscript) != 1 || s.taskTranscript[0].Kind != transcriptBlockToolOutput {
+		t.Fatalf("raw output should append as tool-output block: %#v", s.taskTranscript)
+	}
+	if got := s.responseText(); got != "```\n# not markdown\n```\n" {
+		t.Fatalf("serialized raw output = %q", got)
 	}
 }

@@ -19,10 +19,10 @@ import (
 // Usage: GUI_SCREENSHOTS=<abs-dir> go test ./internal/gui/ -run TestCaptureScreenshots
 // (the `task screenshots:gui` wrapper sets GUI_SCREENSHOTS to an absolute path).
 //
-// Note: the pinned Fyne fork's *software* rasterizer underflows when drawing the
-// brand theme's fenced code blocks (zero-stroke rounded rects), so the captured
-// states deliberately avoid triple-backtick code fences. The fenced live-output
-// styling renders correctly under the real GL renderer.
+// Note: the pinned Fyne fork's *software* rasterizer historically underflowed on
+// some rich-text code-block paths, so the captured states still avoid large live
+// tool-output transcripts even though runtime Task output no longer renders via
+// fenced markdown.
 func TestCaptureScreenshots(t *testing.T) {
 	outDir := os.Getenv("GUI_SCREENSHOTS")
 	if outDir == "" {
@@ -63,7 +63,7 @@ func TestCaptureScreenshots(t *testing.T) {
 
 	completedAt := time.Date(2026, 6, 7, 14, 30, 0, 0, time.UTC)
 
-	// Ask mode with a rendered markdown response (no code fence).
+	// Ask mode with a rendered markdown response.
 	g.setMode(guiModeAsk)
 	g.popup.input.SetText("what is terminal agent?")
 	g.state.input = "what is terminal agent?"
@@ -76,9 +76,7 @@ func TestCaptureScreenshots(t *testing.T) {
 	g.render()
 	capture("gui-ask.png")
 
-	// Task mode transcript: a tool-call status line and a final answer. (Live
-	// tool output is wrapped in a fenced code block at runtime; that styling is
-	// GL-only, so it is omitted from this software-rendered capture.)
+	// Task mode transcript: a tool-call status line and a final answer.
 	g.setMode(guiModeTask)
 	g.popup.input.SetText("how many Go files are in internal/gui?")
 	g.state.input = "how many Go files are in internal/gui?"

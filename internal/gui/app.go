@@ -249,7 +249,7 @@ func (g *App) render() {
 	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
 	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
 
-	showAnswer := g.state.output != "" || g.state.isRunning || g.state.errorText != ""
+	showAnswer := g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != ""
 	if showAnswer {
 		g.popup.responseSection.Show()
 	} else {
@@ -332,12 +332,16 @@ func (g *App) renderResponse() {
 		g.popup.setError(g.state.errorText)
 		return
 	}
+	if g.state.mode == guiModeTask {
+		g.popup.setTranscript(g.state.taskTranscript)
+		return
+	}
 	g.popup.setOutput(g.state.output)
 }
 
 // renderOutput pushes the current response into the view.
 func (g *App) renderOutput() {
-	g.popup.setOutput(g.state.output)
+	g.renderResponse()
 }
 
 // setMode switches the active sidebar tab. Switching is ignored while a request
@@ -453,7 +457,7 @@ func metaText(s *state) string {
 	if s.isRunning {
 		return "running…"
 	}
-	if s.errorText != "" || s.output == "" {
+	if s.errorText != "" || !s.hasResponseContent() {
 		return ""
 	}
 	parts := make([]string, 0, 2)
@@ -498,15 +502,18 @@ func displayCwd(dir string) string {
 }
 
 func hasCopyableResponse(s *state) bool {
-	return s.errorText != "" || s.output != ""
+	if s.isRunning {
+		return false
+	}
+	return s.errorText != "" || s.hasResponseContent()
 }
 
 func responseCopyText(s *state) string {
 	if s.errorText != "" {
 		return s.errorText
 	}
-	if s.output != "" {
-		return s.output
+	if s.hasResponseContent() {
+		return s.responseText()
 	}
 	return s.question
 }
