@@ -34,8 +34,7 @@ func (g *App) submitTask(ctx context.Context, message string) {
 
 // consumeTaskEvents drains the Task event stream, building a segmented
 // transcript (status/tool-call lines, progress lines, live tool output, and the
-// final answer) while keeping the existing brain/spinner indicators working
-// through the shared status surface.
+// final answer).
 func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 	for event := range events {
 		eventCopy := event
@@ -81,9 +80,8 @@ func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 				g.state.status = "responding"
 
 			case appservice.EventWarning:
-				// Warnings are operational/display noise, not task content: surface
-				// them transiently on the status line only. They never enter the
-				// transcript, never export, and never fail the run.
+				// Warnings are operational/display noise, not task content: keep them
+				// transient and out of the transcript/export path.
 				if eventCopy.Text != "" {
 					g.state.status = "Warning: " + eventCopy.Text
 				}
@@ -145,19 +143,15 @@ func (s *state) appendTaskCompletionOutput(event appservice.Event) {
 }
 
 // isMeaningfulTaskStatus reports whether a task status phase warrants its own
-// transcript line. Tool-call starts are the meaningful phases; other phases
-// (thinking, finalizing) only update the transient status surface.
+// transcript line. Tool-call starts are the meaningful phases; other phases are
+// transient run state.
 func isMeaningfulTaskStatus(phase string) bool {
 	return phase == string(agent.TaskStatusRunningTool)
 }
 
-// taskStatusDisplay maps a task status event to the status-surface value. The
-// thinking phase keeps the literal "thinking" so the existing brain indicator
-// fires; other phases show their human-readable message text.
+// taskStatusDisplay maps a task status event to transient run state, preferring
+// the human-readable message text when the app layer provides one.
 func taskStatusDisplay(event appservice.Event) string {
-	if event.Status == string(agent.TaskStatusThinking) {
-		return "thinking"
-	}
 	if event.Text != "" {
 		return event.Text
 	}

@@ -23,7 +23,6 @@ const (
 	sidebarWidth        float32 = 208
 	navIconSize         float32 = 16
 	micRingSize         float32 = 54
-	statusIndicatorSize float32 = 18
 
 	wordmarkText        = "TERMINAL AGENT"
 	promptGlyph         = ">_"
@@ -44,8 +43,6 @@ const (
 	listenWordOff       = "MIC OFF"
 	listenWordBusy      = "BUSY"
 )
-
-var spinnerFrames = []string{"|", "/", "-", "\\"}
 
 type popupWindow struct {
 	window fyne.Window
@@ -70,11 +67,7 @@ type popupWindow struct {
 	lastError       string
 	transcriptViews []transcriptBlockView
 
-	headerStatus    *widget.Label
-	headerBrain     *canvas.Text
-	headerSpinner   *canvas.Text
-	headerStatusBox fyne.CanvasObject
-	modelLabel      *widget.Label
+	modelLabel *widget.Label
 
 	listenButton   *widget.Button
 	listenLabel    *fyne.Container
@@ -121,7 +114,6 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 
 	p.buildInput(app)
 	p.buildOutput()
-	p.buildStatus()
 
 	sidebar := p.buildSidebar(devMode)
 	workspace := p.buildWorkspace()
@@ -177,31 +169,6 @@ func (p *popupWindow) buildOutput() {
 
 	p.metaLabel = canvas.NewText("", brandSecondaryText)
 	p.metaLabel.TextSize = theme.TextSize() - 2
-}
-
-func (p *popupWindow) buildStatus() {
-	headerStatus := widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	headerStatus.Importance = widget.MediumImportance
-	headerStatus.Wrapping = fyne.TextWrapOff
-	p.headerStatus = headerStatus
-
-	brain := canvas.NewText("🧠", brandAccentGreen)
-	brain.Alignment = fyne.TextAlignCenter
-	brain.TextSize = theme.TextSize() + 2
-	brain.Hide()
-	p.headerBrain = brain
-
-	spinner := canvas.NewText(spinnerFrames[0], brandAccentGreen)
-	spinner.Alignment = fyne.TextAlignCenter
-	spinner.TextSize = theme.TextSize() + 4
-	spinner.Hide()
-	p.headerSpinner = spinner
-
-	statusSlot := container.NewGridWrap(
-		fyne.NewSize(140, max(headerStatus.MinSize().Height, statusIndicatorSize)),
-		container.NewCenter(headerStatus),
-	)
-	p.headerStatusBox = container.NewStack(statusSlot, container.NewCenter(brain), container.NewCenter(spinner))
 }
 
 func (p *popupWindow) buildWordmark() fyne.CanvasObject {
@@ -329,7 +296,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	headingRow := container.NewBorder(
 		nil, nil,
 		p.inputHeading,
-		container.NewHBox(p.headerStatusBox, hStrut(12), p.buildModelPill()),
+		p.buildModelPill(),
 		nil,
 	)
 
@@ -562,37 +529,6 @@ func (p *popupWindow) setError(content string) {
 	}
 	p.lastError = content
 	p.errorLabel.SetText(content)
-}
-
-func (p *popupWindow) setStatus(status string, isRunning bool, spinnerFrame int) {
-	p.headerBrain.Color = brandAccentGreen
-	p.headerBrain.Refresh()
-	p.headerSpinner.Color = brandAccentGreen
-	p.headerSpinner.Refresh()
-	p.headerBrain.Hide()
-	p.headerSpinner.Hide()
-	p.headerStatus.Show()
-
-	switch status {
-	case "thinking":
-		p.headerStatus.SetText("")
-		p.headerStatus.Hide()
-		p.headerBrain.Show()
-	case "responding":
-		if isRunning {
-			p.headerStatus.SetText("")
-			p.headerStatus.Hide()
-			p.headerSpinner.Text = spinnerFrames[spinnerFrame%len(spinnerFrames)]
-			p.headerSpinner.Refresh()
-			p.headerSpinner.Show()
-			return
-		}
-		p.headerStatus.SetText("")
-	default:
-		p.headerStatus.SetText(status)
-		p.headerSpinner.Text = spinnerFrames[0]
-		p.headerSpinner.Refresh()
-	}
 }
 
 func max(a, b float32) float32 {

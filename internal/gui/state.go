@@ -27,7 +27,6 @@ type state struct {
 	output         string
 	taskTranscript []transcriptBlock
 	status         string
-	spinnerFrame   int
 	errorText      string
 	isRunning      bool
 	isVisible      bool
@@ -74,7 +73,6 @@ type modeViewState struct {
 	output         string
 	taskTranscript []transcriptBlock
 	status         string
-	spinnerFrame   int
 	errorText      string
 	completedAt    time.Time
 	elapsed        time.Duration
@@ -105,7 +103,6 @@ func (s *state) saveModeView() {
 		output:                       s.output,
 		taskTranscript:               cloneTranscriptBlocks(s.taskTranscript),
 		status:                       s.status,
-		spinnerFrame:                 s.spinnerFrame,
 		errorText:                    s.errorText,
 		completedAt:                  s.completedAt,
 		elapsed:                      s.elapsed,
@@ -129,7 +126,6 @@ func (s *state) restoreModeView(mode guiMode) {
 	s.output = view.output
 	s.taskTranscript = cloneTranscriptBlocks(view.taskTranscript)
 	s.status = view.status
-	s.spinnerFrame = view.spinnerFrame
 	s.errorText = view.errorText
 	s.completedAt = view.completedAt
 	s.elapsed = view.elapsed
@@ -152,7 +148,6 @@ func (s *state) resetOutput() {
 	s.output = ""
 	s.taskTranscript = nil
 	s.status = ""
-	s.spinnerFrame = 0
 	s.errorText = ""
 	s.completedAt = time.Time{}
 	s.elapsed = 0
@@ -258,7 +253,6 @@ func (s *state) setRunning(cancel context.CancelFunc) {
 	s.isRunning = true
 	s.cancelFunc = cancel
 	s.status = "thinking"
-	s.spinnerFrame = 0
 	s.errorText = ""
 	s.startTime = time.Now()
 }
@@ -275,5 +269,4 @@ func (s *state) clearRunning() {
 	s.isRunning = false
 	s.cancelFunc = nil
 	s.status = ""
-	s.spinnerFrame = 0
 }

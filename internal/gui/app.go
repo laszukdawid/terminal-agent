@@ -152,10 +152,6 @@ func (g *App) startIndicator() {
 						g.renderOutput()
 						g.popup.outputScroll.ScrollToBottom()
 					}
-					if g.state.status == "responding" {
-						g.state.spinnerFrame = (g.state.spinnerFrame + 1) % len(spinnerFrames)
-						g.popup.setStatus(g.state.status, g.state.isRunning, g.state.spinnerFrame)
-					}
 				})
 			case <-stop:
 				return
@@ -261,8 +257,6 @@ func (g *App) render() {
 		g.popup.setResponseHeading(sectionResp)
 	}
 	g.popup.setMeta(metaText(g.state))
-
-	g.popup.setStatus(displayStatus(g.state), g.state.isRunning, g.state.spinnerFrame)
 
 	if g.state.isRunning {
 		g.popup.actionButton.SetText(stopButtonText)
@@ -435,13 +429,6 @@ func exportPromptHeadingForMode(mode guiMode) string {
 		return "Task"
 	}
 	return "Ask"
-}
-
-func displayStatus(s *state) string {
-	if s.errorText != "" {
-		return "Error"
-	}
-	return s.status
 }
 
 const (

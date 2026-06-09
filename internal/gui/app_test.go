@@ -6,25 +6,6 @@ import (
 	"time"
 )
 
-func TestDisplayStatusUsesShortErrorStatus(t *testing.T) {
-	s := &state{
-		status:    "thinking",
-		errorText: "provider openai request failed with a long response body",
-	}
-
-	if got := displayStatus(s); got != "Error" {
-		t.Fatalf("displayStatus() = %q, want %q", got, "Error")
-	}
-}
-
-func TestDisplayStatusUsesNormalStatusWithoutError(t *testing.T) {
-	s := &state{status: "responding"}
-
-	if got := displayStatus(s); got != "responding" {
-		t.Fatalf("displayStatus() = %q, want %q", got, "responding")
-	}
-}
-
 func TestResponseCopyTextPrioritizesDisplayedError(t *testing.T) {
 	s := &state{
 		question:  "test question",

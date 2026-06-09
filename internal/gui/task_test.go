@@ -352,8 +352,8 @@ func TestIsMeaningfulTaskStatus(t *testing.T) {
 
 func TestTaskStatusDisplay(t *testing.T) {
 	thinking := appservice.Event{Status: string(agent.TaskStatusThinking), Text: "Thinking..."}
-	if got := taskStatusDisplay(thinking); got != "thinking" {
-		t.Fatalf("thinking phase display = %q, want thinking", got)
+	if got := taskStatusDisplay(thinking); got != "Thinking..." {
+		t.Fatalf("thinking phase display = %q, want message text", got)
 	}
 	running := appservice.Event{Status: string(agent.TaskStatusRunningTool), Text: "Running unix..."}
 	if got := taskStatusDisplay(running); got != "Running unix..." {
