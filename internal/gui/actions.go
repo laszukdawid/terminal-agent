@@ -62,6 +62,9 @@ func (g *App) cancel() {
 }
 
 func (g *App) copyOutput() {
+	if !hasCopyableResponse(g.state) {
+		return
+	}
 	text := responseCopyText(g.state)
 	if text != "" {
 		g.fyneApp.Clipboard().SetContent(text)
@@ -72,6 +75,9 @@ func (g *App) copyOutput() {
 // a file chosen by the user. It mirrors the "EXPORT LOG" affordance from the
 // brand: a lightweight terminal-output action rather than a document toolbar.
 func (g *App) exportOutput() {
+	if !hasCopyableResponse(g.state) {
+		return
+	}
 	text := responseCopyText(g.state)
 	if text == "" {
 		return

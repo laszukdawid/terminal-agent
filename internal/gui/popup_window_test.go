@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 func TestBuildOutputWrapsGeneralResponseText(t *testing.T) {
@@ -20,8 +21,61 @@ func TestBuildOutputWrapsGeneralResponseText(t *testing.T) {
 	if p.outputField.Wrapping != fyne.TextWrapWord {
 		t.Fatalf("outputField.Wrapping = %v, want %v", p.outputField.Wrapping, fyne.TextWrapWord)
 	}
+	if p.transcriptBody == nil {
+		t.Fatal("buildOutput should initialize the transcript container")
+	}
 	if p.errorLabel.Wrapping != fyne.TextWrapBreak {
 		t.Fatalf("errorLabel.Wrapping = %v, want %v", p.errorLabel.Wrapping, fyne.TextWrapBreak)
+	}
+}
+
+func TestSetTranscriptReusesExistingToolOutputWidget(t *testing.T) {
+	p := &popupWindow{}
+	p.buildOutput()
+
+	blocks := []transcriptBlock{
+		{Kind: transcriptBlockProse, Text: "Running unix..."},
+		{Kind: transcriptBlockToolOutput, Chunks: []string{"line1\n"}},
+	}
+	p.setTranscript(blocks)
+
+	if len(p.transcriptViews) != 2 {
+		t.Fatalf("transcript view count = %d, want 2", len(p.transcriptViews))
+	}
+	grid := p.transcriptViews[1].textGrid
+	rich := p.transcriptViews[0].richText
+	if grid == nil || rich == nil {
+		t.Fatal("expected rich text and text grid transcript views")
+	}
+
+	updated := []transcriptBlock{
+		{Kind: transcriptBlockProse, Text: "Running unix..."},
+		{Kind: transcriptBlockToolOutput, Chunks: []string{"line1\n", "line2\n"}},
+	}
+	p.setTranscript(updated)
+
+	if p.transcriptViews[1].textGrid != grid {
+		t.Fatal("tool-output updates should reuse the existing text grid")
+	}
+	if p.transcriptViews[0].richText != rich {
+		t.Fatal("unchanged prose blocks should reuse the existing rich text widget")
+	}
+	if got := p.transcriptViews[1].textGrid.Text(); got != "line1\nline2\n" {
+		t.Fatalf("text grid content = %q, want updated output", got)
+	}
+	if p.transcriptViews[1].chunks != 2 {
+		t.Fatalf("tracked chunk count = %d, want 2", p.transcriptViews[1].chunks)
+	}
+}
+
+func TestAppendTextGridTextNoRefreshPreservesChunkBytes(t *testing.T) {
+	grid := widget.NewTextGrid()
+
+	appendTextGridTextNoRefresh(grid, "line1\n")
+	appendTextGridTextNoRefresh(grid, "line2")
+
+	if got := grid.Text(); got != "line1\nline2" {
+		t.Fatalf("text grid text = %q, want exact appended chunks", got)
 	}
 }
 

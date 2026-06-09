@@ -43,6 +43,11 @@ func TestResponseCopyTextFallsBackToOutputThenQuestion(t *testing.T) {
 		t.Fatalf("responseCopyText(withOutput) = %q, want %q", got, "answer")
 	}
 
+	withTaskTranscript := &state{taskTranscript: []transcriptBlock{{Kind: transcriptBlockProse, Text: "Running unix..."}, {Kind: transcriptBlockFinal, Text: "answer"}}}
+	if got := responseCopyText(withTaskTranscript); got != "Running unix...\n\n---\n\nanswer" {
+		t.Fatalf("responseCopyText(withTaskTranscript) = %q", got)
+	}
+
 	withQuestion := &state{question: "question"}
 	if got := responseCopyText(withQuestion); got != "question" {
 		t.Fatalf("responseCopyText(withQuestion) = %q, want %q", got, "question")
@@ -53,8 +58,14 @@ func TestHasCopyableResponseIncludesErrors(t *testing.T) {
 	if !hasCopyableResponse(&state{errorText: "provider failed"}) {
 		t.Fatal("hasCopyableResponse() should be true for errors")
 	}
+	if hasCopyableResponse(&state{isRunning: true, output: "partial"}) {
+		t.Fatal("hasCopyableResponse() should be false while a response is streaming")
+	}
 	if hasCopyableResponse(&state{question: "question only"}) {
 		t.Fatal("hasCopyableResponse() should be false without output or error")
+	}
+	if !hasCopyableResponse(&state{taskTranscript: []transcriptBlock{{Kind: transcriptBlockFinal, Text: "answer"}}}) {
+		t.Fatal("hasCopyableResponse() should be true for task transcripts")
 	}
 }
 

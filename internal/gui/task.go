@@ -32,9 +32,9 @@ func (g *App) submitTask(ctx context.Context, message string) {
 	go g.consumeTaskEvents(events)
 }
 
-// consumeTaskEvents drains the Task event stream, building a rich transcript in
-// state.output (status/tool-call lines, progress lines, live tool output, and
-// the final answer) while keeping the existing brain/spinner indicators working
+// consumeTaskEvents drains the Task event stream, building a segmented
+// transcript (status/tool-call lines, progress lines, live tool output, and the
+// final answer) while keeping the existing brain/spinner indicators working
 // through the shared status surface.
 func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 	for event := range events {
@@ -67,9 +67,7 @@ func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 				}
 				// final/direct-output tools stream unlimited because their output is
 				// the run's answer (matching the CLI). Non-final live output is capped
-				// to GetTaskLiveOutputLimit lines. Large final output is bounded only
-				// by render throttling here; the proper fix is the monospace segmented
-				// transcript tracked in issue #55.
+				// to GetTaskLiveOutputLimit lines.
 				maxLines := 0
 				if !g.state.taskCurrentToolFinal {
 					maxLines = g.cfg.GetTaskLiveOutputLimit()
@@ -103,7 +101,7 @@ func (g *App) consumeTaskEvents(events <-chan appservice.Event) {
 			case appservice.EventCompleted:
 				g.state.closeTaskToolBlock()
 				if shouldAppendTaskFinalOutput(eventCopy, g.state) {
-					g.state.appendTaskFinalText(taskFinalOutputText(eventCopy))
+					g.state.appendTaskCompletionOutput(eventCopy)
 				}
 				g.state.outputDirty = true
 				g.finishRun(nil)
@@ -136,14 +134,14 @@ func shouldAppendTaskFinalOutput(event appservice.Event, s *state) bool {
 	return event.RawOutput != "" && (!s.taskSawLiveOutput || truncated)
 }
 
-// taskFinalOutputText returns the completion text to append: the final answer
-// when present, otherwise the raw output as a fallback. Callers should gate on
-// shouldAppendTaskFinalOutput first.
-func taskFinalOutputText(event appservice.Event) string {
+// appendTaskCompletionOutput appends final prose as markdown and raw fallback as
+// monospace tool output. Callers should gate on shouldAppendTaskFinalOutput first.
+func (s *state) appendTaskCompletionOutput(event appservice.Event) {
 	if event.FinalOutput != "" {
-		return event.FinalOutput
+		s.appendTaskFinalText(event.FinalOutput)
+		return
 	}
-	return event.RawOutput
+	s.appendTaskRawOutput(event.RawOutput)
 }
 
 // isMeaningfulTaskStatus reports whether a task status phase warrants its own
@@ -177,4 +175,3 @@ func formatTaskToolProgress(event appservice.Event) string {
 	}
 	return event.ToolName + ": " + event.Text
 }
-

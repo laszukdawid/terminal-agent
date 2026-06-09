@@ -17,26 +17,26 @@ const (
 	guiModeTask guiMode = "task"
 )
 
-// taskToolFenceMarker opens and closes the fenced code block that wraps live
-// tool stdout/stderr in the Task transcript, keeping shell output readable in
-// the markdown renderer.
+// taskToolFenceMarker is the copy/export fence marker used when serializing
+// task tool-output blocks back to the legacy markdown transcript shape.
 const taskToolFenceMarker = "```"
 
 type state struct {
-	input        string
-	question     string
-	output       string
-	status       string
-	spinnerFrame int
-	errorText    string
-	isRunning    bool
-	isVisible    bool
-	cancelFunc   context.CancelFunc
-	voiceState   voice.State
-	voiceError   string
-	startTime    time.Time
-	completedAt  time.Time
-	elapsed      time.Duration
+	input          string
+	question       string
+	output         string
+	taskTranscript []transcriptBlock
+	status         string
+	spinnerFrame   int
+	errorText      string
+	isRunning      bool
+	isVisible      bool
+	cancelFunc     context.CancelFunc
+	voiceState     voice.State
+	voiceError     string
+	startTime      time.Time
+	completedAt    time.Time
+	elapsed        time.Duration
 
 	// mode is the selected sidebar tab. It deliberately persists across runs and
 	// is not cleared by resetOutput so the chosen tab stays selected.
@@ -46,8 +46,8 @@ type state struct {
 	// Per-run Task streaming state. taskSawLiveOutput records whether any live
 	// tool output streamed this run; taskLiveOutputTools tracks which tools
 	// streamed so completion can avoid duplicating already-shown raw output.
-	// taskToolOpen/taskToolProcessID track the currently open fenced output
-	// block so consecutive chunks render as one contiguous transcript block.
+	// taskToolOpen/taskToolProcessID track the currently open tool-output block so
+	// consecutive chunks render as one contiguous monospace transcript block.
 	taskSawLiveOutput   bool
 	taskLiveOutputTools map[string]bool
 	// taskLiveOutputTruncatedTools records tools whose live output was capped, so
@@ -56,9 +56,10 @@ type state struct {
 	taskLiveOutputTruncatedTools map[string]bool
 	taskToolOpen                 bool
 	taskToolProcessID            int
+	taskToolBlockIndex           int
 
-	// outputDirty marks that state.output changed and the response panel needs a
-	// (coalesced) re-render; the indicator ticker flushes it.
+	// outputDirty marks that the visible response changed and the response panel
+	// needs a (coalesced) re-render; the indicator ticker flushes it.
 	outputDirty bool
 	// taskCurrentToolFinal is set from the running_tool status: final tools stream
 	// unlimited because their output is the run's answer.
@@ -68,19 +69,22 @@ type state struct {
 }
 
 type modeViewState struct {
-	input        string
-	question     string
-	output       string
-	status       string
-	spinnerFrame int
-	errorText    string
-	completedAt  time.Time
-	elapsed      time.Duration
+	input          string
+	question       string
+	output         string
+	taskTranscript []transcriptBlock
+	status         string
+	spinnerFrame   int
+	errorText      string
+	completedAt    time.Time
+	elapsed        time.Duration
 
-	taskSawLiveOutput   bool
-	taskLiveOutputTools map[string]bool
-	taskToolOpen        bool
-	taskToolProcessID   int
+	taskSawLiveOutput            bool
+	taskLiveOutputTools          map[string]bool
+	taskLiveOutputTruncatedTools map[string]bool
+	taskToolOpen                 bool
+	taskToolProcessID            int
+	taskToolBlockIndex           int
 }
 
 func (s *state) saveModeView() {
@@ -91,19 +95,26 @@ func (s *state) saveModeView() {
 	for tool, seen := range s.taskLiveOutputTools {
 		liveOutputTools[tool] = seen
 	}
+	truncatedTools := map[string]bool{}
+	for tool, seen := range s.taskLiveOutputTruncatedTools {
+		truncatedTools[tool] = seen
+	}
 	s.modeViews[s.mode] = modeViewState{
-		input:               s.input,
-		question:            s.question,
-		output:              s.output,
-		status:              s.status,
-		spinnerFrame:        s.spinnerFrame,
-		errorText:           s.errorText,
-		completedAt:         s.completedAt,
-		elapsed:             s.elapsed,
-		taskSawLiveOutput:   s.taskSawLiveOutput,
-		taskLiveOutputTools: liveOutputTools,
-		taskToolOpen:        s.taskToolOpen,
-		taskToolProcessID:   s.taskToolProcessID,
+		input:                        s.input,
+		question:                     s.question,
+		output:                       s.output,
+		taskTranscript:               cloneTranscriptBlocks(s.taskTranscript),
+		status:                       s.status,
+		spinnerFrame:                 s.spinnerFrame,
+		errorText:                    s.errorText,
+		completedAt:                  s.completedAt,
+		elapsed:                      s.elapsed,
+		taskSawLiveOutput:            s.taskSawLiveOutput,
+		taskLiveOutputTools:          liveOutputTools,
+		taskLiveOutputTruncatedTools: truncatedTools,
+		taskToolOpen:                 s.taskToolOpen,
+		taskToolProcessID:            s.taskToolProcessID,
+		taskToolBlockIndex:           s.taskToolBlockIndex,
 	}
 }
 
@@ -116,6 +127,7 @@ func (s *state) restoreModeView(mode guiMode) {
 	s.input = view.input
 	s.question = view.question
 	s.output = view.output
+	s.taskTranscript = cloneTranscriptBlocks(view.taskTranscript)
 	s.status = view.status
 	s.spinnerFrame = view.spinnerFrame
 	s.errorText = view.errorText
@@ -126,13 +138,19 @@ func (s *state) restoreModeView(mode guiMode) {
 	for tool, seen := range view.taskLiveOutputTools {
 		s.taskLiveOutputTools[tool] = seen
 	}
+	s.taskLiveOutputTruncatedTools = map[string]bool{}
+	for tool, seen := range view.taskLiveOutputTruncatedTools {
+		s.taskLiveOutputTruncatedTools[tool] = seen
+	}
 	s.taskToolOpen = view.taskToolOpen
 	s.taskToolProcessID = view.taskToolProcessID
+	s.taskToolBlockIndex = view.taskToolBlockIndex
 }
 
 func (s *state) resetOutput() {
 	s.question = ""
 	s.output = ""
+	s.taskTranscript = nil
 	s.status = ""
 	s.spinnerFrame = 0
 	s.errorText = ""
@@ -150,24 +168,25 @@ func (s *state) resetTaskStreaming() {
 	s.taskLiveOutputTruncatedTools = map[string]bool{}
 	s.taskToolOpen = false
 	s.taskToolProcessID = 0
+	s.taskToolBlockIndex = -1
 	s.outputDirty = false
 	s.taskCurrentToolFinal = false
 	s.taskLiveLimiter = nil
 }
 
-// openTaskToolBlock ensures a fenced output block is open for processID, bounding
+// openTaskToolBlock ensures a tool-output block is open for processID, bounding
 // it to maxLines lines (0 = unlimited). A new process (or no open block) closes
-// any previous fence and opens a fresh one with a fresh limiter so each tool's
+// any previous block and opens a fresh one with a fresh limiter so each tool's
 // live output is its own readable, bounded block.
 func (s *state) openTaskToolBlock(processID, maxLines int) {
 	if s.taskToolOpen && s.taskToolProcessID == processID {
 		return
 	}
 	s.closeTaskToolBlock()
-	s.ensureTrailingNewline()
-	s.output += taskToolFenceMarker + "\n"
+	s.taskTranscript = append(s.taskTranscript, transcriptBlock{Kind: transcriptBlockToolOutput})
 	s.taskToolOpen = true
 	s.taskToolProcessID = processID
+	s.taskToolBlockIndex = len(s.taskTranscript) - 1
 	s.taskLiveLimiter = newLiveOutputLimiter(maxLines, liveOutputMaxLineChars)
 }
 
@@ -178,21 +197,24 @@ func (s *state) appendTaskOutput(text string) {
 	if s.taskLiveLimiter != nil {
 		text = s.taskLiveLimiter.Filter(text)
 	}
-	s.output += text
+	if text == "" || s.taskToolBlockIndex < 0 || s.taskToolBlockIndex >= len(s.taskTranscript) {
+		return
+	}
+	s.taskTranscript[s.taskToolBlockIndex].Chunks = append(s.taskTranscript[s.taskToolBlockIndex].Chunks, text)
 }
 
-// closeTaskToolBlock closes an open fenced output block, if any.
+// closeTaskToolBlock closes an open tool-output block, if any.
 func (s *state) closeTaskToolBlock() {
 	if !s.taskToolOpen {
 		return
 	}
-	s.ensureTrailingNewline()
-	s.output += taskToolFenceMarker + "\n"
 	s.taskToolOpen = false
 	s.taskToolProcessID = 0
+	s.taskToolBlockIndex = -1
+	s.taskLiveLimiter = nil
 }
 
-// appendTaskTranscriptLine closes any open tool-output fence and appends a
+// appendTaskTranscriptLine closes any open tool-output block and appends a
 // non-output transcript line (status/progress) on its own line.
 func (s *state) appendTaskTranscriptLine(line string) {
 	line = strings.TrimSpace(line)
@@ -200,8 +222,7 @@ func (s *state) appendTaskTranscriptLine(line string) {
 		return
 	}
 	s.closeTaskToolBlock()
-	s.ensureTrailingNewline()
-	s.output += line + "\n"
+	s.taskTranscript = append(s.taskTranscript, transcriptBlock{Kind: transcriptBlockProse, Text: line})
 }
 
 // appendTaskFinalText appends final/raw completion text, separating it from any
@@ -210,19 +231,27 @@ func (s *state) appendTaskFinalText(text string) {
 	if text == "" {
 		return
 	}
-	if s.output != "" {
-		s.ensureTrailingNewline()
-		s.output += "\n---\n\n"
-	}
-	s.output += text
+	s.closeTaskToolBlock()
+	s.taskTranscript = append(s.taskTranscript, transcriptBlock{Kind: transcriptBlockFinal, Text: text})
 }
 
-// ensureTrailingNewline normalizes the transcript so the next appended block
-// starts on a fresh line.
-func (s *state) ensureTrailingNewline() {
-	if s.output != "" && !strings.HasSuffix(s.output, "\n") {
-		s.output += "\n"
+func (s *state) appendTaskRawOutput(text string) {
+	if text == "" {
+		return
 	}
+	s.closeTaskToolBlock()
+	s.taskTranscript = append(s.taskTranscript, transcriptBlock{Kind: transcriptBlockToolOutput, Chunks: []string{text}})
+}
+
+func (s *state) hasResponseContent() bool {
+	return s.output != "" || len(s.taskTranscript) > 0
+}
+
+func (s *state) responseText() string {
+	if len(s.taskTranscript) > 0 {
+		return serializeTranscript(s.taskTranscript)
+	}
+	return s.output
 }
 
 func (s *state) setRunning(cancel context.CancelFunc) {
