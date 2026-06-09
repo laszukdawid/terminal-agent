@@ -20,6 +20,8 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 - Do **not** include design specs or implementation plans in pull requests or git commits. Keep them local only (e.g. under `docs/superpowers/`, which is git-ignored); a PR should contain only the production code, tests, and user-facing docs for the change.
 - Do **not** commit build artifacts (the `agent` / `agent-gui` binaries produced by `task build`). They are git-ignored; never `git add` them into a commit.
 - Prefer named constants over magic strings and numbers. If a value has product meaning, is reused, or is part of configuration/default behavior, define it as a const and reference the const in production code and tests.
+- Keep source files focused. Do not let files grow into catch-all buckets; when a file starts mixing separate responsibilities, split it along durable product or implementation boundaries.
+- Periodically revisit filenames as code evolves. A file name should still describe what the file holds today, not only the original intent from when it was created.
 
 ## Development Philosophy
 
