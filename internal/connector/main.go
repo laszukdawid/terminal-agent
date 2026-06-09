@@ -12,7 +12,7 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 	var err error
 	switch provider {
 	case BedrockProvider:
-		connector, err = NewBedrockConnector((*BedrockModelID)(&modelID))
+		connector, err = NewBedrockConnector((*BedrockModelID)(&modelID), cfg)
 	case CodexProvider:
 		connector = NewCodexConnector(&modelID)
 	case OpenaiProvider:

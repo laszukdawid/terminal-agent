@@ -62,8 +62,8 @@ func providerSetupHint(provider string) string {
 	case connector.OllamaProvider:
 		return "Ollama uses the local server configuration from OLLAMA_HOST when set."
 	case connector.BedrockProvider:
-		if os.Getenv("AWS_REGION") == "" {
-			return "Bedrock uses AWS credentials and defaults AWS_REGION when unset."
+		if os.Getenv("AWS_PROFILE") == "" && os.Getenv("AWS_REGION") == "" && os.Getenv("AWS_DEFAULT_REGION") == "" {
+			return "Bedrock uses the AWS SDK credential chain; set AWS_PROFILE/AWS_REGION or configure a profile in config.json."
 		}
 	}
 	return ""
@@ -111,10 +111,13 @@ func providerReadinessStatusWithEnvironment(provider string, envResult Environme
 	case connector.OllamaProvider:
 		return providerReadiness{Available: true, Message: "Available: Ollama does not require an API key; OLLAMA_HOST is optional."}
 	case connector.BedrockProvider:
-		if os.Getenv("AWS_REGION") != "" {
-			return providerReadiness{Available: true, Message: "Check AWS credentials: AWS_REGION is visible; Bedrock uses the AWS SDK credential chain."}
+		if os.Getenv("AWS_PROFILE") != "" {
+			return providerReadiness{Available: true, Message: "Check AWS credentials: AWS_PROFILE is visible; Bedrock uses the AWS SDK credential chain."}
 		}
-		return providerReadiness{Available: true, Message: "Check AWS credentials: Bedrock uses the AWS SDK credential chain and defaults AWS_REGION when unset."}
+		if os.Getenv("AWS_REGION") != "" || os.Getenv("AWS_DEFAULT_REGION") != "" {
+			return providerReadiness{Available: true, Message: "Check AWS credentials: AWS region is visible; Bedrock uses the AWS SDK credential chain."}
+		}
+		return providerReadiness{Available: true, Message: "Check AWS credentials: Bedrock uses the AWS SDK credential chain and falls back to us-east-1 when no region is configured."}
 	default:
 		if provider == "" {
 			return providerReadiness{}

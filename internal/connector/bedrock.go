@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -77,6 +77,16 @@ type BedrockConnector struct {
 	logger  zap.Logger
 }
 
+type BedrockSettings struct {
+	Profile string
+	Region  string
+}
+
+type BedrockConfigProvider interface {
+	GetBedrockProfile() string
+	GetBedrockRegion() string
+}
+
 func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice {
 	prices, exists := ModelPricesBedrock[modelId]
 	if !exists {
@@ -91,16 +101,68 @@ func computePriceBedrock(modelId BedrockModelID, usage *BedrockUsage) *LLMPrice 
 	}
 }
 
-// convertToolsToBedrock converts a map of tools.Tool to AWS Bedrock's types.Tool format.
-// It extracts the name, description, and input schema from each tool and formats them
-// according to AWS Bedrock API requirements.
-//
-// Parameters:
-//   - tools: A map of string to tools.Tool representing the available tools
-//
-// Returns:
-//   - []types.Tool: A slice of Bedrock-compatible tool specifications
-//
+func bedrockInferenceConfig(qParams *QueryParams) *types.InferenceConfiguration {
+	if qParams.MaxTokens <= 0 {
+		return nil
+	}
+
+	maxTokens := int32(qParams.MaxTokens)
+	return &types.InferenceConfiguration{MaxTokens: &maxTokens}
+}
+
+func bedrockUsageFromOutput(usage *types.TokenUsage) *BedrockUsage {
+	if usage == nil {
+		return nil
+	}
+
+	var bedrockUsage BedrockUsage
+	if usage.InputTokens != nil {
+		bedrockUsage.InputTokens = *usage.InputTokens
+	}
+	if usage.OutputTokens != nil {
+		bedrockUsage.OutputTokens = *usage.OutputTokens
+	}
+	if usage.TotalTokens != nil {
+		bedrockUsage.TotalTokens = *usage.TotalTokens
+	}
+	return &bedrockUsage
+}
+
+func textFromBedrockMessage(modelID BedrockModelID, message types.Message) (string, error) {
+	var response string
+	for _, content := range message.Content {
+		if text, ok := content.(*types.ContentBlockMemberText); ok {
+			response += text.Value
+		}
+	}
+	if response == "" {
+		return "", fmt.Errorf("model %s returned no text content", modelID)
+	}
+	return response, nil
+}
+
+func bedrockSettingsFromConfig(cfg any) BedrockSettings {
+	provider, ok := cfg.(BedrockConfigProvider)
+	if !ok {
+		return BedrockSettings{}
+	}
+	return BedrockSettings{
+		Profile: strings.TrimSpace(provider.GetBedrockProfile()),
+		Region:  strings.TrimSpace(provider.GetBedrockRegion()),
+	}
+}
+
+func bedrockAWSConfigOptions(settings BedrockSettings) []func(*config.LoadOptions) error {
+	var opts []func(*config.LoadOptions) error
+	if settings.Profile != "" {
+		opts = append(opts, config.WithSharedConfigProfile(settings.Profile))
+	}
+	if settings.Region != "" {
+		opts = append(opts, config.WithRegion(settings.Region))
+	}
+	return opts
+}
+
 // buildMessages constructs the messages slice from history + current user prompt
 func (bc *BedrockConnector) buildMessages(qParams *QueryParams) []types.Message {
 	var messages []types.Message
@@ -124,6 +186,7 @@ func (bc *BedrockConnector) buildMessages(qParams *QueryParams) []types.Message 
 	return messages
 }
 
+// convertToolsToBedrock converts tool definitions to Bedrock tool specifications.
 func convertToolsToBedrock(tools map[string]tools.Tool) []types.Tool {
 	// Define the input schema as a map
 	var bedrockTools []types.Tool
@@ -142,22 +205,18 @@ func convertToolsToBedrock(tools map[string]tools.Tool) []types.Tool {
 	return bedrockTools
 }
 
-func NewBedrockConnector(modelID *BedrockModelID) (*BedrockConnector, error) {
+func NewBedrockConnector(modelID *BedrockModelID, cfg any) (*BedrockConnector, error) {
 	logger := *utils.GetLogger()
 	logger.Debug("NewBedrockConnector")
-	// sdkConfig, err := cloud.NewAwsConfigWithSSO(context.Background(), "dev")
-	// sdkConfig, err := cloud.NewDefaultAwsConfig(context.Background())
 
-	// Load the AWS region from environment variable or use default
-	awsRegion := os.Getenv("AWS_REGION")
-	if awsRegion == "" {
-		awsRegion = DefaultAwsRegion
-	}
-
-	sdkConfig, err := cloud.NewAwsConfig(context.Background(), config.WithRegion(awsRegion))
+	settings := bedrockSettingsFromConfig(cfg)
+	sdkConfig, err := cloud.NewAwsConfig(context.Background(), bedrockAWSConfigOptions(settings)...)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration for Bedrock: %w", err)
+	}
+	if sdkConfig.Region == "" {
+		sdkConfig.Region = DefaultAwsRegion
 	}
 
 	if modelID == nil || *modelID == "" {
@@ -182,7 +241,8 @@ func (bc *BedrockConnector) queryBedrock(
 	messages := bc.buildMessages(qParams)
 
 	converseInput := &bedrockruntime.ConverseInput{
-		ModelId: (*string)(&bc.modelID),
+		ModelId:         (*string)(&bc.modelID),
+		InferenceConfig: bedrockInferenceConfig(qParams),
 		System: []types.SystemContentBlock{
 			&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
 		},
@@ -201,29 +261,24 @@ func (bc *BedrockConnector) queryBedrock(
 		}
 
 		if re == nil || re.ResponseError == nil {
-			return nil, fmt.Errorf("failed to send request: %v", err)
+			return nil, fmt.Errorf("failed to send request: %w", err)
 		}
 
 		if re.ResponseError.HTTPStatusCode() == 403 {
 			return nil, ErrBedrockForbidden
 		}
 
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Only text output is supported
 	if converseOutput.Output == nil {
 		return nil, fmt.Errorf("model %s returned response is nil", bc.modelID)
 	}
-	if converseOutput.Usage != nil {
-		usage := converseOutput.Usage
-		price := computePriceBedrock(bc.modelID, &BedrockUsage{
-			InputTokens:  *usage.InputTokens,
-			OutputTokens: *usage.OutputTokens,
-			TotalTokens:  *usage.TotalTokens,
-		})
+	if usage := bedrockUsageFromOutput(converseOutput.Usage); usage != nil {
+		price := computePriceBedrock(bc.modelID, usage)
 
-		bc.logger.Sugar().Debugw("Usage", "usage", converseOutput.Usage, "price", price)
+		bc.logger.Sugar().Debugw("Usage", "usage", usage, "price", price)
 	}
 
 	if _, ok := converseOutput.Output.(*types.ConverseOutputMemberMessage); !ok {
@@ -250,7 +305,8 @@ func (bc *BedrockConnector) queryBedrockStream(
 	messages := bc.buildMessages(qParams)
 
 	converseInput := &bedrockruntime.ConverseStreamInput{
-		ModelId: (*string)(&bc.modelID),
+		ModelId:         (*string)(&bc.modelID),
+		InferenceConfig: bedrockInferenceConfig(qParams),
 		System: []types.SystemContentBlock{
 			&types.SystemContentBlockMemberText{Value: *qParams.SysPrompt},
 		},
@@ -268,16 +324,21 @@ func (bc *BedrockConnector) queryBedrockStream(
 			bc.logger.Sugar().Errorf("requestID: %s, error: %v", re.ServiceRequestID(), re.Unwrap())
 		}
 
+		if re == nil || re.ResponseError == nil {
+			return "", fmt.Errorf("failed to send request: %w", err)
+		}
+
 		if re.ResponseError.HTTPStatusCode() == 403 {
 			return "", ErrBedrockForbidden
 		}
 
-		return "", fmt.Errorf("failed to send request: %v", err)
+		return "", fmt.Errorf("failed to send request: %w", err)
 	}
 
 	var acc string
 
 	stream := converseOutput.GetStream()
+	defer stream.Close()
 	var events <-chan types.ConverseStreamOutput = stream.Events()
 
 	for _event := range events {
@@ -302,7 +363,7 @@ func (bc *BedrockConnector) queryBedrockStream(
 
 		case *types.ConverseStreamOutputMemberContentBlockStop:
 			stop := event.Value
-			bc.logger.Debug("ContentBlockStart", zap.Any("stop", stop))
+			bc.logger.Debug("ContentBlockStop", zap.Any("stop", stop))
 
 		case *types.ConverseStreamOutputMemberContentBlockDelta:
 			chunk, isText := event.Value.Delta.(*types.ContentBlockDeltaMemberText)
@@ -321,14 +382,11 @@ func (bc *BedrockConnector) queryBedrockStream(
 			acc += chunk.Value
 
 		case *types.ConverseStreamOutputMemberMetadata:
-			usage := event.Value.Usage
-			price := computePriceBedrock(bc.modelID, &BedrockUsage{
-				InputTokens:  *usage.InputTokens,
-				OutputTokens: *usage.OutputTokens,
-				TotalTokens:  *usage.TotalTokens,
-			})
-
-			bc.logger.Sugar().Debugw("Usage", "usage", usage, "price", price)
+			usage := bedrockUsageFromOutput(event.Value.Usage)
+			if usage != nil {
+				price := computePriceBedrock(bc.modelID, usage)
+				bc.logger.Sugar().Debugw("Usage", "usage", usage, "price", price)
+			}
 
 		default:
 			bc.logger.Warn("union is nil or unknown type", zap.Any("event", event))
@@ -338,6 +396,9 @@ func (bc *BedrockConnector) queryBedrockStream(
 	// Flush any remaining content
 	if mdRenderer != nil {
 		mdRenderer.Flush()
+	}
+	if err := stream.Err(); err != nil {
+		return "", fmt.Errorf("failed to read response stream: %w", err)
 	}
 
 	return acc, nil
@@ -350,27 +411,22 @@ func (bc *BedrockConnector) Query(ctx context.Context, qParams *QueryParams) (st
 		return bc.queryBedrockStream(ctx, qParams, nil)
 	}
 
-	converseOutput, err := bc.queryBedrock(context.Background(), qParams, nil)
+	converseOutput, err := bc.queryBedrock(ctx, qParams, nil)
 	if err != nil {
 		return "", err
 	}
-
-	// If converseOutput.stopReason ==
-	var response string
-	var msgResponse types.Message
 
 	union := converseOutput.Output
 	if union == nil {
 		return "", fmt.Errorf("model %s returned response is nil", bc.modelID)
 	}
 
-	if _, ok := union.(*types.ConverseOutputMemberMessage); !ok {
+	messageOutput, ok := union.(*types.ConverseOutputMemberMessage)
+	if !ok {
 		return "", fmt.Errorf("model %s returned unknown response type", bc.modelID)
 	}
-	msgResponse = union.(*types.ConverseOutputMemberMessage).Value // Value is types.Message
-	response = msgResponse.Content[0].(*types.ContentBlockMemberText).Value
 
-	return response, nil
+	return textFromBedrockMessage(bc.modelID, messageOutput.Value)
 }
 
 func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
@@ -383,25 +439,39 @@ func (bc *BedrockConnector) QueryWithTool(ctx context.Context, qParams *QueryPar
 	}
 
 	//
-	converseOutput, err := bc.queryBedrock(context.Background(), qParams, &toolConfig)
+	converseOutput, err := bc.queryBedrock(ctx, qParams, &toolConfig)
 	if err != nil {
-		return response, fmt.Errorf("failed to send request: %v", err)
+		return response, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	if converseOutput.StopReason == ToolUse {
 		bc.logger.Sugar().Debugw("Tool use", "stopReason", converseOutput.StopReason)
 	}
 
-	contents := converseOutput.Output.(*types.ConverseOutputMemberMessage).Value.Content
-	for blockIdx, content := range contents {
-		bc.logger.Sugar().Debugw("Content block", "blockIdx", blockIdx, "content", content)
+	messageOutput, ok := converseOutput.Output.(*types.ConverseOutputMemberMessage)
+	if !ok {
+		return response, fmt.Errorf("model %s returned unknown response type", bc.modelID)
+	}
+
+	return parseBedrockToolResponse(bc.modelID, messageOutput.Value)
+}
+
+func parseBedrockToolResponse(modelID BedrockModelID, message types.Message) (LlmResponseWithTools, error) {
+	response := LlmResponseWithTools{}
+	contents := message.Content
+	for _, content := range contents {
 		if contentBlockMemberText, ok := content.(*types.ContentBlockMemberText); ok {
 			response.Response += contentBlockMemberText.Value + "\n"
 		}
 
 		if contentBlockMemberText, ok := content.(*types.ContentBlockMemberToolUse); ok {
-			bc.logger.Sugar().Debugw("Tool use", "blockIdx", blockIdx, "content", content)
 			contentToolUse := contentBlockMemberText.Value
+			if contentToolUse.Name == nil || *contentToolUse.Name == "" {
+				return response, fmt.Errorf("model %s returned tool use with empty name", modelID)
+			}
+			if contentToolUse.Input == nil {
+				return response, fmt.Errorf("model %s returned tool use with empty input", modelID)
+			}
 			response.ToolUse = true
 			response.ToolName = *contentToolUse.Name
 

@@ -282,11 +282,34 @@ export OLLAMA_HOST=http://localhost:11345  # modify
    export AWS_REGION=your_region
    ```
 
+   SSO profiles are supported through the standard AWS SDK credential chain:
+   ```sh
+   aws configure sso --profile dev
+   aws sso login --profile dev
+
+   AWS_PROFILE=dev agent ask --provider bedrock "Hello from Bedrock"
+   ```
+
+   If the selected AWS profile includes a region, no region environment variable is required. Otherwise set `AWS_REGION` or configure a Bedrock region in `~/.config/terminal-agent/config.json`.
+
 **Configuration:**
 ```sh
 agent config set provider bedrock
 agent config set model anthropic.claude-3-haiku-20240307-v1:0
 ```
+
+Optional persistent AWS profile/region settings can be added directly to `~/.config/terminal-agent/config.json`:
+
+```json
+{
+  "bedrock": {
+    "profile": "dev",
+    "region": "us-west-2"
+  }
+}
+```
+
+When these fields are omitted, Bedrock uses the normal AWS SDK resolution order, including `AWS_PROFILE`, `AWS_REGION`, `AWS_DEFAULT_REGION`, and shared AWS config files. If no region is resolved, Terminal Agent falls back to `us-east-1`.
 
 **Recommended Models:**
 - `anthropic.claude-3-haiku-20240307-v1:0` - Good balance of capability and cost

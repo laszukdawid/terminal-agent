@@ -82,6 +82,8 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "gemini-3.1-flash-lite", config.Providers["google"])
 		assert.Equal(t, "llama3.2", config.Providers["ollama"])
 		assert.Empty(t, config.GetLlamaModels())
+		assert.Empty(t, config.GetBedrockProfile())
+		assert.Empty(t, config.GetBedrockRegion())
 
 		// Verify config file was created
 		_, err = os.Stat(configPath)
@@ -115,6 +117,26 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, expectedConfig.DefaultProvider, loadedConfig.DefaultProvider)
 		assert.Equal(t, expectedConfig.Providers, loadedConfig.Providers)
 		assert.Equal(t, expectedConfig.GetDefaultModelId(), loadedConfig.GetDefaultModelId())
+	})
+
+	t.Run("LoadBedrockConfig", func(t *testing.T) {
+		_, cleanup := setupTempConfig(t)
+		defer cleanup()
+
+		expectedConfig := &config{
+			DefaultProvider: "bedrock",
+			Providers: map[string]string{
+				"bedrock": "anthropic.claude-3-haiku-20240307-v1:0",
+			},
+			Bedrock: BedrockConfig{Profile: " dev ", Region: " us-west-2 "},
+		}
+		require.NoError(t, SaveConfig(expectedConfig))
+
+		loadedConfig, err := LoadConfig()
+		require.NoError(t, err)
+
+		assert.Equal(t, "dev", loadedConfig.GetBedrockProfile())
+		assert.Equal(t, "us-west-2", loadedConfig.GetBedrockRegion())
 	})
 
 	// Test Ollama provider configuration

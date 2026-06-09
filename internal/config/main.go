@@ -64,6 +64,7 @@ type config struct {
 	LogLevel            string
 	DefaultProvider     string            `json:"default_provider"`
 	Providers           map[string]string `json:"providers"`
+	Bedrock             BedrockConfig     `json:"bedrock,omitempty"`
 	LlamaModels         map[string]string `json:"llama_models,omitempty"`
 	GUI                 GUIConfig         `json:"gui,omitempty"`
 	Device              string            `json:"device,omitempty"`
@@ -82,6 +83,11 @@ type GUIConfig struct {
 	LoadShellEnvironment    *bool          `json:"load_shell_environment,omitempty"`
 	ShellEnvironmentTimeout string         `json:"shell_environment_timeout,omitempty"`
 	Voice                   GUIVoiceConfig `json:"voice,omitempty"`
+}
+
+type BedrockConfig struct {
+	Profile string `json:"profile,omitempty"`
+	Region  string `json:"region,omitempty"`
 }
 
 type GUIVoiceConfig struct {
@@ -218,6 +224,14 @@ func (config *config) GetLlamaModels() map[string]string {
 		return map[string]string{}
 	}
 	return config.LlamaModels
+}
+
+func (config *config) GetBedrockProfile() string {
+	return strings.TrimSpace(config.Bedrock.Profile)
+}
+
+func (config *config) GetBedrockRegion() string {
+	return strings.TrimSpace(config.Bedrock.Region)
 }
 
 func normalizeDevice(device string) string {
