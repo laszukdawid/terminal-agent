@@ -73,14 +73,14 @@ func (t *ReadTool) ToolStatus(input map[string]any) string {
 		return ""
 	}
 
-	parts := []string{quotedStatusPart("file", path)}
+	parts := []string{fmt.Sprintf("Read(%s)", path)}
 	if offset, ok := integerInput(input, "offset"); ok {
 		parts = append(parts, fmt.Sprintf("offset=%d", offset))
 	}
 	if limit, ok := integerInput(input, "limit"); ok {
 		parts = append(parts, fmt.Sprintf("limit=%d", limit))
 	}
-	return formatStatus("Read: ", parts)
+	return strings.Join(parts, " ")
 }
 
 func (t *ReadTool) Run(input *string) (string, error) {

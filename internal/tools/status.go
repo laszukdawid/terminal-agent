@@ -1,9 +1,6 @@
 package tools
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 func trimmedStringInput(input map[string]any, key string) string {
 	value, _ := input[key].(string)
@@ -23,13 +20,25 @@ func integerInput(input map[string]any, key string) (int, bool) {
 	}
 }
 
-func formatStatus(prefix string, parts []string) string {
-	if len(parts) == 0 {
-		return ""
+func joinStatusParts(parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			kept = append(kept, part)
+		}
 	}
-	return prefix + strings.Join(parts, " ")
+	return strings.Join(kept, " ")
 }
 
-func quotedStatusPart(key string, value string) string {
-	return fmt.Sprintf("%s=%q", key, value)
+func joinSearchScope(root string, pattern string) string {
+	root = strings.TrimSuffix(root, "/")
+	pattern = strings.TrimPrefix(pattern, "/")
+	switch {
+	case root != "" && pattern != "":
+		return root + "/" + pattern
+	case root != "":
+		return root
+	default:
+		return pattern
+	}
 }

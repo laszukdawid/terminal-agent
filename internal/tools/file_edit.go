@@ -87,12 +87,7 @@ func (t *FileEditTool) ToolStatus(input map[string]any) string {
 		return ""
 	}
 
-	parts := make([]string, 0, 2)
-	if operation := trimmedStringInput(input, "operation"); operation != "" {
-		parts = append(parts, quotedStatusPart("op", operation))
-	}
-	parts = append(parts, quotedStatusPart("file", path))
-	return formatStatus("Edit: ", parts)
+	return joinStatusParts(fmt.Sprintf("Edit(%s)", path), trimmedStringInput(input, "operation"))
 }
 
 func (t *FileEditTool) Run(input *string) (string, error) {

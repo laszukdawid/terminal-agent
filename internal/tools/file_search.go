@@ -96,17 +96,12 @@ func (t *FileSearchTool) HelpText() string {
 }
 
 func (t *FileSearchTool) ToolStatus(input map[string]any) string {
-	parts := make([]string, 0, 3)
-	if pattern := trimmedStringInput(input, "name_pattern"); pattern != "" {
-		parts = append(parts, quotedStatusPart("files", pattern))
+	scope := joinSearchScope(trimmedStringInput(input, "root"), trimmedStringInput(input, "name_pattern"))
+	contains := trimmedStringInput(input, "contains")
+	if scope == "" && contains == "" {
+		return ""
 	}
-	if contains := trimmedStringInput(input, "contains"); contains != "" {
-		parts = append(parts, quotedStatusPart("with", contains))
-	}
-	if root := trimmedStringInput(input, "root"); root != "" {
-		parts = append(parts, quotedStatusPart("at", root))
-	}
-	return formatStatus("Search: ", parts)
+	return joinStatusParts(fmt.Sprintf("Search(%s)", scope), contains)
 }
 
 func (t *FileSearchTool) Run(input *string) (string, error) {
