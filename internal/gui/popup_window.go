@@ -124,7 +124,7 @@ type popupWindow struct {
 
 	cwdLabel *canvas.Text
 
-	testButton *widget.Button
+	testButton *navRow
 
 	onSubmit      func()
 	onEscape      func()
@@ -471,12 +471,12 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 	}))
 
 	if devMode {
-		p.testButton = widget.NewButton("Test", func() {
+		nav.Add(brandSeparator())
+		p.testButton = newNavRow("TEST", iconPathTest, false, func() {
 			if p.onTest != nil {
 				p.onTest()
 			}
 		})
-		p.testButton.Importance = widget.LowImportance
 		nav.Add(p.testButton)
 	}
 
