@@ -342,7 +342,7 @@ func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, 
 	if err := ctx.Err(); err != nil {
 		return TaskRunResult{}, false, err
 	}
-	run.emitStatus(TaskStatusRunningTool, fmt.Sprintf("Running %s...", response.ToolName), response.ToolName, response.ToolInput)
+	run.emitStatus(TaskStatusRunningTool, formatRunningToolStatus(tool, response.ToolInput), response.ToolName, response.ToolInput)
 	toolResult, err := runTaskTool(ctx, tool, response.ToolInput, run.state.Dirs, newTaskToolOutputWriter(ctx, response.ToolName, run.onToolOutput), run.progressReporter(response.ToolName))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -414,6 +414,15 @@ func (r *taskExecutionState) emitStatus(phase TaskStatusPhase, message string, t
 		return
 	}
 	r.onStatus(TaskStatusEvent{Phase: phase, Message: message, ToolName: toolName, ToolInput: toolInput, Timestamp: time.Now().UTC()})
+}
+
+func formatRunningToolStatus(tool tools.Tool, toolInput map[string]any) string {
+	if formatter, ok := tool.(tools.StatusFormatter); ok {
+		if status := formatter.ToolStatus(toolInput); status != "" {
+			return status
+		}
+	}
+	return fmt.Sprintf("Running %s...", tool.Name())
 }
 
 func (r *taskExecutionState) progressReporter(toolName string) func(string) {

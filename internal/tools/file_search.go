@@ -95,6 +95,15 @@ func (t *FileSearchTool) HelpText() string {
 	return t.helpText
 }
 
+func (t *FileSearchTool) ToolStatus(input map[string]any) string {
+	scope := joinSearchScope(trimmedStringInput(input, "root"), trimmedStringInput(input, "name_pattern"))
+	contains := trimmedStringInput(input, "contains")
+	if scope == "" && contains == "" {
+		return ""
+	}
+	return joinStatusParts(fmt.Sprintf("Search(%s)", scope), contains)
+}
+
 func (t *FileSearchTool) Run(input *string) (string, error) {
 	return t.RunSchema(map[string]any{"contains": *input})
 }

@@ -32,6 +32,13 @@ func (t *fixedOutputTool) HelpText() string                             { return
 func (t *fixedOutputTool) RunSchema(map[string]any) (string, error)     { return t.output, nil }
 func (t *fixedOutputTool) Run(*string) (string, error)                  { return t.output, nil }
 
+type statusOutputTool struct {
+	fixedOutputTool
+	status string
+}
+
+func (t *statusOutputTool) ToolStatus(map[string]any) string { return t.status }
+
 type schemaOutputTool struct {
 	name     string
 	output   string
@@ -548,6 +555,41 @@ func TestTaskWithOptionsResultEmitsStatusAndProgress(t *testing.T) {
 	require.Len(t, progress, 1)
 	assert.Equal(t, "progress_tool", progress[0].ToolName)
 	assert.Equal(t, "halfway", progress[0].Message)
+}
+
+func TestFormatRunningToolStatusUsesToolFormatter(t *testing.T) {
+	tests := []struct {
+		name string
+		tool tools.Tool
+		want string
+	}{
+		{
+			name: "formatted status",
+			tool: &statusOutputTool{
+				fixedOutputTool: fixedOutputTool{name: "status_tool"},
+				status:          `Status: value="x"`,
+			},
+			want: `Status: value="x"`,
+		},
+		{
+			name: "empty formatted status falls back",
+			tool: &statusOutputTool{
+				fixedOutputTool: fixedOutputTool{name: "status_tool"},
+			},
+			want: "Running status_tool...",
+		},
+		{
+			name: "unformatted tool falls back",
+			tool: &fixedOutputTool{name: "plain_tool"},
+			want: "Running plain_tool...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, formatRunningToolStatus(tt.tool, map[string]any{"value": "x"}))
+		})
+	}
 }
 
 func TestTaskWithOptionsResultEmitsFailureStatusWithError(t *testing.T) {

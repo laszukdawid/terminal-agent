@@ -81,6 +81,15 @@ func (t *FileEditTool) HelpText() string {
 	return t.helpText
 }
 
+func (t *FileEditTool) ToolStatus(input map[string]any) string {
+	path := trimmedStringInput(input, "path")
+	if path == "" {
+		return ""
+	}
+
+	return joinStatusParts(fmt.Sprintf("Edit(%s)", path), trimmedStringInput(input, "operation"))
+}
+
 func (t *FileEditTool) Run(input *string) (string, error) {
 	return t.RunSchema(map[string]any{"operation": "write", "path": "", "content": *input})
 }
