@@ -32,6 +32,13 @@ func (t *fixedOutputTool) HelpText() string                             { return
 func (t *fixedOutputTool) RunSchema(map[string]any) (string, error)     { return t.output, nil }
 func (t *fixedOutputTool) Run(*string) (string, error)                  { return t.output, nil }
 
+type statusOutputTool struct {
+	fixedOutputTool
+	status string
+}
+
+func (t *statusOutputTool) ToolStatus(map[string]any) string { return t.status }
+
 type schemaOutputTool struct {
 	name     string
 	output   string
@@ -550,66 +557,37 @@ func TestTaskWithOptionsResultEmitsStatusAndProgress(t *testing.T) {
 	assert.Equal(t, "halfway", progress[0].Message)
 }
 
-func TestFormatRunningToolStatusIncludesReadAndSearchDetails(t *testing.T) {
+func TestFormatRunningToolStatusUsesToolFormatter(t *testing.T) {
 	tests := []struct {
-		name      string
-		toolName  string
-		toolInput map[string]any
-		want      string
+		name string
+		tool tools.Tool
+		want string
 	}{
 		{
-			name:      "read path",
-			toolName:  tools.ToolNameRead,
-			toolInput: map[string]any{"path": "internal/agent/task.go"},
-			want:      `Read: file="internal/agent/task.go"`,
+			name: "formatted status",
+			tool: &statusOutputTool{
+				fixedOutputTool: fixedOutputTool{name: "status_tool"},
+				status:          `Status: value="x"`,
+			},
+			want: `Status: value="x"`,
 		},
 		{
-			name:      "read path with pagination",
-			toolName:  tools.ToolNameRead,
-			toolInput: map[string]any{"path": "internal/agent/task.go", "offset": 10, "limit": 20},
-			want:      `Read: file="internal/agent/task.go" offset=10 limit=20`,
+			name: "empty formatted status falls back",
+			tool: &statusOutputTool{
+				fixedOutputTool: fixedOutputTool{name: "status_tool"},
+			},
+			want: "Running status_tool...",
 		},
 		{
-			name:      "file search pattern",
-			toolName:  tools.ToolNameFileSearch,
-			toolInput: map[string]any{"name_pattern": "*.go"},
-			want:      `Search: files="*.go"`,
-		},
-		{
-			name:      "file search contains and root",
-			toolName:  tools.ToolNameFileSearch,
-			toolInput: map[string]any{"contains": "TaskState", "root": "internal/agent"},
-			want:      `Search: with="TaskState" at="internal/agent"`,
-		},
-		{
-			name:      "file search pattern and contains",
-			toolName:  tools.ToolNameFileSearch,
-			toolInput: map[string]any{"name_pattern": "*.go", "contains": "TaskState"},
-			want:      `Search: files="*.go" with="TaskState"`,
-		},
-		{
-			name:      "file edit write",
-			toolName:  tools.ToolNameFileEdit,
-			toolInput: map[string]any{"operation": "write", "path": "README.md"},
-			want:      `Edit: op="write" file="README.md"`,
-		},
-		{
-			name:      "file edit replace",
-			toolName:  tools.ToolNameFileEdit,
-			toolInput: map[string]any{"operation": "replace", "path": "internal/agent/task.go"},
-			want:      `Edit: op="replace" file="internal/agent/task.go"`,
-		},
-		{
-			name:      "generic fallback",
-			toolName:  "progress_tool",
-			toolInput: map[string]any{},
-			want:      "Running progress_tool...",
+			name: "unformatted tool falls back",
+			tool: &fixedOutputTool{name: "plain_tool"},
+			want: "Running plain_tool...",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, formatRunningToolStatus(tt.toolName, tt.toolInput))
+			assert.Equal(t, tt.want, formatRunningToolStatus(tt.tool, map[string]any{"value": "x"}))
 		})
 	}
 }

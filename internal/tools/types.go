@@ -25,6 +25,10 @@ type TaskSchemaProvider interface {
 	TaskInputSchema() map[string]any
 }
 
+type StatusFormatter interface {
+	ToolStatus(input map[string]any) string
+}
+
 func EffectiveTaskInputSchema(tool Tool) map[string]any {
 	if provider, ok := tool.(TaskSchemaProvider); ok {
 		return provider.TaskInputSchema()

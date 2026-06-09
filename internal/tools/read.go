@@ -67,6 +67,22 @@ func (t *ReadTool) HelpText() string {
 	return t.helpText
 }
 
+func (t *ReadTool) ToolStatus(input map[string]any) string {
+	path := trimmedStringInput(input, "path")
+	if path == "" {
+		return ""
+	}
+
+	parts := []string{quotedStatusPart("file", path)}
+	if offset, ok := integerInput(input, "offset"); ok {
+		parts = append(parts, fmt.Sprintf("offset=%d", offset))
+	}
+	if limit, ok := integerInput(input, "limit"); ok {
+		parts = append(parts, fmt.Sprintf("limit=%d", limit))
+	}
+	return formatStatus("Read: ", parts)
+}
+
 func (t *ReadTool) Run(input *string) (string, error) {
 	if input == nil {
 		return "", fmt.Errorf("path is required")

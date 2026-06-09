@@ -342,7 +342,7 @@ func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, 
 	if err := ctx.Err(); err != nil {
 		return TaskRunResult{}, false, err
 	}
-	run.emitStatus(TaskStatusRunningTool, formatRunningToolStatus(response.ToolName, response.ToolInput), response.ToolName, response.ToolInput)
+	run.emitStatus(TaskStatusRunningTool, formatRunningToolStatus(tool, response.ToolInput), response.ToolName, response.ToolInput)
 	toolResult, err := runTaskTool(ctx, tool, response.ToolInput, run.state.Dirs, newTaskToolOutputWriter(ctx, response.ToolName, run.onToolOutput), run.progressReporter(response.ToolName))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -416,88 +416,13 @@ func (r *taskExecutionState) emitStatus(phase TaskStatusPhase, message string, t
 	r.onStatus(TaskStatusEvent{Phase: phase, Message: message, ToolName: toolName, ToolInput: toolInput, Timestamp: time.Now().UTC()})
 }
 
-func formatRunningToolStatus(toolName string, toolInput map[string]any) string {
-	switch toolName {
-	case tools.ToolNameRead:
-		if status := formatReadStatus(toolInput); status != "" {
-			return status
-		}
-	case tools.ToolNameFileSearch:
-		if status := formatFileSearchStatus(toolInput); status != "" {
-			return status
-		}
-	case tools.ToolNameFileEdit:
-		if status := formatFileEditStatus(toolInput); status != "" {
+func formatRunningToolStatus(tool tools.Tool, toolInput map[string]any) string {
+	if formatter, ok := tool.(tools.StatusFormatter); ok {
+		if status := formatter.ToolStatus(toolInput); status != "" {
 			return status
 		}
 	}
-
-	return fmt.Sprintf("Running %s...", toolName)
-}
-
-func formatReadStatus(toolInput map[string]any) string {
-	path := trimmedStringInput(toolInput, "path")
-	if path == "" {
-		return ""
-	}
-
-	parts := []string{fmt.Sprintf("file=%q", path)}
-	if offset, ok := integerInput(toolInput, "offset"); ok {
-		parts = append(parts, fmt.Sprintf("offset=%d", offset))
-	}
-	if limit, ok := integerInput(toolInput, "limit"); ok {
-		parts = append(parts, fmt.Sprintf("limit=%d", limit))
-	}
-	return "Read: " + strings.Join(parts, " ")
-}
-
-func formatFileSearchStatus(toolInput map[string]any) string {
-	parts := make([]string, 0, 3)
-	if pattern := trimmedStringInput(toolInput, "name_pattern"); pattern != "" {
-		parts = append(parts, fmt.Sprintf("files=%q", pattern))
-	}
-	if contains := trimmedStringInput(toolInput, "contains"); contains != "" {
-		parts = append(parts, fmt.Sprintf("with=%q", contains))
-	}
-	if root := trimmedStringInput(toolInput, "root"); root != "" {
-		parts = append(parts, fmt.Sprintf("at=%q", root))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "Search: " + strings.Join(parts, " ")
-}
-
-func formatFileEditStatus(toolInput map[string]any) string {
-	path := trimmedStringInput(toolInput, "path")
-	if path == "" {
-		return ""
-	}
-
-	parts := make([]string, 0, 2)
-	if operation := trimmedStringInput(toolInput, "operation"); operation != "" {
-		parts = append(parts, fmt.Sprintf("op=%q", operation))
-	}
-	parts = append(parts, fmt.Sprintf("file=%q", path))
-	return "Edit: " + strings.Join(parts, " ")
-}
-
-func trimmedStringInput(input map[string]any, key string) string {
-	value, _ := input[key].(string)
-	return strings.TrimSpace(value)
-}
-
-func integerInput(input map[string]any, key string) (int, bool) {
-	switch value := input[key].(type) {
-	case int:
-		return value, true
-	case int64:
-		return int(value), true
-	case float64:
-		return int(value), true
-	default:
-		return 0, false
-	}
+	return fmt.Sprintf("Running %s...", tool.Name())
 }
 
 func (r *taskExecutionState) progressReporter(toolName string) func(string) {

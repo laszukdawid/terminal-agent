@@ -95,6 +95,20 @@ func (t *FileSearchTool) HelpText() string {
 	return t.helpText
 }
 
+func (t *FileSearchTool) ToolStatus(input map[string]any) string {
+	parts := make([]string, 0, 3)
+	if pattern := trimmedStringInput(input, "name_pattern"); pattern != "" {
+		parts = append(parts, quotedStatusPart("files", pattern))
+	}
+	if contains := trimmedStringInput(input, "contains"); contains != "" {
+		parts = append(parts, quotedStatusPart("with", contains))
+	}
+	if root := trimmedStringInput(input, "root"); root != "" {
+		parts = append(parts, quotedStatusPart("at", root))
+	}
+	return formatStatus("Search: ", parts)
+}
+
 func (t *FileSearchTool) Run(input *string) (string, error) {
 	return t.RunSchema(map[string]any{"contains": *input})
 }
