@@ -3,6 +3,7 @@ package gui
 import (
 	"image/color"
 	"math"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -29,6 +30,9 @@ const (
 	// LISTEN caption. Monospace can't sub-divide a cell, so the caption is laid
 	// out letter-by-letter with this pixel gap for fine control.
 	listenLetterGap float32 = 3
+
+	marqueeStepInterval = 450 * time.Millisecond
+	marqueeGap          = "   "
 )
 
 // hStrut is a fixed-width transparent spacer for putting deliberate horizontal
@@ -177,6 +181,172 @@ type navRow struct {
 	marker *canvas.Rectangle
 	icon   *canvas.Image
 	text   *canvas.Text
+}
+
+// marqueeLabel renders a single-line text value inside the width it receives.
+// When the full text does not fit, it advances a window over the text so long
+// paths can be read without overflowing the sidebar.
+type marqueeLabel struct {
+	widget.BaseWidget
+	text         string
+	offset       int
+	width        float32
+	height       float32
+	lastProgress float32
+	hovered      bool
+	onCopy       func(string)
+	label        *canvas.Text
+	anim         *fyne.Animation
+}
+
+func newMarqueeLabel(text string, col color.Color, size float32) *marqueeLabel {
+	m := &marqueeLabel{text: text}
+	m.label = canvas.NewText(text, col)
+	m.label.TextStyle = fyne.TextStyle{Monospace: true}
+	m.label.TextSize = size
+	m.height = m.label.MinSize().Height
+	m.ExtendBaseWidget(m)
+	m.start()
+	return m
+}
+
+func (m *marqueeLabel) start() {
+	m.anim = fyne.NewAnimation(marqueeStepInterval, func(progress float32) {
+		if progress < m.lastProgress {
+			m.advance()
+		}
+		m.lastProgress = progress
+	})
+	m.anim.Curve = fyne.AnimationLinear
+	m.anim.RepeatCount = fyne.AnimationRepeatForever
+	m.anim.Start()
+}
+
+func (m *marqueeLabel) SetText(text string) {
+	if m.text == text {
+		return
+	}
+	m.text = text
+	m.offset = 0
+	m.updateVisibleText()
+	m.Refresh()
+}
+
+func (m *marqueeLabel) Text() string {
+	return m.text
+}
+
+func (m *marqueeLabel) SetOnCopy(fn func(string)) {
+	m.onCopy = fn
+}
+
+func (m *marqueeLabel) MouseIn(*desktop.MouseEvent)    { m.hovered = true }
+func (m *marqueeLabel) MouseMoved(*desktop.MouseEvent) {}
+func (m *marqueeLabel) MouseOut()                      { m.hovered = false }
+
+func (m *marqueeLabel) Tapped(*fyne.PointEvent) {
+	m.copy()
+}
+
+func (m *marqueeLabel) DoubleTapped(*fyne.PointEvent) {
+	m.copy()
+}
+
+func (m *marqueeLabel) copy() {
+	if m.onCopy != nil && m.text != "" {
+		m.onCopy(m.text)
+	}
+}
+
+func (m *marqueeLabel) advance() {
+	if m.hovered || !m.overflows() {
+		return
+	}
+	m.offset++
+	if m.offset >= len([]rune(m.text+marqueeGap)) {
+		m.offset = 0
+	}
+	m.updateVisibleText()
+	m.label.Refresh()
+}
+
+func (m *marqueeLabel) overflows() bool {
+	if m.width <= 0 {
+		return false
+	}
+	return m.textWidth(m.text) > m.width
+}
+
+func (m *marqueeLabel) updateVisibleText() {
+	if !m.overflows() {
+		m.label.Text = m.text
+		return
+	}
+
+	cycle := []rune(m.text + marqueeGap)
+	if len(cycle) == 0 || m.width <= 0 {
+		m.label.Text = ""
+		return
+	}
+	if m.offset >= len(cycle) {
+		m.offset = 0
+	}
+	out := make([]rune, 0, len(cycle))
+	for i := 0; i < len(cycle); i++ {
+		candidate := append(out, cycle[(m.offset+i)%len(cycle)])
+		if len(candidate) > 0 && m.textWidth(string(candidate)) > m.width {
+			break
+		}
+		out = candidate
+	}
+	m.label.Text = string(out)
+}
+
+func (m *marqueeLabel) textWidth(text string) float32 {
+	probe := canvas.NewText(text, m.label.Color)
+	probe.TextStyle = m.label.TextStyle
+	probe.TextSize = m.label.TextSize
+	return float32(math.Ceil(float64(probe.MinSize().Width)))
+}
+
+func (m *marqueeLabel) Cursor() desktop.Cursor {
+	if m.onCopy != nil {
+		return desktop.PointerCursor
+	}
+	return desktop.DefaultCursor
+}
+
+func (m *marqueeLabel) CreateRenderer() fyne.WidgetRenderer {
+	return &marqueeLabelRenderer{label: m, objects: []fyne.CanvasObject{m.label}}
+}
+
+type marqueeLabelRenderer struct {
+	label   *marqueeLabel
+	objects []fyne.CanvasObject
+}
+
+func (r *marqueeLabelRenderer) Destroy() {
+	if r.label.anim != nil {
+		r.label.anim.Stop()
+	}
+}
+
+func (r *marqueeLabelRenderer) Layout(size fyne.Size) {
+	r.label.width = size.Width
+	r.label.updateVisibleText()
+	r.label.label.Resize(r.label.label.MinSize())
+	r.label.label.Move(fyne.NewPos(0, 0))
+}
+
+func (r *marqueeLabelRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(1, r.label.height)
+}
+
+func (r *marqueeLabelRenderer) Objects() []fyne.CanvasObject { return r.objects }
+
+func (r *marqueeLabelRenderer) Refresh() {
+	r.label.updateVisibleText()
+	r.label.label.Refresh()
 }
 
 func newNavRow(label, iconPath string, active bool, onTap func()) *navRow {

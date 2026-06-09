@@ -477,12 +477,9 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
-// maxCwdChars bounds the working-directory label so it stays inside the
-// sidebar status panel; longer paths are shown tail-first with a leading "…".
-const maxCwdChars = 22
-
 // displayCwd renders the working directory in terminal "~/"-relative form for
-// the sidebar connection status, truncated to fit the status panel.
+// the sidebar connection status. The sidebar widget owns width-constrained
+// rendering so it can scroll long paths instead of truncating them.
 func displayCwd(dir string) string {
 	if dir == "" {
 		return "~/"
@@ -494,9 +491,6 @@ func displayCwd(dir string) string {
 			return "~/"
 		}
 		path = "~" + rel
-	}
-	if len(path) > maxCwdChars {
-		path = "…" + path[len(path)-(maxCwdChars-1):]
 	}
 	return path
 }

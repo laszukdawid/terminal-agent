@@ -122,7 +122,7 @@ type popupWindow struct {
 	host        *hostNode
 	mascotAnim  *fyne.Animation
 
-	cwdLabel *canvas.Text
+	cwdLabel *marqueeLabel
 
 	testButton *navRow
 
@@ -536,9 +536,7 @@ func (p *popupWindow) buildListenControl() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildConnectionStatus() fyne.CanvasObject {
-	p.cwdLabel = canvas.NewText("~/", brandMutedGreen)
-	p.cwdLabel.TextStyle = fyne.TextStyle{Monospace: true}
-	p.cwdLabel.TextSize = theme.TextSize() - 1
+	p.cwdLabel = newMarqueeLabel("~/", brandMutedGreen, theme.TextSize()-1)
 
 	return container.NewVBox(p.cwdLabel)
 }
@@ -704,6 +702,9 @@ func (p *popupWindow) tickMascot(progress float32) {
 
 func (p *popupWindow) wireInteractions(app fyne.App) {
 	win := p.window
+	p.cwdLabel.SetOnCopy(func(text string) {
+		app.Clipboard().SetContent(text)
+	})
 
 	p.input.onEscape = func() {
 		if p.onEscape != nil {
@@ -839,11 +840,10 @@ func (p *popupWindow) setResponseHeading(text string) {
 }
 
 func (p *popupWindow) setCwd(text string) {
-	if p.cwdLabel.Text == text {
+	if p.cwdLabel.Text() == text {
 		return
 	}
-	p.cwdLabel.Text = text
-	p.cwdLabel.Refresh()
+	p.cwdLabel.SetText(text)
 }
 
 func (p *popupWindow) setOutput(content string) {

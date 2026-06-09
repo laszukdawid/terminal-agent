@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
@@ -83,6 +84,46 @@ func TestSidebarLabelsAreAskAndTask(t *testing.T) {
 	}
 	if g.popup.navTask.label != "TASK" {
 		t.Fatalf("task nav label = %q, want TASK", g.popup.navTask.label)
+	}
+}
+
+func TestDisplayCwdDoesNotTruncateLongPath(t *testing.T) {
+	path := "/tmp/.local/config/terminal-agent"
+	if got := displayCwd(path); got != path {
+		t.Fatalf("displayCwd() = %q, want %q", got, path)
+	}
+}
+
+func TestMarqueeDoubleTapCopiesFullText(t *testing.T) {
+	path := "~/.local/config/terminal-agent"
+	label := newMarqueeLabel(path, brandMutedGreen, 12)
+	var copied string
+	label.SetOnCopy(func(text string) {
+		copied = text
+	})
+	label.Resize(label.MinSize())
+	label.CreateRenderer().Layout(fyne.NewSize(80, label.MinSize().Height))
+	label.advance()
+
+	label.DoubleTapped(nil)
+
+	if copied != path {
+		t.Fatalf("copied marquee text = %q, want %q", copied, path)
+	}
+}
+
+func TestMarqueeTapCopiesFullText(t *testing.T) {
+	path := "~/.local/config/terminal-agent"
+	label := newMarqueeLabel(path, brandMutedGreen, 12)
+	var copied string
+	label.SetOnCopy(func(text string) {
+		copied = text
+	})
+
+	label.Tapped(nil)
+
+	if copied != path {
+		t.Fatalf("copied marquee text = %q, want %q", copied, path)
 	}
 }
 
