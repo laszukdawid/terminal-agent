@@ -26,6 +26,7 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 ## Development Philosophy
 
 - Optimize for the best durable solution, not the smallest or quickest implementation path. Prefer designs that make the idea clear, robust, and future-proof even when they require more code.
+- When evaluating gaps or proposing changes, think in terms of the proper long-term product and architecture first. It is fine to recommend small incremental steps, but do not frame them as the default goal unless the user explicitly asks for the smallest change.
 - Avoid shortcuts, temporary workarounds, and narrowly scoped fixes unless the user explicitly asks for them. If a shortcut is unavoidable, call it out clearly and explain the tradeoff.
 - Treat coding as the easy part. Spend the necessary effort on understanding the product idea, long-term architecture, edge cases, and future maintenance before choosing an implementation.
 

@@ -176,6 +176,23 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	assert.Contains(t, output.String(), "done")
 }
 
+func TestFormatTaskStreamedCommandOmitsRuntimeControls(t *testing.T) {
+	_, display := formatTaskStreamedCommand(app.Event{
+		ToolName: tools.ToolNameUnix,
+		ToolInput: map[string]any{
+			"command":   "journalctl -f",
+			"timeout":   "0",
+			"max_bytes": 0,
+			"final":     true,
+		},
+	})
+
+	assert.Equal(t, "journalctl -f", display)
+	assert.NotContains(t, display, "max_bytes")
+	assert.NotContains(t, display, "timeout")
+	assert.NotContains(t, display, "final")
+}
+
 func TestTaskCommandStreamedOutput(t *testing.T) {
 	tests := []struct {
 		name        string

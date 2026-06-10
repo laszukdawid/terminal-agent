@@ -49,13 +49,20 @@ type taskHistoryRenderOptions struct {
 	finalAnswerLimit int
 }
 
+const (
+	promptTaskHistoryOutputLimit       = 8000
+	promptTaskHistoryFinalAnswerLimit  = 8000
+	summaryTaskHistoryOutputLimit      = 12000
+	summaryTaskHistoryFinalAnswerLimit = 12000
+)
+
 var promptTaskHistoryRenderOptions = taskHistoryRenderOptions{
 	thoughtLimit:     600,
 	inputLimit:       500,
 	messageLimit:     500,
 	errorLimit:       1000,
-	outputLimit:      1800,
-	finalAnswerLimit: 1800,
+	outputLimit:      promptTaskHistoryOutputLimit,
+	finalAnswerLimit: promptTaskHistoryFinalAnswerLimit,
 }
 
 var summaryTaskHistoryRenderOptions = taskHistoryRenderOptions{
@@ -63,8 +70,8 @@ var summaryTaskHistoryRenderOptions = taskHistoryRenderOptions{
 	inputLimit:       1000,
 	messageLimit:     1000,
 	errorLimit:       1600,
-	outputLimit:      2400,
-	finalAnswerLimit: 2400,
+	outputLimit:      summaryTaskHistoryOutputLimit,
+	finalAnswerLimit: summaryTaskHistoryFinalAnswerLimit,
 }
 
 func renderTaskHistoryForPrompt(steps []TaskStep) string {

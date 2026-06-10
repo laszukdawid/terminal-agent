@@ -58,6 +58,14 @@ func TestConvertToGenaiSchema(t *testing.T) {
 						Type:        genai.TypeBoolean,
 						Description: "Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round.",
 					},
+					"timeout": {
+						Type:        genai.TypeString,
+						Description: "Optional Go duration string bounding this command (for example 30s, 2m, 1h). Omit for the safe default; set to 0 for unlimited.",
+					},
+					"max_bytes": {
+						Type:        genai.TypeInteger,
+						Description: "Optional maximum bytes of command output captured by the process runner. Omit for the safe default; set to 0 for unlimited. Live display and later task-history rendering have separate limits.",
+					},
 				},
 				Required: []string{"command"},
 			},

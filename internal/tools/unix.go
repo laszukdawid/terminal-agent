@@ -90,6 +90,14 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 				"description": "The Unix command to execute. " +
 					"Please provide the command in a single line without any new lines.",
 			},
+			"timeout": map[string]string{
+				"type":        "string",
+				"description": "Optional Go duration string bounding this command (for example 30s, 2m, 1h). Omit for the safe default; set to 0 for unlimited.",
+			},
+			"max_bytes": map[string]any{
+				"type":        "integer",
+				"description": "Optional maximum bytes of command output captured by the process runner. Omit for the safe default; set to 0 for unlimited. Live display and later task-history rendering have separate limits.",
+			},
 			"final": map[string]string{
 				"type":        "boolean",
 				"description": "Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round.",
@@ -143,6 +151,10 @@ func (u *UnixTool) execCodeWithExecutor(code string, executor CodeExecutor) (str
 }
 
 func (u *UnixTool) execCodeWithExecutorContext(ctx context.Context, code string, executor CodeExecutor) (string, error) {
+	return u.execCodeWithExecutorOptions(ctx, code, executor, ProcessOptions{})
+}
+
+func (u *UnixTool) execCodeWithExecutorOptions(ctx context.Context, code string, executor CodeExecutor, opts ProcessOptions) (string, error) {
 	log.Debugw("Executing Unix tool", "command", code)
 	if code == "" {
 		return "", fmt.Errorf("no Unix command found in the response")
@@ -151,19 +163,26 @@ func (u *UnixTool) execCodeWithExecutorContext(ctx context.Context, code string,
 		return "", err
 	}
 
-	var (
-		cmdOutput string
-		err       error
-	)
+	if processExecutor, ok := executor.(ProcessOptionsCodeExecutor); ok {
+		result, err := processExecutor.ExecContextWithOptions(ctx, code, opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to execute Unix command: %w", err)
+		}
+		return result.Output, nil
+	}
 	if contextAwareExecutor, ok := executor.(ContextAwareCodeExecutor); ok {
-		cmdOutput, err = contextAwareExecutor.ExecContext(ctx, code)
+		cmdOutput, err := contextAwareExecutor.ExecContext(ctx, code)
+		if err != nil {
+			return "", fmt.Errorf("failed to execute Unix command: %w", err)
+		}
+		return cmdOutput, nil
 	} else {
-		cmdOutput, err = executor.Exec(code)
+		cmdOutput, err := executor.Exec(code)
+		if err != nil {
+			return "", fmt.Errorf("failed to execute Unix command: %w", err)
+		}
+		return cmdOutput, nil
 	}
-	if err != nil {
-		return "", fmt.Errorf("failed to execute Unix command: %w", err)
-	}
-	return cmdOutput, nil
 }
 
 // Run method of Unix Tool
@@ -184,6 +203,10 @@ func (u *UnixTool) RunSchemaContext(ctx context.Context, input map[string]any, e
 	if !ok {
 		return "", fmt.Errorf("failed to extract command from tool input")
 	}
+	opts, err := processOptionsFromInput(input)
+	if err != nil {
+		return "", err
+	}
 
 	executor := u.executor
 	if execCtx.CurrentDir != "" || execCtx.Output != nil {
@@ -195,5 +218,5 @@ func (u *UnixTool) RunSchemaContext(ctx context.Context, input map[string]any, e
 		}
 		executor = &BashExecutor{workDir: workDir, output: execCtx.Output}
 	}
-	return u.execCodeWithExecutorContext(ctx, cmd, executor)
+	return u.execCodeWithExecutorOptions(ctx, cmd, executor, opts)
 }

@@ -142,3 +142,50 @@ func TestBashExecutor(t *testing.T) {
 		}
 	})
 }
+
+func TestUnixToolTimeoutReturnsCapturedOutput(t *testing.T) {
+	tool := NewUnixTool(nil)
+
+	out, err := tool.RunSchema(map[string]any{
+		"command": "printf start; sleep 5",
+		"timeout": "100ms",
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "start", out)
+}
+
+func TestUnixToolMaxBytesCapsCapturedOutput(t *testing.T) {
+	tool := NewUnixTool(nil)
+
+	out, err := tool.RunSchema(map[string]any{
+		"command":   "printf abcdef",
+		"max_bytes": 3,
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "abc", out)
+}
+
+func TestUnixToolZeroTimeoutAndMaxBytesMeanUnlimited(t *testing.T) {
+	tool := NewUnixTool(nil)
+
+	out, err := tool.RunSchema(map[string]any{
+		"command":   "printf abcdef",
+		"timeout":   "0",
+		"max_bytes": 0,
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "abcdef", out)
+}
+
+func TestUnixToolRejectsInvalidProcessOptions(t *testing.T) {
+	tool := NewUnixTool(nil)
+
+	_, err := tool.RunSchema(map[string]any{"command": "true", "timeout": "not-a-duration"})
+	assert.ErrorContains(t, err, "invalid timeout")
+
+	_, err = tool.RunSchema(map[string]any{"command": "true", "max_bytes": 1.5})
+	assert.ErrorContains(t, err, "max_bytes must be an integer")
+}

@@ -289,7 +289,7 @@ func BuildActionString(toolName string, input map[string]any) string {
 
 	keys := make([]string, 0, len(input))
 	for key := range input {
-		if key == "command" || key == "final" {
+		if key == "command" || key == "final" || key == "timeout" || key == "max_bytes" {
 			continue
 		}
 		keys = append(keys, key)

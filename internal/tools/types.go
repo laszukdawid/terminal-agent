@@ -96,6 +96,11 @@ type ContextAwareCodeExecutor interface {
 	ExecContext(ctx context.Context, code string) (string, error)
 }
 
+type ProcessOptionsCodeExecutor interface {
+	ContextAwareCodeExecutor
+	ExecContextWithOptions(ctx context.Context, code string, opts ProcessOptions) (ProcessResult, error)
+}
+
 type LlmResponseWithTools struct {
 	ToolName     string
 	ToolInput    map[string]any
