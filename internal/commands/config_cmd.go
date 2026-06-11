@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"time"
@@ -20,14 +19,7 @@ const (
 	cmdWorkingDir = "working-dir"
 	cmdMemory     = "memory"
 	cmdDevice     = "device"
-
-	bedrockPriceRefreshTimeout = 3 * time.Second
 )
-
-type bedrockPriceCacheConfig interface {
-	GetBedrockModelPrice(region string, modelID string) (inputPer1K, outputPer1K float64, lastChecked string, ok bool)
-	SetBedrockModelPrice(region string, modelID string, inputPer1K, outputPer1K float64, lastChecked string) error
-}
 
 func NewConfigCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
@@ -118,9 +110,7 @@ For example:
 					return
 				}
 				fmt.Println("Default provider set to:", value)
-				if value == connector.BedrockProvider {
-					refreshBedrockModelPriceIfNeeded(context.Background(), config, config.GetDefaultModelId(), time.Now(), cmd.ErrOrStderr())
-				}
+				connector.RefreshProviderModelMetadataIfNeeded(context.Background(), value, config.GetDefaultModelId(), config, time.Now(), cmd.ErrOrStderr())
 			case cmdModel:
 				if err := config.SetDefaultModelId(value); err != nil {
 					cmd.SilenceUsage = true
@@ -128,9 +118,7 @@ For example:
 					return
 				}
 				fmt.Println("Default model ID set to:", value)
-				if config.GetDefaultProvider() == connector.BedrockProvider {
-					refreshBedrockModelPriceIfNeeded(context.Background(), config, value, time.Now(), cmd.ErrOrStderr())
-				}
+				connector.RefreshProviderModelMetadataIfNeeded(context.Background(), config.GetDefaultProvider(), value, config, time.Now(), cmd.ErrOrStderr())
 			case cmdMcpPath:
 				config.SetMcpFilePath(value)
 				fmt.Println("MCP file path set to:", value)
@@ -166,40 +154,6 @@ For example:
 	}
 
 	return cmd
-}
-
-func refreshBedrockModelPriceIfNeeded(ctx context.Context, cfg config.Config, modelID string, now time.Time, errWriter io.Writer) {
-	ctx, cancel := context.WithTimeout(ctx, bedrockPriceRefreshTimeout)
-	defer cancel()
-
-	cache, ok := cfg.(bedrockPriceCacheConfig)
-	if !ok {
-		return
-	}
-	region := connector.ResolveBedrockRegion(ctx, cfg)
-	if _, _, lastChecked, ok := cache.GetBedrockModelPrice(region, modelID); ok && !bedrockPriceCacheExpired(lastChecked, now) {
-		return
-	}
-
-	price, err := connector.FetchBedrockModelPrice(ctx, cfg, connector.BedrockModelID(modelID))
-	if err != nil {
-		fmt.Fprintf(errWriter, "Warning: could not refresh Bedrock pricing for %s: %v\n", modelID, err)
-		fmt.Fprintln(errWriter, "Cost estimates for this Bedrock model will be unavailable until pricing is configured or refreshed successfully.")
-		return
-	}
-
-	checkedAt := now.UTC().Format(time.RFC3339)
-	if err := cache.SetBedrockModelPrice(region, modelID, price.InputPer1K, price.OutputPer1K, checkedAt); err != nil {
-		fmt.Fprintf(errWriter, "Warning: could not save Bedrock pricing for %s: %v\n", modelID, err)
-	}
-}
-
-func bedrockPriceCacheExpired(lastChecked string, now time.Time) bool {
-	checkedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(lastChecked))
-	if err != nil {
-		return true
-	}
-	return now.Sub(checkedAt) > 24*time.Hour
 }
 
 func ConfigShowAllCommand(config config.Config) *cobra.Command {

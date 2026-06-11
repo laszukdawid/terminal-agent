@@ -1,8 +1,11 @@
 package connector
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"reflect"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
 )
@@ -41,6 +44,13 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 	}
 
 	return connector, nil
+}
+
+func RefreshProviderModelMetadataIfNeeded(ctx context.Context, provider string, modelID string, cfg config.Config, now time.Time, errWriter io.Writer) {
+	switch provider {
+	case BedrockProvider:
+		refreshBedrockModelPriceIfNeeded(ctx, cfg, BedrockModelID(modelID), now, errWriter)
+	}
 }
 
 func isNilConnector(connector LLMConnector) bool {

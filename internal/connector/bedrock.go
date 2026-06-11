@@ -81,6 +81,11 @@ type BedrockPriceConfigProvider interface {
 	GetBedrockModelPrice(region string, modelID string) (inputPer1K, outputPer1K float64, lastChecked string, ok bool)
 }
 
+type bedrockPriceCacheConfigProvider interface {
+	BedrockPriceConfigProvider
+	SetBedrockModelPrice(region string, modelID string, inputPer1K, outputPer1K float64, lastChecked string) error
+}
+
 func computePriceBedrock(usage *BedrockUsage, modelPrice *BedrockModelPrice) *LLMPrice {
 	if modelPrice == nil {
 		return nil
@@ -239,6 +244,41 @@ func FetchBedrockModelPrice(ctx context.Context, cfg any, modelID BedrockModelID
 		return BedrockModelPrice{}, fmt.Errorf("load AWS pricing configuration: %w", err)
 	}
 	return BedrockModelPrice{}, fmt.Errorf("pricing not found for Bedrock model %q in region %q", strings.TrimSpace(string(modelID)), settings.Region)
+}
+
+func refreshBedrockModelPriceIfNeeded(ctx context.Context, cfg any, modelID BedrockModelID, now time.Time, errWriter io.Writer) {
+	ctx, cancel := context.WithTimeout(ctx, bedrockPriceTimeout)
+	defer cancel()
+
+	cache, ok := cfg.(bedrockPriceCacheConfigProvider)
+	if !ok {
+		return
+	}
+	model := strings.TrimSpace(string(modelID))
+	region := ResolveBedrockRegion(ctx, cfg)
+	if _, _, lastChecked, ok := cache.GetBedrockModelPrice(region, model); ok && !bedrockPriceCacheExpired(lastChecked, now) {
+		return
+	}
+
+	price, err := FetchBedrockModelPrice(ctx, cfg, modelID)
+	if err != nil {
+		fmt.Fprintf(errWriter, "Warning: could not refresh Bedrock pricing for %s: %v\n", model, err)
+		fmt.Fprintln(errWriter, "Cost estimates for this Bedrock model will be unavailable until pricing is configured or refreshed successfully.")
+		return
+	}
+
+	checkedAt := now.UTC().Format(time.RFC3339)
+	if err := cache.SetBedrockModelPrice(region, model, price.InputPer1K, price.OutputPer1K, checkedAt); err != nil {
+		fmt.Fprintf(errWriter, "Warning: could not save Bedrock pricing for %s: %v\n", model, err)
+	}
+}
+
+func bedrockPriceCacheExpired(lastChecked string, now time.Time) bool {
+	checkedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(lastChecked))
+	if err != nil {
+		return true
+	}
+	return now.Sub(checkedAt) > bedrockPriceCacheTTL
 }
 
 func fetchBedrockModelPrice(ctx context.Context, client bedrockPricingClient, modelID BedrockModelID, region string) (BedrockModelPrice, error) {
