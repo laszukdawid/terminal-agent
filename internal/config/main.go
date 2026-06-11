@@ -58,6 +58,7 @@ const (
 	DefaultGUIVoiceMaxRecordingDuration = 60 * time.Second
 	DefaultGUIVoiceSTTBackend           = "openai"
 	DefaultGUIVoiceSTTModel             = "gpt-4o-mini-transcribe"
+	DefaultBedrockModel                 = "zai.glm-4.7-flash"
 )
 
 type config struct {
@@ -86,8 +87,15 @@ type GUIConfig struct {
 }
 
 type BedrockConfig struct {
-	Profile string `json:"profile,omitempty"`
-	Region  string `json:"region,omitempty"`
+	Profile string                                   `json:"profile,omitempty"`
+	Region  string                                   `json:"region,omitempty"`
+	Prices  map[string]map[string]BedrockPriceConfig `json:"prices,omitempty"`
+}
+
+type BedrockPriceConfig struct {
+	InputPer1K  float64 `json:"input_per_1k"`
+	OutputPer1K float64 `json:"output_per_1k"`
+	LastChecked string  `json:"last_checked"`
 }
 
 type GUIVoiceConfig struct {
@@ -137,7 +145,7 @@ func NewDefaultConfig() *config {
 		DefaultProvider: "openai",
 		Providers: map[string]string{
 			"anthropic": "claude-3-5-haiku-latest",
-			"bedrock":   "anthropic.claude-3-haiku-20240307-v1:0",
+			"bedrock":   DefaultBedrockModel,
 			"codex":     "gpt-4o-mini",
 			"google":    "gemini-3.1-flash-lite",
 			"llama":     "llama3.2",
@@ -146,6 +154,15 @@ func NewDefaultConfig() *config {
 			"openai":    "gpt-4o-mini",
 			"ollama":    "llama3.2",
 		},
+		Bedrock: BedrockConfig{Prices: map[string]map[string]BedrockPriceConfig{
+			"us-east-1": {
+				DefaultBedrockModel: {
+					InputPer1K:  0.00007,
+					OutputPer1K: 0.0004,
+					LastChecked: time.Now().UTC().Format(time.RFC3339),
+				},
+			},
+		}},
 		LlamaModels: map[string]string{},
 		LogLevel:    "info",
 		Device:      "auto",
@@ -232,6 +249,51 @@ func (config *config) GetBedrockProfile() string {
 
 func (config *config) GetBedrockRegion() string {
 	return strings.TrimSpace(config.Bedrock.Region)
+}
+
+func (config *config) GetBedrockModelPrice(region string, modelID string) (float64, float64, string, bool) {
+	if config.Bedrock.Prices == nil {
+		return 0, 0, "", false
+	}
+	region = strings.TrimSpace(region)
+	if region == "" {
+		region = "us-east-1"
+	}
+	prices, ok := config.Bedrock.Prices[region]
+	if !ok {
+		return 0, 0, "", false
+	}
+	price, ok := prices[modelID]
+	if !ok {
+		return 0, 0, "", false
+	}
+	return price.InputPer1K, price.OutputPer1K, strings.TrimSpace(price.LastChecked), true
+}
+
+func (config *config) SetBedrockModelPrice(region string, modelID string, inputPer1K, outputPer1K float64, lastChecked string) error {
+	region = strings.TrimSpace(region)
+	if region == "" {
+		region = "us-east-1"
+	}
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return fmt.Errorf("bedrock model ID cannot be empty")
+	}
+	if inputPer1K < 0 || outputPer1K < 0 {
+		return fmt.Errorf("bedrock model prices cannot be negative")
+	}
+	if config.Bedrock.Prices == nil {
+		config.Bedrock.Prices = map[string]map[string]BedrockPriceConfig{}
+	}
+	if config.Bedrock.Prices[region] == nil {
+		config.Bedrock.Prices[region] = map[string]BedrockPriceConfig{}
+	}
+	config.Bedrock.Prices[region][modelID] = BedrockPriceConfig{
+		InputPer1K:  inputPer1K,
+		OutputPer1K: outputPer1K,
+		LastChecked: strings.TrimSpace(lastChecked),
+	}
+	return SaveConfig(config)
 }
 
 func normalizeDevice(device string) string {

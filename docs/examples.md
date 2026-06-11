@@ -27,7 +27,7 @@ agent ask --provider openai "Explain Docker containers vs VMs"
 agent ask --provider anthropic "What are the principles of functional programming?"
 
 # Use streaming with a specific model
-agent ask --provider bedrock --model "anthropic.claude-3-haiku-20240307-v1:0" --stream "Explain distributed systems"
+agent ask --provider bedrock --model "zai.glm-4.7-flash" --stream "Explain distributed systems"
 ```
 
 ### Formatting Output

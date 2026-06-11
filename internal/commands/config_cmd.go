@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
@@ -102,11 +104,21 @@ For example:
 					fmt.Printf("Supported providers: %s\n", strings.Join(supported, ", "))
 					return
 				}
-				config.SetDefaultProvider(value)
+				if err := config.SetDefaultProvider(value); err != nil {
+					cmd.SilenceUsage = true
+					cmd.PrintErrln(err.Error())
+					return
+				}
 				fmt.Println("Default provider set to:", value)
+				connector.RefreshProviderModelMetadataIfNeeded(context.Background(), value, config.GetDefaultModelId(), config, time.Now(), cmd.ErrOrStderr())
 			case cmdModel:
-				config.SetDefaultModelId(value)
+				if err := config.SetDefaultModelId(value); err != nil {
+					cmd.SilenceUsage = true
+					cmd.PrintErrln(err.Error())
+					return
+				}
 				fmt.Println("Default model ID set to:", value)
+				connector.RefreshProviderModelMetadataIfNeeded(context.Background(), config.GetDefaultProvider(), value, config, time.Now(), cmd.ErrOrStderr())
 			case cmdMcpPath:
 				config.SetMcpFilePath(value)
 				fmt.Println("MCP file path set to:", value)

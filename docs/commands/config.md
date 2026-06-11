@@ -100,7 +100,7 @@ agent config set model claude-3-5-sonnet-latest
 ### Amazon Bedrock
 ```sh
 agent config set provider bedrock
-agent config set model anthropic.claude-3-haiku-20240307-v1:0
+agent config set model zai.glm-4.7-flash
 ```
 
 ### Google

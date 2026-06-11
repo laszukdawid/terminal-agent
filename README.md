@@ -188,11 +188,11 @@ Terminal Agent uses the Bedrock [Converse API](https://docs.aws.amazon.com/bedro
 
 To use these models you need to make sure that you have valid aws credentials set. We support having auth via local credentials or via SSO.
 
-Setting `bedrock` provider with Anthropic Haiku model can be done with `task run:set:bedrock` or directly
+Setting `bedrock` provider with the default GLM 4.7 Flash model can be done with `task run:set:bedrock` or directly
 
 ```sh
 $ agent config set provider bedrock
-$ agent config set anthropic.claude-3-haiku-20240307-v1:0 
+$ agent config set model zai.glm-4.7-flash
 ```
 
 
