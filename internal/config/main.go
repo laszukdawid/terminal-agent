@@ -58,7 +58,7 @@ const (
 	DefaultGUIVoiceMaxRecordingDuration = 60 * time.Second
 	DefaultGUIVoiceSTTBackend           = "openai"
 	DefaultGUIVoiceSTTModel             = "gpt-4o-mini-transcribe"
-	DefaultBedrockModel                 = "anthropic.claude-3-haiku-20240307-v1:0"
+	DefaultBedrockModel                 = "zai.glm-4.7-flash"
 )
 
 type config struct {
@@ -157,8 +157,8 @@ func NewDefaultConfig() *config {
 		Bedrock: BedrockConfig{Prices: map[string]map[string]BedrockPriceConfig{
 			"us-east-1": {
 				DefaultBedrockModel: {
-					InputPer1K:  0.00025,
-					OutputPer1K: 0.00125,
+					InputPer1K:  0.00007,
+					OutputPer1K: 0.0004,
 					LastChecked: time.Now().UTC().Format(time.RFC3339),
 				},
 			},

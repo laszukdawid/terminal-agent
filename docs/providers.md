@@ -295,7 +295,7 @@ export OLLAMA_HOST=http://localhost:11345  # modify
 **Configuration:**
 ```sh
 agent config set provider bedrock
-agent config set model anthropic.claude-3-haiku-20240307-v1:0
+agent config set model zai.glm-4.7-flash
 ```
 
 Optional persistent AWS profile/region settings can be added directly to `~/.config/terminal-agent/config.json`:
@@ -307,9 +307,9 @@ Optional persistent AWS profile/region settings can be added directly to `~/.con
     "region": "us-west-2",
     "prices": {
       "us-west-2": {
-        "anthropic.claude-3-haiku-20240307-v1:0": {
-          "input_per_1k": 0.00025,
-          "output_per_1k": 0.00125,
+        "zai.glm-4.7-flash": {
+          "input_per_1k": 0.00007,
+          "output_per_1k": 0.0004,
           "last_checked": "2026-06-09T00:00:00Z"
         }
       }
@@ -323,6 +323,7 @@ When these fields are omitted, Bedrock uses the normal AWS SDK resolution order,
 When you set a Bedrock model with `agent config set model ...`, Terminal Agent checks the cached model price for the configured region. If the price is missing or `last_checked` is older than 24 hours, it makes a three-second AWS Price List API refresh request to update the cached `input_per_1k` and `output_per_1k` values. Runtime model calls do not query pricing APIs. If pricing refresh fails, the model is still saved, but cost estimates for that model and region are unavailable until pricing is configured or refreshed successfully.
 
 **Recommended Models:**
+- `zai.glm-4.7-flash` - Fast and cost-effective default
 - `anthropic.claude-3-haiku-20240307-v1:0` - Good balance of capability and cost
 - `anthropic.claude-3-sonnet-20240229-v1:0` - Higher capability
 - `meta.llama3-8b-instruct-v1:0` - Open source alternative

@@ -41,6 +41,7 @@ const (
 	bedrockPriceMaxResults = 50
 
 	// Supported models https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html
+	GLM47Flash       BedrockModelID = "zai.glm-4.7-flash"
 	ClaudeHaiku      BedrockModelID = "anthropic.claude-3-haiku-20240307-v1:0"
 	JambaMini        BedrockModelID = "ai21.jamba-1-5-mini-v1:0"
 	MistralSmall2402 BedrockModelID = "mistral.mistral-small-2402-v1:0"
@@ -644,7 +645,7 @@ func NewBedrockConnector(modelID *BedrockModelID, cfg any) (*BedrockConnector, e
 	logger.Debug("NewBedrockConnector")
 
 	if modelID == nil || *modelID == "" {
-		model := ClaudeHaiku
+		model := GLM47Flash
 		modelID = &model
 	}
 

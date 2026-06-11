@@ -15,7 +15,7 @@ type ProviderInfo struct {
 var providerRegistry = []ProviderInfo{
 	{Name: AnthropicProvider, DefaultModel: DefaultAnthropicModel},
 	// BedrockModelID and ChatModel are named string types, hence the conversions.
-	{Name: BedrockProvider, DefaultModel: string(ClaudeHaiku)},
+	{Name: BedrockProvider, DefaultModel: string(GLM47Flash)},
 	{Name: CodexProvider, DefaultModel: string(DefaultOpenAIModel)},
 	{Name: GoogleProvider, DefaultModel: Gemini31FlashLite},
 	{Name: LlamaProvider, DefaultModel: DefaultLlamaModel},

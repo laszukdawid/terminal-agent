@@ -73,7 +73,7 @@ func TestLoadConfig(t *testing.T) {
 
 		// Verify that default providers included
 		assert.Equal(t, "claude-3-5-haiku-latest", config.Providers["anthropic"])
-		assert.Equal(t, "anthropic.claude-3-haiku-20240307-v1:0", config.Providers["bedrock"])
+		assert.Equal(t, DefaultBedrockModel, config.Providers["bedrock"])
 		assert.Equal(t, "gpt-4o-mini", config.Providers["codex"])
 		assert.Equal(t, "llama3.2", config.Providers["llama"])
 		assert.Equal(t, "mimo-v2.5-pro", config.Providers["mimo"])
@@ -86,8 +86,8 @@ func TestLoadConfig(t *testing.T) {
 		assert.Empty(t, config.GetBedrockRegion())
 		input, output, lastChecked, ok := config.GetBedrockModelPrice("us-east-1", DefaultBedrockModel)
 		require.True(t, ok)
-		assert.Equal(t, 0.00025, input)
-		assert.Equal(t, 0.00125, output)
+		assert.Equal(t, 0.00007, input)
+		assert.Equal(t, 0.0004, output)
 		_, parseErr := time.Parse(time.RFC3339, lastChecked)
 		assert.NoError(t, parseErr)
 
@@ -132,7 +132,7 @@ func TestLoadConfig(t *testing.T) {
 		expectedConfig := &config{
 			DefaultProvider: "bedrock",
 			Providers: map[string]string{
-				"bedrock": "anthropic.claude-3-haiku-20240307-v1:0",
+				"bedrock": DefaultBedrockModel,
 			},
 			Bedrock: BedrockConfig{Profile: " dev ", Region: " us-west-2 "},
 		}
