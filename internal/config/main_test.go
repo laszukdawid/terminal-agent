@@ -84,6 +84,12 @@ func TestLoadConfig(t *testing.T) {
 		assert.Empty(t, config.GetLlamaModels())
 		assert.Empty(t, config.GetBedrockProfile())
 		assert.Empty(t, config.GetBedrockRegion())
+		input, output, lastChecked, ok := config.GetBedrockModelPrice("us-east-1", DefaultBedrockModel)
+		require.True(t, ok)
+		assert.Equal(t, 0.00025, input)
+		assert.Equal(t, 0.00125, output)
+		_, parseErr := time.Parse(time.RFC3339, lastChecked)
+		assert.NoError(t, parseErr)
 
 		// Verify config file was created
 		_, err = os.Stat(configPath)
@@ -137,6 +143,24 @@ func TestLoadConfig(t *testing.T) {
 
 		assert.Equal(t, "dev", loadedConfig.GetBedrockProfile())
 		assert.Equal(t, "us-west-2", loadedConfig.GetBedrockRegion())
+	})
+
+	t.Run("SetBedrockModelPrice", func(t *testing.T) {
+		_, cleanup := setupTempConfig(t)
+		defer cleanup()
+
+		cfg := NewDefaultConfig()
+		require.NoError(t, SaveConfig(cfg))
+
+		require.NoError(t, cfg.SetBedrockModelPrice(" us-west-2 ", " model-id ", 0.001, 0.002, " 2026-06-09T00:00:00Z "))
+
+		loadedConfig, err := LoadConfig()
+		require.NoError(t, err)
+		input, output, lastChecked, ok := loadedConfig.GetBedrockModelPrice("us-west-2", "model-id")
+		require.True(t, ok)
+		assert.Equal(t, 0.001, input)
+		assert.Equal(t, 0.002, output)
+		assert.Equal(t, "2026-06-09T00:00:00Z", lastChecked)
 	})
 
 	// Test Ollama provider configuration
