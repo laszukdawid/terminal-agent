@@ -29,7 +29,7 @@ type PermissionStore struct {
 }
 
 func LoadPermissionRuleSets(startDir string) ([]PermissionRuleSet, PermissionStore, error) {
-	globalConfig, err := LoadConfig()
+	globalPermissions, err := loadGlobalPermissions()
 	if err != nil {
 		return nil, PermissionStore{}, err
 	}
@@ -41,7 +41,7 @@ func LoadPermissionRuleSets(startDir string) ([]PermissionRuleSet, PermissionSto
 
 	rules := []PermissionRuleSet{
 		{
-			Permissions: globalConfig.Permissions,
+			Permissions: globalPermissions,
 			Priority:    0,
 			SourcePath:  getConfigPath(),
 		},
@@ -63,6 +63,37 @@ func LoadPermissionRuleSets(startDir string) ([]PermissionRuleSet, PermissionSto
 		GlobalPath: getConfigPath(),
 		LocalPaths: localPaths,
 	}, nil
+}
+
+func loadGlobalPermissions() (Permissions, error) {
+	configPath := getConfigPath()
+	if err := ensurePathExists(configPath); err != nil {
+		return Permissions{}, err
+	}
+
+	file, err := os.Open(configPath)
+	if err != nil {
+		return Permissions{}, err
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return Permissions{}, err
+	}
+
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return Permissions{}, nil
+	}
+
+	var payload struct {
+		Permissions Permissions `json:"permissions"`
+	}
+	if err := json.Unmarshal(content, &payload); err != nil {
+		return Permissions{}, err
+	}
+
+	return payload.Permissions, nil
 }
 
 func FindLocalConfigPaths(startDir string) ([]string, error) {
