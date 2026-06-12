@@ -187,11 +187,15 @@ func (g *App) wire() {
 	g.popup.onSettings = g.openSettings
 	g.popup.onSelectAsk = func() { g.setMode(guiModeAsk) }
 	g.popup.onSelectTask = func() { g.setMode(guiModeTask) }
+	g.popup.onSelectHistory = func() { g.setMode(guiModeHistory) }
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
 	g.popup.input.onVoiceToggle = g.toggleVoice
 	g.popup.window.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
+		if key.Name == fyne.KeyEscape && g.popup.dismissHistoryDetail() {
+			return
+		}
 		if key.Name == fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey()) {
 			g.toggleVoice()
 		}
@@ -245,10 +249,19 @@ func (g *App) render() {
 	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
 	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
 
-	showAnswer := g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != ""
+	if g.state.mode == guiModeHistory {
+		g.popup.inputGroup.Hide()
+		g.popup.responseSection.Hide()
+		g.popup.historySection.Show()
+	} else {
+		g.popup.inputGroup.Show()
+		g.popup.historySection.Hide()
+	}
+
+	showAnswer := g.state.mode != guiModeHistory && (g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != "")
 	if showAnswer {
 		g.popup.responseSection.Show()
-	} else {
+	} else if g.state.mode != guiModeHistory {
 		g.popup.responseSection.Hide()
 	}
 	if g.state.errorText != "" {
@@ -269,7 +282,13 @@ func (g *App) render() {
 			g.popup.setActionSubtitle("")
 		}
 	}
-	g.popup.actionButton.Enable()
+	if g.state.mode == guiModeHistory {
+		g.popup.actionButton.Disable()
+		g.popup.input.Disable()
+	} else {
+		g.popup.actionButton.Enable()
+		g.popup.input.Enable()
+	}
 
 	voiceEnabled := g.cfg.GetGUIVoiceEnabled() && g.voiceController != nil
 	voiceBlockedByRunning := g.state.isRunning && g.state.voiceState == voice.StateIdle
@@ -347,6 +366,9 @@ func (g *App) setMode(mode guiMode) {
 	g.state.saveModeView()
 	g.state.restoreModeView(mode)
 	g.popup.setMode(mode)
+	if mode == guiModeHistory {
+		g.loadHistory()
+	}
 	g.render()
 }
 
@@ -408,6 +430,9 @@ func (g *App) taskAutoApprove() bool {
 
 // inputHeadingForMode returns the input section heading for the active mode.
 func inputHeadingForMode(mode guiMode) string {
+	if mode == guiModeHistory {
+		return sectionHistory
+	}
 	if mode == guiModeTask {
 		return sectionTask
 	}

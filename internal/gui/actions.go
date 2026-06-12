@@ -16,6 +16,9 @@ func (g *App) submit() {
 	if g.state.isRunning {
 		return
 	}
+	if g.state.mode == guiModeHistory {
+		return
+	}
 
 	message := strings.TrimSpace(g.popup.input.Text)
 	if message == "" {

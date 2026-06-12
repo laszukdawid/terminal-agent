@@ -13,8 +13,9 @@ import (
 type guiMode string
 
 const (
-	guiModeAsk  guiMode = "ask"
-	guiModeTask guiMode = "task"
+	guiModeAsk     guiMode = "ask"
+	guiModeTask    guiMode = "task"
+	guiModeHistory guiMode = "history"
 )
 
 // taskToolFenceMarker is the copy/export fence marker used when serializing

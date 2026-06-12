@@ -29,6 +29,7 @@ const (
 	inputPrompt         = ">"
 	sectionAsk          = "ASK THE TERMINAL AGENT"
 	sectionTask         = "TASK THE TERMINAL AGENT TO DO"
+	sectionHistory      = "HISTORY"
 	sectionResp         = "RESPONSE"
 	sectionErr          = "ERROR"
 	sendButtonText      = "SEND  ›"
@@ -54,8 +55,13 @@ type popupWindow struct {
 	inputHeading    *canvas.Text
 	navAsk          *navRow
 	navTask         *navRow
+	navHistory      *navRow
+	inputGroup      fyne.CanvasObject
 	responseHeading *canvas.Text
 	responseSection *fyne.Container
+	historySection  *fyne.Container
+	historyBody     *fyne.Container
+	historyDetail   *widget.PopUp
 	outputField     *widget.RichText
 	transcriptBody  *fyne.Container
 	outputBody      fyne.CanvasObject
@@ -90,18 +96,19 @@ type popupWindow struct {
 
 	testButton *navRow
 
-	onSubmit      func()
-	onEscape      func()
-	onAction      func()
-	onVoiceToggle func()
-	onCopy        func()
-	onExport      func()
-	onSettings    func()
-	onSelectAsk   func()
-	onSelectTask  func()
-	onTest        func()
-	onInput       func(string)
-	onQuit        func()
+	onSubmit        func()
+	onEscape        func()
+	onAction        func()
+	onVoiceToggle   func()
+	onCopy          func()
+	onExport        func()
+	onSettings      func()
+	onSelectAsk     func()
+	onSelectTask    func()
+	onSelectHistory func()
+	onTest          func()
+	onInput         func(string)
+	onQuit          func()
 }
 
 func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
@@ -204,11 +211,15 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 			p.onSelectTask()
 		}
 	})
-	nav := container.NewVBox(p.navAsk, p.navTask)
-	// HISTORY, ENV and TOOLS are not wired up yet, so they are only shown in
-	// dev mode where we can build them out without exposing dead nav entries.
+	p.navHistory = newNavRow(sectionHistory, iconPathHistory, false, func() {
+		if p.onSelectHistory != nil {
+			p.onSelectHistory()
+		}
+	})
+	nav := container.NewVBox(p.navAsk, p.navTask, p.navHistory)
+	// ENV and TOOLS are not wired up yet, so they are only shown in dev mode
+	// where we can build them out without exposing dead nav entries.
 	if devMode {
-		nav.Add(newNavRow("HISTORY", iconPathHistory, false, nil))
 		nav.Add(newNavRow("ENV", iconPathEnv, false, nil))
 		nav.Add(newNavRow("TOOLS", iconPathTools, false, nil))
 	}
@@ -349,12 +360,22 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	p.responseSection.Hide()
 
 	askGroup := container.NewVBox(headingRow, inputPanel)
+	p.inputGroup = askGroup
+	p.historyBody = container.NewVBox()
+	p.historySection = container.NewBorder(
+		container.NewVBox(brandSectionLabel(sectionHistory)),
+		nil,
+		nil, nil,
+		borderedBox(container.NewVScroll(p.historyBody), brandBorder),
+	)
+	p.historySection.Hide()
+	mainContent := container.NewStack(p.responseSection, p.historySection)
 
 	workspace := container.NewBorder(
-		askGroup,
+		p.inputGroup,
 		p.buildMascotPanel(),
 		nil, nil,
-		p.responseSection,
+		mainContent,
 	)
 	// Inset the whole workspace from the sidebar divider and window edges so the
 	// section headings and panels are not flush against the border.
@@ -467,6 +488,9 @@ func (p *popupWindow) setMode(mode guiMode) {
 	}
 	if p.navTask != nil {
 		p.navTask.setActive(mode == guiModeTask)
+	}
+	if p.navHistory != nil {
+		p.navHistory.setActive(mode == guiModeHistory)
 	}
 	p.setInputHeading(inputHeadingForMode(mode))
 }

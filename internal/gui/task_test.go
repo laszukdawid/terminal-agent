@@ -12,6 +12,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
+	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 )
 
 // recordingService captures the most recent Ask/Task request and returns a
@@ -77,13 +78,16 @@ func TestDefaultModeIsAsk(t *testing.T) {
 	}
 }
 
-func TestSidebarLabelsAreAskAndTask(t *testing.T) {
+func TestSidebarLabelsIncludeHistory(t *testing.T) {
 	g, _ := newRecordingApp(t)
 	if g.popup.navAsk.label != "ASK" {
 		t.Fatalf("ask nav label = %q, want ASK", g.popup.navAsk.label)
 	}
 	if g.popup.navTask.label != "TASK" {
 		t.Fatalf("task nav label = %q, want TASK", g.popup.navTask.label)
+	}
+	if g.popup.navHistory.label != sectionHistory {
+		t.Fatalf("history nav label = %q, want %q", g.popup.navHistory.label, sectionHistory)
 	}
 }
 
@@ -156,6 +160,93 @@ func TestSetModeTogglesModeAndSidebar(t *testing.T) {
 	}
 	if g.popup.actionSubtitle.Text != "" {
 		t.Fatalf("action subtitle after Ask = %q, want empty", g.popup.actionSubtitle.Text)
+	}
+}
+
+func TestSetModeHistoryLoadsSessionHistory(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(appservice.SessionDirEnv, dir)
+	rec := sessionlog.New(dir, sessionlog.Meta{Kind: "ask", Provider: "openai", Model: "gpt-4.1", Command: "hello", CreatedAt: completedAtForTest()})
+	rec.Write(sessionlog.Record{Type: sessionlog.RecordRequest, Text: "hello"})
+	rec.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Text: "world", Timestamp: completedAtForTest().Add(time.Second)})
+	g, _ := newRecordingApp(t)
+
+	g.setMode(guiModeHistory)
+
+	if g.state.mode != guiModeHistory {
+		t.Fatalf("mode after select History = %q, want %q", g.state.mode, guiModeHistory)
+	}
+	if !g.popup.navHistory.active || g.popup.navAsk.active || g.popup.navTask.active {
+		t.Fatalf("sidebar active rows wrong: ask=%v task=%v history=%v", g.popup.navAsk.active, g.popup.navTask.active, g.popup.navHistory.active)
+	}
+	if !g.popup.historySection.Visible() || g.popup.inputGroup.Visible() || g.popup.responseSection.Visible() {
+		t.Fatal("history mode should show history section and hide prompt/response sections")
+	}
+	if len(g.popup.historyBody.Objects) != 1 {
+		t.Fatalf("history rows = %d, want 1", len(g.popup.historyBody.Objects))
+	}
+}
+
+func TestHistoryFullResponseIsNotTruncated(t *testing.T) {
+	long := strings.Repeat("response ", 80)
+	run := sessionlog.Summary{Response: long}
+
+	if got := historyFullResponse(run); got != strings.TrimSpace(long) {
+		t.Fatalf("historyFullResponse() length = %d, want full length %d", len(got), len(strings.TrimSpace(long)))
+	}
+	preview, truncated := historyPreview(long, "")
+	if !truncated {
+		t.Fatal("historyPreview should report truncated content")
+	}
+	if len([]rune(preview)) >= len([]rune(strings.TrimSpace(long))) {
+		t.Fatalf("historyPreview should remain compact; preview len=%d full len=%d", len([]rune(preview)), len([]rune(strings.TrimSpace(long))))
+	}
+}
+
+func TestHistoryPreviewReportsWhetherContentWasTruncated(t *testing.T) {
+	preview, truncated := historyPreview("short response", "fallback")
+	if truncated || preview != "short response" {
+		t.Fatalf("short preview = %q truncated=%v, want untruncated short response", preview, truncated)
+	}
+
+	preview, truncated = historyPreview("", "fallback")
+	if truncated || preview != "fallback" {
+		t.Fatalf("fallback preview = %q truncated=%v, want untruncated fallback", preview, truncated)
+	}
+
+	if historyTruncationCorner() == nil {
+		t.Fatal("historyTruncationCorner() returned nil")
+	}
+}
+
+func TestHistoryDetailPopupSizeFitsCanvas(t *testing.T) {
+	size := historyDetailPopupSize(fyne.NewSize(640, 360))
+	if size.Width > 640-historyDetailDialogMargin {
+		t.Fatalf("popup width = %f, want within canvas margin", size.Width)
+	}
+	if size.Height > 360-historyDetailDialogMargin {
+		t.Fatalf("popup height = %f, want within canvas margin", size.Height)
+	}
+
+	defaultSize := historyDetailPopupSize(fyne.NewSize(1200, 900))
+	if defaultSize.Height != historyDetailDialogHeight {
+		t.Fatalf("default popup height = %f, want %f", defaultSize.Height, float32(historyDetailDialogHeight))
+	}
+}
+
+func TestHistoryCardIsTappable(t *testing.T) {
+	tapped := false
+	card, ok := newHistoryCard(sessionlog.Summary{Kind: "ask", Request: "hello", Response: "world"}, func() {
+		tapped = true
+	}).(*tappableHistoryCard)
+	if !ok {
+		t.Fatalf("newHistoryCard type = %T, want *tappableHistoryCard", card)
+	}
+
+	card.Tapped(nil)
+
+	if !tapped {
+		t.Fatal("history card tap did not invoke callback")
 	}
 }
 
