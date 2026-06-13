@@ -32,12 +32,13 @@ const (
 )
 
 func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
-	p.robotIdle = robotMascot(brandAccentGreen)
+	palette := currentBrandPalette()
+	p.robotIdle = robotMascot(palette.accentGreen)
 	p.robotFrames = make([]fyne.Resource, mascotFrameCount)
 	for i := range p.robotFrames {
 		s := math.Sin(2 * math.Pi * float64(i) / float64(mascotFrameCount))
 		// Legs scissor in opposition and the antenna sways with them: a walk.
-		p.robotFrames[i] = robotMascotFrame(brandAccentGreen, mascotAntennaSwing*s, mascotLegSwing*s, -mascotLegSwing*s)
+		p.robotFrames[i] = robotMascotFrame(palette.accentGreen, mascotAntennaSwing*s, mascotLegSwing*s, -mascotLegSwing*s)
 	}
 
 	p.mascotImage = canvas.NewImageFromResource(p.robotIdle)
@@ -45,9 +46,9 @@ func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
 	p.mascotImage.SetMinSize(fyne.NewSize(mascotSize, mascotSize))
 	mascot := container.NewGridWrap(fyne.NewSize(mascotSize, mascotSize), p.mascotImage)
 
-	t1 := canvas.NewText(tagline1, brandMutedGreen)
+	t1 := canvas.NewText(tagline1, palette.mutedGreen)
 	t1.TextStyle = fyne.TextStyle{Monospace: true}
-	t2 := canvas.NewText(tagline2, brandMutedGreen)
+	t2 := canvas.NewText(tagline2, palette.mutedGreen)
 	t2.TextStyle = fyne.TextStyle{Monospace: true}
 	tagline := container.NewVBox(layout.NewSpacer(), t1, t2, layout.NewSpacer())
 
@@ -57,7 +58,7 @@ func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
 
 	// Receiving end: the host/model the agent sends to (not the >_ mark, which
 	// is the agent's own identity). It shakes and swells as the packet arrives.
-	p.host = newHostNode(serverIcon(brandMutedGreen), serverIcon(brandAccentGreen))
+	p.host = newHostNode(serverIcon(palette.mutedGreen), serverIcon(palette.accentGreen))
 
 	row := container.NewBorder(
 		nil, nil,
@@ -65,7 +66,7 @@ func (p *popupWindow) buildMascotPanel() fyne.CanvasObject {
 		container.NewHBox(hStrut(10), container.NewCenter(p.host)),
 		p.dataLane,
 	)
-	return borderedBox(row, brandBorder)
+	return borderedBox(row, palette.border)
 }
 
 // startMascotAnimation plays the walking wiggle and data-transfer dots while a

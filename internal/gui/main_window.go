@@ -118,6 +118,16 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 	win.CenterOnScreen()
 
 	p := &popupWindow{window: win}
+	p.rebuildContent(app, devMode)
+	return p
+}
+
+func (p *popupWindow) rebuildContent(app fyne.App, devMode bool) {
+	if p.mascotAnim != nil {
+		p.mascotAnim.Stop()
+		p.mascotAnim = nil
+	}
+	p.dismissHistoryDetail()
 
 	p.buildInput(app)
 	p.buildOutput()
@@ -132,10 +142,9 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 		nil,
 		workspace,
 	)
-	win.SetContent(container.NewPadded(body))
+	p.window.SetContent(container.NewPadded(body))
 
 	p.wireInteractions(app)
-	return p
 }
 
 // buildInput creates the terminal-style prompt entry and the in-field SEND
@@ -174,16 +183,18 @@ func (p *popupWindow) buildOutput() {
 	scroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 	p.outputScroll = scroll
 
-	p.metaLabel = canvas.NewText("", brandSecondaryText)
+	palette := currentBrandPalette()
+	p.metaLabel = canvas.NewText("", palette.secondaryText)
 	p.metaLabel.TextSize = theme.TextSize() - 2
 }
 
 func (p *popupWindow) buildWordmark() fyne.CanvasObject {
-	mark := canvas.NewText(promptGlyph, brandAccentGreen)
+	palette := currentBrandPalette()
+	mark := canvas.NewText(promptGlyph, palette.accentGreen)
 	mark.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	mark.TextSize = theme.TextSize() + 2
 
-	word := canvas.NewText(wordmarkText, brandPrimaryText)
+	word := canvas.NewText(wordmarkText, palette.primaryText)
 	word.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	word.TextSize = theme.TextSize() - 1
 
@@ -191,12 +202,14 @@ func (p *popupWindow) buildWordmark() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildModelPill() fyne.CanvasObject {
-	modelDot := newStatusDot(brandAccentGreen)
+	palette := currentBrandPalette()
+	modelDot := newStatusDot(palette.accentGreen)
 	p.modelLabel = widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true, Monospace: true})
 	return container.NewHBox(modelDot, p.modelLabel)
 }
 
 func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
+	palette := currentBrandPalette()
 	// ASK and TASK are the two live modes. ASK keeps the chat-bubble icon from
 	// the original single-mode sidebar; TASK gets the action "zap" glyph. The
 	// rows own only their styling and fire selection callbacks; App decides what
@@ -245,7 +258,7 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 		p.buildListenControl(),
 		brandSeparator(),
 		p.buildConnectionStatus(),
-	), brandBorder)
+	), palette.border)
 
 	content := container.NewVBox(
 		p.buildWordmark(),
@@ -255,21 +268,22 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 		listenPanel,
 	)
 
-	bg := canvas.NewRectangle(brandPanel)
+	bg := canvas.NewRectangle(palette.panel)
 	padded := container.New(layout.NewCustomPaddedLayout(panelPadV, panelPadV, panelPadH, panelPadH), content)
 	panel := container.NewStack(bg, padded)
 	return container.New(&fixedWidthLayout{width: sidebarWidth}, panel)
 }
 
 func (p *popupWindow) buildListenControl() fyne.CanvasObject {
+	palette := currentBrandPalette()
 	ring := canvas.NewCircle(color.Transparent)
-	ring.StrokeColor = brandAccentGreen
+	ring.StrokeColor = palette.accentGreen
 	ring.StrokeWidth = 1.5
 	p.micRing = ring
 
 	// The mic ring is itself the toggle button: an icon-only, borderless button
 	// sized to the ring, with the ring stroke drawn over it.
-	p.listenButton = widget.NewButtonWithIcon("", lineIcon("mic", iconPathMic, brandAccentGreen), nil)
+	p.listenButton = widget.NewButtonWithIcon("", lineIcon("mic", iconPathMic, palette.accentGreen), nil)
 	p.listenButton.Importance = widget.LowImportance
 	mic := container.NewGridWrap(
 		fyne.NewSize(micRingSize, micRingSize),
@@ -278,10 +292,10 @@ func (p *popupWindow) buildListenControl() fyne.CanvasObject {
 
 	// LISTEN is a caption (not the button label) so it can be letter-spaced and
 	// sit tight against the subtitle below it.
-	p.listenLabel = letterRow(listenWordIdle, brandPrimaryText, theme.TextSize()+1)
+	p.listenLabel = letterRow(listenWordIdle, palette.primaryText, theme.TextSize()+1)
 	p.listenWord = listenWordIdle
 
-	p.listenSubtitle = canvas.NewText("Press to toggle mic", brandSecondaryText)
+	p.listenSubtitle = canvas.NewText("Press to toggle mic", palette.secondaryText)
 	p.listenSubtitle.Alignment = fyne.TextAlignCenter
 	p.listenSubtitle.TextSize = theme.TextSize() - 2
 
@@ -297,12 +311,14 @@ func (p *popupWindow) buildListenControl() fyne.CanvasObject {
 }
 
 func (p *popupWindow) buildConnectionStatus() fyne.CanvasObject {
-	p.cwdLabel = newMarqueeLabel("~/", brandMutedGreen, theme.TextSize()-1)
+	palette := currentBrandPalette()
+	p.cwdLabel = newMarqueeLabel("~/", palette.mutedGreen, theme.TextSize()-1)
 
 	return container.NewVBox(p.cwdLabel)
 }
 
 func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
+	palette := currentBrandPalette()
 	p.inputHeading = brandSectionLabel(sectionAsk)
 	headingRow := container.NewBorder(
 		nil, nil,
@@ -311,11 +327,11 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 		nil,
 	)
 
-	prompt := canvas.NewText(inputPrompt, brandAccentGreen)
+	prompt := canvas.NewText(inputPrompt, palette.accentGreen)
 	prompt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	prompt.TextSize = theme.TextSize() + 3
 
-	p.actionSubtitle = canvas.NewText("", brandSecondaryText)
+	p.actionSubtitle = canvas.NewText("", palette.secondaryText)
 	p.actionSubtitle.Alignment = fyne.TextAlignCenter
 	p.actionSubtitle.TextStyle = fyne.TextStyle{Monospace: true}
 	p.actionSubtitle.TextSize = theme.TextSize() - 4
@@ -329,13 +345,13 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 		vCenter(actionControl),
 		vCenter(inputWithNativeCursor),
 	)
-	inputPanel := borderedBox(inputRow, brandBorderBright)
+	inputPanel := borderedBox(inputRow, palette.borderBright)
 
 	p.responseHeading = brandSectionLabel(sectionResp)
 
 	metaRow := container.NewVBox(brandSeparator(), p.metaLabel)
 	responsePanelInner := container.NewBorder(nil, metaRow, nil, nil, p.outputScroll)
-	responsePanel := borderedBox(responsePanelInner, brandBorder)
+	responsePanel := borderedBox(responsePanelInner, palette.border)
 
 	p.copyButton = newCommandButton("COPY", iconPathCopy, func() {
 		if p.onCopy != nil {
@@ -366,7 +382,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 		container.NewVBox(brandSectionLabel(sectionHistory)),
 		nil,
 		nil, nil,
-		borderedBox(container.NewVScroll(p.historyBody), brandBorder),
+		borderedBox(container.NewVScroll(p.historyBody), palette.border),
 	)
 	p.historySection.Hide()
 	mainContent := container.NewStack(p.responseSection, p.historySection)
@@ -433,24 +449,25 @@ func (p *popupWindow) wireInteractions(app fyne.App) {
 }
 
 func (p *popupWindow) setListenButton(enabled bool, state voice.State) {
+	palette := currentBrandPalette()
 	switch state {
 	case voice.StateRecording:
 		p.setListenWord(listenWordRecording)
 		p.listenSubtitle.Text = "Press to stop"
-		p.micRing.StrokeColor = brandAccentGreen
+		p.micRing.StrokeColor = palette.accentGreen
 	case voice.StateTranscribing:
 		p.setListenWord(listenWordWorking)
 		p.listenSubtitle.Text = "Transcribing…"
-		p.micRing.StrokeColor = brandMutedGreen
+		p.micRing.StrokeColor = palette.mutedGreen
 	default:
 		if enabled {
 			p.setListenWord(listenWordIdle)
 			p.listenSubtitle.Text = "Press to toggle mic"
-			p.micRing.StrokeColor = brandAccentGreen
+			p.micRing.StrokeColor = palette.accentGreen
 		} else {
 			p.setListenWord(listenWordOff)
 			p.listenSubtitle.Text = "Check settings"
-			p.micRing.StrokeColor = brandBorder
+			p.micRing.StrokeColor = palette.border
 		}
 	}
 	p.micRing.Refresh()
@@ -468,7 +485,7 @@ func (p *popupWindow) setListenWord(word string) {
 		return
 	}
 	p.listenWord = word
-	p.listenLabel.Objects = letterRow(word, brandPrimaryText, theme.TextSize()+1).Objects
+	p.listenLabel.Objects = letterRow(word, currentBrandPalette().primaryText, theme.TextSize()+1).Objects
 	p.listenLabel.Refresh()
 }
 

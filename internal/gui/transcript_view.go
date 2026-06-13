@@ -64,7 +64,7 @@ func newTranscriptBlockView(block transcriptBlock, showFinalSeparator bool) tran
 		grid.Scroll = fyne.ScrollNone
 		appendTextGridText(grid, block.content())
 		view.textGrid = grid
-		view.root = borderedBox(grid, brandBorder)
+		view.root = borderedBox(grid, currentBrandPalette().border)
 	case transcriptBlockFinal:
 		rt := widget.NewRichText()
 		rt.Wrapping = fyne.TextWrapWord

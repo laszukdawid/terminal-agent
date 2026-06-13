@@ -101,7 +101,8 @@ func brandVSeparator() fyne.CanvasObject { return widget.NewSeparator() }
 // brandSectionLabel renders an uppercase green section heading
 // ("ASK THE TERMINAL AGENT", "RESPONSE") in the terminal-native style.
 func brandSectionLabel(text string) *canvas.Text {
-	t := canvas.NewText(text, brandAccentGreen)
+	palette := currentBrandPalette()
+	t := canvas.NewText(text, palette.accentGreen)
 	t.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	t.TextSize = theme.TextSize() - 1
 	return t
@@ -112,7 +113,8 @@ func brandSectionLabel(text string) *canvas.Text {
 // heavy shadows; callers pass the stroke color to distinguish the emphasized
 // input field (bright green border) from calmer output/mascot panels.
 func borderedBox(content fyne.CanvasObject, stroke color.Color) *fyne.Container {
-	rect := canvas.NewRectangle(brandPanel)
+	palette := currentBrandPalette()
+	rect := canvas.NewRectangle(palette.panel)
 	rect.StrokeColor = stroke
 	rect.StrokeWidth = 1
 	rect.CornerRadius = 5
@@ -131,14 +133,16 @@ func newStatusDot(fill color.Color) fyne.CanvasObject {
 // that sits under the response panel. It uses low importance so it reads as a
 // terminal output action rather than a document-toolbar button.
 func newCommandButton(label, iconPath string, onTap func()) *widget.Button {
-	btn := widget.NewButtonWithIcon(label, lineIcon("cmd-"+label, iconPath, brandMutedGreen), onTap)
+	palette := currentBrandPalette()
+	btn := widget.NewButtonWithIcon(label, lineIcon("cmd-"+label, iconPath, palette.mutedGreen), onTap)
 	btn.Importance = widget.LowImportance
 	return btn
 }
 
 // brandActionDivider is the muted "|" separator shown between COPY and EXPORT.
 func brandActionDivider() fyne.CanvasObject {
-	t := canvas.NewText("|", brandSecondaryText)
+	palette := currentBrandPalette()
+	t := canvas.NewText("|", palette.secondaryText)
 	t.TextStyle = fyne.TextStyle{Monospace: true}
 	return container.NewCenter(t)
 }
@@ -351,21 +355,22 @@ func (r *marqueeLabelRenderer) Refresh() {
 
 func newNavRow(label, iconPath string, active bool, onTap func()) *navRow {
 	n := &navRow{label: label, iconPath: iconPath, active: active, onTap: onTap}
+	palette := currentBrandPalette()
 
-	textColor := brandSecondaryText
+	textColor := palette.secondaryText
 	if active {
-		textColor = brandAccentGreen
+		textColor = palette.accentGreen
 	}
 
 	n.bg = canvas.NewRectangle(color.Transparent)
 	n.bg.CornerRadius = 4
 	if active {
-		n.bg.FillColor = brandElevatedPanel
+		n.bg.FillColor = palette.elevatedPanel
 	}
 
 	n.marker = canvas.NewRectangle(color.Transparent)
 	if active {
-		n.marker.FillColor = brandAccentGreen
+		n.marker.FillColor = palette.accentGreen
 	}
 
 	n.icon = canvas.NewImageFromResource(lineIcon("nav-"+label, iconPath, textColor))
@@ -388,12 +393,13 @@ func (n *navRow) setActive(active bool) {
 		return
 	}
 	n.active = active
+	palette := currentBrandPalette()
 
-	textColor := brandSecondaryText
+	textColor := palette.secondaryText
 	if active {
-		textColor = brandAccentGreen
-		n.bg.FillColor = brandElevatedPanel
-		n.marker.FillColor = brandAccentGreen
+		textColor = palette.accentGreen
+		n.bg.FillColor = palette.elevatedPanel
+		n.marker.FillColor = palette.accentGreen
 	} else {
 		n.bg.FillColor = color.Transparent
 		n.marker.FillColor = color.Transparent
@@ -420,7 +426,7 @@ func (n *navRow) MouseIn(*desktop.MouseEvent) {
 		return
 	}
 	n.hovered = true
-	n.bg.FillColor = brandElevatedPanel
+	n.bg.FillColor = currentBrandPalette().elevatedPanel
 	n.bg.Refresh()
 }
 
@@ -510,10 +516,11 @@ type dataLane struct {
 
 func newDataLane(dotCount int) *dataLane {
 	l := &dataLane{dots: make([]*canvas.Circle, dotCount)}
+	palette := currentBrandPalette()
 	for i := range l.dots {
-		l.dots[i] = canvas.NewCircle(brandBorderBright)
+		l.dots[i] = canvas.NewCircle(palette.borderBright)
 	}
-	l.packet = canvas.NewRectangle(brandAccentGreen)
+	l.packet = canvas.NewRectangle(palette.accentGreen)
 	l.packet.CornerRadius = 1.5
 	l.packet.Hide()
 	l.ExtendBaseWidget(l)
@@ -573,16 +580,17 @@ func (l *dataLane) relayout() {
 // laneDotStyle returns the radius and color for a dot at distPx pixels from the
 // packet head; dots near the packet are larger and brighter.
 func laneDotStyle(distPx float32, active bool) (float32, color.Color) {
+	palette := currentBrandPalette()
 	if !active {
-		return laneDotBaseR, brandBorderBright
+		return laneDotBaseR, palette.borderBright
 	}
 	switch {
 	case distPx <= lanePacketSize:
-		return laneDotBoldR, brandAccentGreen
+		return laneDotBoldR, palette.accentGreen
 	case distPx <= laneDotMidDist:
-		return laneDotMidR, brandMutedGreen
+		return laneDotMidR, palette.mutedGreen
 	default:
-		return laneDotBaseR, brandBorderBright
+		return laneDotBaseR, palette.borderBright
 	}
 }
 

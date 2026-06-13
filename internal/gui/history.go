@@ -60,7 +60,8 @@ func (p *popupWindow) setHistory(runs []sessionlog.Summary, errorText string) {
 }
 
 func historyEmptyState() fyne.CanvasObject {
-	label := canvas.NewText("No Ask or Task executions recorded yet.", brandSecondaryText)
+	palette := currentBrandPalette()
+	label := canvas.NewText("No Ask or Task executions recorded yet.", palette.secondaryText)
 	label.TextSize = theme.TextSize()
 	return container.NewPadded(label)
 }
@@ -70,11 +71,12 @@ func newHistoryCard(run sessionlog.Summary, onTap func()) fyne.CanvasObject {
 }
 
 func historyCardContent(run sessionlog.Summary) fyne.CanvasObject {
-	title := canvas.NewText(historyTitle(run), brandPrimaryText)
+	palette := currentBrandPalette()
+	title := canvas.NewText(historyTitle(run), palette.primaryText)
 	title.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	title.TextSize = theme.TextSize() - 1
 
-	meta := canvas.NewText(historyMeta(run), brandSecondaryText)
+	meta := canvas.NewText(historyMeta(run), palette.secondaryText)
 	meta.TextSize = theme.TextSize() - 2
 
 	fallbackPrompt := run.Command
@@ -94,7 +96,7 @@ func historyCardContent(run sessionlog.Summary) fyne.CanvasObject {
 	response.Wrapping = fyne.TextWrapWord
 
 	body := container.NewVBox(title, meta, brandSeparator(), prompt, response)
-	card := borderedBox(body, brandBorder)
+	card := borderedBox(body, palette.border)
 	if promptTruncated || responseTruncated {
 		return withHistoryTruncationCorner(card)
 	}
@@ -119,7 +121,7 @@ func (p *popupWindow) showHistoryDetail(run sessionlog.Summary) {
 	scroll := container.NewVScroll(content)
 	scroll.SetMinSize(fyne.NewSize(size.Width, max(120, size.Height-historyDetailFooterHeight)))
 	closeButton := widget.NewButton("Close", nil)
-	detail := borderedBox(container.NewBorder(nil, closeButton, nil, nil, scroll), brandBorder)
+	detail := borderedBox(container.NewBorder(nil, closeButton, nil, nil, scroll), currentBrandPalette().border)
 	canvasSize := p.window.Canvas().Size()
 	overlay := newHistoryDetailOverlay(detail, size, nil)
 	pop := widget.NewPopUp(overlay, p.window.Canvas())
@@ -215,7 +217,7 @@ func withHistoryTruncationCorner(content fyne.CanvasObject) fyne.CanvasObject {
 func historyTruncationCorner() fyne.CanvasObject {
 	return canvas.NewRasterWithPixels(func(x, y, w, h int) color.Color {
 		if x+y >= w-1 {
-			return brandAccentGreen
+			return currentBrandPalette().accentGreen
 		}
 		return color.NRGBA{A: 0}
 	})
@@ -265,7 +267,7 @@ func (c *tappableHistoryCard) Tapped(*fyne.PointEvent) {
 }
 
 func (c *tappableHistoryCard) MouseIn(*desktop.MouseEvent) {
-	c.bg.FillColor = brandElevatedPanel
+	c.bg.FillColor = currentBrandPalette().elevatedPanel
 	c.bg.Refresh()
 }
 

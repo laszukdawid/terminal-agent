@@ -9,6 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
@@ -184,6 +185,38 @@ func TestSetModeHistoryLoadsSessionHistory(t *testing.T) {
 	}
 	if len(g.popup.historyBody.Objects) != 1 {
 		t.Fatalf("history rows = %d, want 1", len(g.popup.historyBody.Objects))
+	}
+}
+
+func TestThemeVariantChangePreservesHistoryNavigation(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(appservice.SessionDirEnv, dir)
+	rec := sessionlog.New(dir, sessionlog.Meta{Kind: "ask", Provider: "openai", Model: "gpt-4.1", Command: "hello", CreatedAt: completedAtForTest()})
+	rec.Write(sessionlog.Record{Type: sessionlog.RecordRequest, Text: "hello"})
+	rec.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Text: "world", Timestamp: completedAtForTest().Add(time.Second)})
+	g, _ := newRecordingApp(t)
+	g.setMode(guiModeHistory)
+	if len(g.popup.historyBody.Objects) != 1 {
+		t.Fatalf("history rows before theme change = %d, want 1", len(g.popup.historyBody.Objects))
+	}
+
+	target := theme.VariantLight
+	if g.themeVariant == theme.VariantLight {
+		target = theme.VariantDark
+	}
+	g.applyThemeVariant(target, false)
+
+	if g.state.mode != guiModeHistory {
+		t.Fatalf("mode after theme change = %q, want %q", g.state.mode, guiModeHistory)
+	}
+	if !g.popup.navHistory.active || g.popup.navAsk.active || g.popup.navTask.active {
+		t.Fatalf("sidebar active rows wrong after theme change: ask=%v task=%v history=%v", g.popup.navAsk.active, g.popup.navTask.active, g.popup.navHistory.active)
+	}
+	if !g.popup.historySection.Visible() || g.popup.inputGroup.Visible() || g.popup.responseSection.Visible() {
+		t.Fatal("history mode should remain visible after theme change")
+	}
+	if len(g.popup.historyBody.Objects) != 1 {
+		t.Fatalf("history rows after theme change = %d, want 1", len(g.popup.historyBody.Objects))
 	}
 }
 
@@ -414,7 +447,8 @@ func TestNavRowSetActiveTogglesStyling(t *testing.T) {
 	if !row.active || !row.text.TextStyle.Bold {
 		t.Fatalf("setActive(true): active=%v bold=%v", row.active, row.text.TextStyle.Bold)
 	}
-	if row.text.Color != brandAccentGreen {
+	palette := currentBrandPalette()
+	if row.text.Color != palette.accentGreen {
 		t.Fatal("active row text should use accent green")
 	}
 
@@ -422,7 +456,7 @@ func TestNavRowSetActiveTogglesStyling(t *testing.T) {
 	if row.active || row.text.TextStyle.Bold {
 		t.Fatalf("setActive(false): active=%v bold=%v", row.active, row.text.TextStyle.Bold)
 	}
-	if row.text.Color != brandSecondaryText {
+	if row.text.Color != palette.secondaryText {
 		t.Fatal("inactive row text should use secondary color")
 	}
 }

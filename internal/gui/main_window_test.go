@@ -123,6 +123,9 @@ func TestBrandThemeUsesAccentColorForNativeEntryCursor(t *testing.T) {
 	if got := newBrandTheme().Color(theme.ColorNamePrimary, theme.VariantDark); got != brandAccentGreen {
 		t.Fatalf("ColorNamePrimary = %v, want %v", got, brandAccentGreen)
 	}
+	if got := newBrandTheme().Color(theme.ColorNamePrimary, theme.VariantLight); got != brandLightPalette.accentGreen {
+		t.Fatalf("light ColorNamePrimary = %v, want %v", got, brandLightPalette.accentGreen)
+	}
 }
 
 func TestPromptEntryThemeForcesVisibleNativeCursorWidth(t *testing.T) {

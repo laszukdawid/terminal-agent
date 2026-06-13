@@ -28,6 +28,7 @@ type App struct {
 	envResult       EnvironmentLoadResult
 	voiceController *voice.Controller
 	voiceSchedule   func(func())
+	themeVariant    fyne.ThemeVariant
 }
 
 type AppOptions struct {
@@ -63,6 +64,7 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		gui.voiceSchedule = options.Voice.Schedule
 	}
 	fyneApp.Settings().SetTheme(newBrandTheme())
+	gui.themeVariant = fyneApp.Settings().ThemeVariant()
 	if icon, err := loadAppIcon(); err == nil {
 		fyneApp.SetIcon(icon)
 	}
@@ -70,7 +72,34 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 	gui.initVoice(options.Voice)
 	gui.wire()
 	gui.render()
+	gui.watchThemeVariant(options.DevMode)
 	return gui
+}
+
+func (g *App) watchThemeVariant(devMode bool) {
+	g.fyneApp.Settings().AddListener(func(settings fyne.Settings) {
+		g.applyThemeVariant(settings.ThemeVariant(), devMode)
+	})
+	g.applyThemeVariant(g.fyneApp.Settings().ThemeVariant(), devMode)
+}
+
+func (g *App) applyThemeVariant(variant fyne.ThemeVariant, devMode bool) {
+	if variant == g.themeVariant {
+		return
+	}
+	g.themeVariant = variant
+	if g.popup == nil {
+		return
+	}
+	g.popup.rebuildContent(g.fyneApp, devMode)
+	g.wire()
+	if g.state.mode == guiModeHistory {
+		g.loadHistory()
+	}
+	g.render()
+	if g.state.isVisible {
+		g.FocusInput()
+	}
 }
 
 func (g *App) Run() {
@@ -240,6 +269,7 @@ func (g *App) wire() {
 
 func (g *App) render() {
 	g.popup.input.SetText(g.state.input)
+	g.popup.setMode(g.state.mode)
 	if !g.state.isRunning {
 		g.renderResponse()
 	}
