@@ -47,6 +47,7 @@ nav:
       - Plugin Command: commands/plugin.md
       - Config Command: commands/config.md
       - History Command: commands/history.md
+  - Popup GUI: gui.md
   - Tools: tools.md
   - Providers: providers.md
   - Configuration: configuration.md

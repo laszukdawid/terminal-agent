@@ -22,11 +22,15 @@ The demo runs:
 
 ### Popup GUI
 
-Use the desktop popup for fast prompts, then switch providers and models from settings when you want a different backend.
+The desktop popup brings the same Ask and Task modes to a window you summon with `Ctrl+Shift+Space`. Switch providers and models from settings, dictate prompts with voice, and browse run history without touching a config file. See the [Popup GUI guide](https://laszukdawid.github.io/terminal-agent/gui.html) for the full tour.
 
-<img src="./assets/gui.gif" width="760" alt="Terminal Agent popup GUI switching providers and answering prompts" />
+**Ask mode** streams a markdown answer into the response panel:
 
-The GUI demo shows asking with Codex, switching to Bedrock, asking again, and moving back to Codex without touching a config file.
+<img src="./assets/gui-ask.gif" width="760" alt="Terminal Agent popup GUI answering a question in Ask mode" />
+
+**Task mode** plans steps, runs tools, and shows the transcript plus final answer:
+
+<img src="./assets/gui-task.gif" width="760" alt="Terminal Agent popup GUI running a Task workflow" />
 
 ## More examples
 
