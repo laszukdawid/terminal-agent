@@ -39,8 +39,10 @@ Rules:
 - Use "tool", not "tool_name".
 - The "input" field must contain the actual tool arguments for the chosen tool.
 - Do not return a JSON schema.
-- Use "final": true ONLY when raw output is definitely the final user-facing answer: concise, clean, readable, and requiring no interpretation.
-- If raw output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set "final": true.
+- If more information is needed from the user, choose the user_clarification tool. Do not choose final_answer for a clarification request.
+- Use "final": true ONLY when raw output is definitely the complete final user-facing answer: concise, clean, readable, and requiring no interpretation.
+- Never use "final": true for exploratory commands, listings, searches, validation checks, or any step before a requested create/edit/delete/install/initialize/configure action is complete.
+- If raw output needs interpretation, filtering, grouping, cleanup, explanation, validation, or follow-up action, do not set "final": true.
 - For process tools such as unix and python, use "timeout" for bounded observation or commands that may not terminate, and "max_bytes" for noisy commands. Omit them for safe defaults; set either value to 0 only when the user explicitly wants unlimited runtime or capture.
 
 Available tools:

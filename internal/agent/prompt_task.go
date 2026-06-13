@@ -18,7 +18,7 @@ Tool calls: {{.ToolCalls}} of {{.MaxToolCalls}}
 Task root directory: {{.RootDir}}
 Current working directory: {{.CurrentDir}}{{.History}}
 
-What should I do next to complete this task? Should I use one of provided tools? Is the task finished? If so, provide the final answer.`
+Decide internally whether another tool call is needed. If the task is complete, provide only the final answer requested by the user; do not mention that the task is complete unless the user asked about completion status.`
 
 const taskFinalSummaryTemplateText = `I've been working on this task: {{.OriginalQuery}}
 

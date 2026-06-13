@@ -59,7 +59,7 @@ func NewPythonTool(workDir string) *PythonTool {
 		},
 		"final": map[string]string{
 			"type":        "boolean",
-			"description": "Set to true only when the script output itself fully answers the user's request and should be returned directly without another model summary round.",
+			"description": "Set to true only when the script output itself is the complete final user-facing answer and should be returned directly without another model summary round. Do not set for exploratory checks or before create/modify tasks.",
 		},
 	}
 
