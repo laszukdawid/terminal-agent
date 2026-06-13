@@ -56,7 +56,7 @@ func TestConvertToGenaiSchema(t *testing.T) {
 					},
 					"final": {
 						Type:        genai.TypeBoolean,
-						Description: "Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round.",
+						Description: "Set to true only when the command output itself is the complete final user-facing answer and should be returned directly without another model summary round. Do not set for exploratory checks/listings or before create/modify tasks.",
 					},
 					"timeout": {
 						Type:        genai.TypeString,

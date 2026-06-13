@@ -875,6 +875,9 @@ func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {
 	})
 
 	assert.Contains(t, prompt, "Ordered step history:")
+	assert.Contains(t, prompt, "Decide internally whether another tool call is needed")
+	assert.Contains(t, prompt, "do not mention that the task is complete unless the user asked about completion status")
+	assert.NotContains(t, prompt, "Is the task finished?")
 	assert.Contains(t, prompt, "Timestamp: 2026-05-24T09:00:00Z")
 	assert.Contains(t, prompt, "Status: failed")
 	assert.Contains(t, prompt, `Input: {"name_pattern":"*.go"}`)
@@ -990,8 +993,11 @@ func TestTaskActionPromptFinalGuidanceIsSelective(t *testing.T) {
 		nil,
 	)
 
-	assert.Contains(t, prompt, `Use "final": true ONLY when raw output is definitely the final user-facing answer`)
-	assert.Contains(t, prompt, `If raw output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set "final": true`)
+	assert.Contains(t, prompt, `Use "final": true ONLY when raw output is definitely the complete final user-facing answer`)
+	assert.Contains(t, prompt, `Never use "final": true for exploratory commands, listings, searches, validation checks`)
+	assert.Contains(t, prompt, `If raw output needs interpretation, filtering, grouping, cleanup, explanation, validation, or follow-up action, do not set "final": true`)
+	assert.Contains(t, prompt, "If more information is needed from the user, choose the user_clarification tool")
+	assert.Contains(t, prompt, "Do not choose final_answer for a clarification request")
 	assert.NotContains(t, prompt, "fully answers the request")
 }
 

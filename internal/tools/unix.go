@@ -100,7 +100,7 @@ func NewUnixTool(codeExecutor CodeExecutor) *UnixTool {
 			},
 			"final": map[string]string{
 				"type":        "boolean",
-				"description": "Set to true only when the command output itself fully answers the user's request and should be returned directly without another model summary round.",
+				"description": "Set to true only when the command output itself is the complete final user-facing answer and should be returned directly without another model summary round. Do not set for exploratory checks/listings or before create/modify tasks.",
 			},
 		},
 		"required": []string{"command"},

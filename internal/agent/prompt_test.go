@@ -226,14 +226,28 @@ func TestSystemPromptHeaderIncludesProjectContextPath(t *testing.T) {
 func TestSystemPromptTaskFinalGuidanceIsSelective(t *testing.T) {
 	prompt := SystemPromptTask
 
-	if !strings.Contains(prompt, "Use final=true ONLY when the raw output is definitely the final user-facing answer") {
+	if !strings.Contains(prompt, "Use final=true ONLY when the raw output is definitely the complete final user-facing answer") {
 		t.Fatal("expected task prompt to reserve final=true for definitely final raw output")
 	}
-	if !strings.Contains(prompt, "If the output needs interpretation, filtering, grouping, cleanup, explanation, or validation, do not set final=true") {
+	if !strings.Contains(prompt, "Never use final=true for exploratory commands, listings, searches, validation checks") {
+		t.Fatal("expected task prompt to avoid final=true for exploratory output")
+	}
+	if !strings.Contains(prompt, "If the output needs interpretation, filtering, grouping, cleanup, explanation, validation, or follow-up action, do not set final=true") {
 		t.Fatal("expected task prompt to avoid final=true when output needs model review")
 	}
 	if strings.Contains(prompt, "fully answers the user's request and should be returned directly") {
 		t.Fatal("old final=true guidance is too broad")
+	}
+}
+
+func TestSystemPromptTaskClarificationUsesTool(t *testing.T) {
+	prompt := SystemPromptTask
+
+	if !strings.Contains(prompt, "use the user_clarification tool") {
+		t.Fatal("expected task prompt to require the clarification tool")
+	}
+	if !strings.Contains(prompt, "Do not write a clarification request as the final answer") {
+		t.Fatal("expected task prompt to reject clarification as final prose")
 	}
 }
 
