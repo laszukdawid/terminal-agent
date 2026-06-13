@@ -18,11 +18,15 @@ The demo includes:
 
 ### Popup GUI
 
-The popup GUI keeps quick prompts one shortcut away, including provider/model switching from the settings screen.
+The popup GUI keeps quick prompts one shortcut away, with the same Ask and Task modes as the CLI plus provider/model switching from the settings screen. See the [Popup GUI guide](gui.md) for the full feature tour.
 
-![Terminal Agent popup GUI switching providers and answering prompts](assets/gui.gif)
+**Ask mode** streams a markdown answer back into the response panel:
 
-The demo switches between Codex and Bedrock, asks quick prompts, and shows how the GUI uses the selected provider without manual config edits.
+![Terminal Agent popup GUI answering a question in Ask mode](assets/gui-ask.gif)
+
+**Task mode** plans steps, runs tools, and shows the transcript and final answer:
+
+![Terminal Agent popup GUI running a Task workflow](assets/gui-task.gif)
 
 ## Contents
 
@@ -33,6 +37,7 @@ The demo switches between Codex and Bedrock, asks quick prompts, and shows how t
   - [Tool Command](commands/tool.md) - Use and manage tools
   - [Config Command](commands/config.md) - Configure agent settings
   - [History Command](commands/history.md) - Query interaction history
+- [Popup GUI](gui.md) - Desktop popup: Ask/Task modes, voice, settings, history
 - [Providers](providers.md) - Supported LLM providers
 - [Configuration](configuration.md) - Advanced configuration options
 - [Approval Logic](approval-logic.md) - How task tool calls are approved, prompted, or denied

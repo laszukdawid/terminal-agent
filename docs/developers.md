@@ -155,6 +155,72 @@ Documentation is written in Markdown and stored in the `docs/` directory. To upd
 1. Edit the relevant Markdown files
 2. If adding new pages, update the navigation in `docs/Readme.md`
 
+## GUI Architecture
+
+The desktop popup (`cmd/agent-gui`) is a [Fyne](https://fyne.io/) application
+under `internal/gui/`. End-user behavior is documented in the
+[Popup GUI guide](gui.md); this section is for contributors working on the GUI
+itself.
+
+### Shared service layer
+
+The GUI does **not** talk to connectors or prompt helpers directly. Like the CLI
+commands, it depends on the shared `internal/app` service interface (`AskEvents`,
+`TaskEvents`, etc.). Both surfaces consume the same event-driven API, so a change
+in `internal/app` is a cross-surface change even when it looks CLI-only. See the
+[Architecture](architecture.md) page for the event model.
+
+### Layout and key files
+
+| Concern | File(s) |
+| --- | --- |
+| Entry point, single-instance IPC, voice/version wiring | `cmd/agent-gui/main.go` |
+| App lifecycle, show/hide, tray menu, indicator ticker | `internal/gui/app.go` |
+| Window construction, layout, shortcuts | `internal/gui/main_window.go` |
+| Submit / cancel / copy / export actions | `internal/gui/actions.go` |
+| Ask/Task event consumption (presenter) | `internal/gui/presenter.go`, `internal/gui/task.go` |
+| Per-mode view state and persistence | `internal/gui/state.go` |
+| Live tool-output truncation | `internal/gui/livelimit.go` |
+| Task transcript model and rendering | `internal/gui/transcript.go`, `internal/gui/transcript_view.go` |
+| Clarification/confirmation dialogs | `internal/gui/interaction.go` |
+| Settings dialog, provider autocomplete, status icon | `internal/gui/settings_dialog.go`, `internal/gui/provider_entry.go`, `internal/gui/provider_status_icon.go` |
+| Voice controller integration | `internal/gui/voice.go` |
+| History tab and detail modal | `internal/gui/history.go` |
+| Brand theme and icons | `internal/gui/theme.go`, `internal/gui/icons.go` |
+
+Notes for contributors:
+
+- Service events are drained on the Fyne UI thread via `fyne.Do`. Ask mode
+  re-renders on each delta; Task mode sets a dirty flag that a ~140ms ticker in
+  `app.go` flushes, so streamed tool output is coalesced rather than rendered per
+  chunk.
+- `state.go` snapshots each mode's view on switch, so moving between Ask, Task,
+  and History does not discard the previous run.
+- GUI Task runs with `AutoApprove` today; `taskAutoApprove()` in `app.go` is the
+  single switch, and `EventConfirmationNeeded` is handled only as a deadlock
+  backstop until interactive approval lands. `EventClarificationNeeded` already
+  drives a real modal through `interaction.go`.
+- Closing the window calls `Hide()` (close intercept), not quit.
+
+### Building and running
+
+```sh
+# Build just the GUI binary
+task build:gui
+
+# Run the popup from source
+task run:gui
+
+# Install desktop-build dependencies for your platform
+task deps:gui:macos    # or deps:gui:ubuntu / deps:gui:fedora
+```
+
+Fyne requires platform C toolchains/headers: Xcode Command Line Tools on macOS,
+and X11/OpenGL dev packages on Linux (installed by the `deps:gui:*` tasks). The
+`integration:*` tasks additionally install `agent-gui`, register a desktop entry,
+and wire the `Ctrl+Shift+Space` shortcut; see the
+[Integration guides](integration/fedora.md).
+
 ## GUI Screenshots
 
 The popup GUI is rendered to PNG files without a display server or a live LLM
