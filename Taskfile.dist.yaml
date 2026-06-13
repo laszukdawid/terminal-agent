@@ -116,9 +116,10 @@ tasks:
     vars:
       ADDR: '{{.ADDR | default "127.0.0.1:8000"}}'
       # Prefer a locally installed mkdocs; otherwise fall back to uvx with the
-      # material theme (plain `uvx mkdocs` lacks the theme this site uses).
+      # pinned docs toolchain (docs/requirements.txt), which also supplies the
+      # material theme that plain `uvx mkdocs` lacks.
       MKDOCS:
-        sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with mkdocs-material mkdocs"
+        sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with-requirements docs/requirements.txt mkdocs"
     cmds:
       - echo "Serving docs at http://{{.ADDR}}/ (Ctrl+C to stop)"
       - '{{.MKDOCS}} serve --dev-addr {{.ADDR}}'
@@ -130,7 +131,7 @@ tasks:
       SITE_DIR: '{{.SITE_DIR | default (printf "%s/site" .USER_WORKING_DIR)}}'
       STRICT: '{{if .STRICT}}--strict{{end}}'
       MKDOCS:
-        sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with mkdocs-material mkdocs"
+        sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with-requirements docs/requirements.txt mkdocs"
     cmds:
       - '{{.MKDOCS}} build --site-dir {{.SITE_DIR}} {{.STRICT}}'
       - echo "Docs site rendered to {{.SITE_DIR}}"

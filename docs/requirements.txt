@@ -1,0 +1,9 @@
+# Documentation toolchain — pinned on purpose.
+#
+# Material for MkDocs and MkDocs have announced a backward-incompatible 2.0 line
+# (removed plugin system, rewritten theming, no migration path). These upper
+# bounds keep `mkdocs build`/`serve` reproducible and stop an unattended install
+# (local `uvx` fallback or the gh-pages CI deploy) from jumping to a breaking
+# major without us choosing to. Raise the caps deliberately when migrating.
+mkdocs-material>=9.7,<10
+mkdocs>=1.6,<2
