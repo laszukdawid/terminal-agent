@@ -17,6 +17,7 @@ require (
 	github.com/hybridgroup/yzma v1.14.1
 	github.com/jupiterrider/ffi v0.6.0
 	github.com/mark3labs/mcp-go v0.23.1
+	github.com/mattn/go-runewidth v0.0.17
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/openai/openai-go v0.1.0-beta.10
 	github.com/spf13/cobra v1.9.1
@@ -90,7 +91,6 @@ require (
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.17 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect

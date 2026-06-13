@@ -53,12 +53,14 @@ When no permission rule decides the action, Terminal Agent falls back to the too
 
 | Category | Tools | Default |
 | --- | --- | --- |
-| `read` | `read`, `file_search`, `websearch`, `final_answer`, `ask_user` | Allowed without prompting |
-| `write` | `file_edit` | Allowed without prompting only when the target path is inside the task workspace root |
+| `read` | `read`, `file_search`, `websearch`, `final_answer`, `ask_user` | Allowed without prompting, except `file_search` prompts when the requested root is outside the current read scope |
+| `write` | `file_edit` | Allowed without prompting only when the target path is inside the task workspace root or was explicitly approved earlier in the run |
 | `execute` | `unix`, `python` | Prompts, except parser-verified read-only `unix` commands |
 | undeclared | MCP tools and third-party tools without a declared category | Treated as `execute` and prompts |
 
 Default policy is only a fallback. A matching `deny` rule blocks even a read tool, an in-workspace write, or a read-only Unix command.
+
+Approving an out-of-root `file_search` adds that directory to the read scope for the current run only. Approving an out-of-root `file_edit` adds only that exact file path to the write scope for the current run only. Read-scope approvals do not grant write scope.
 
 ## Read-Only Unix Auto-Approval
 

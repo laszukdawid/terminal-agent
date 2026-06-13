@@ -9,6 +9,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
+	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -197,7 +198,11 @@ func (c *interactiveConfirmation) visualLineCount(s string) int {
 	if c.termWidth <= 0 || len(s) == 0 {
 		return 1
 	}
-	return (len(s) + c.termWidth - 1) / c.termWidth
+	displayWidth := runewidth.StringWidth(s)
+	if displayWidth == 0 {
+		return 1
+	}
+	return (displayWidth + c.termWidth - 1) / c.termWidth
 }
 
 func splitDisplayLines(s string) []string {

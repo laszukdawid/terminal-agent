@@ -173,7 +173,67 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	assert.Equal(t, "internal", clarification)
 	assert.Contains(t, output.String(), "Run shell command?")
 	assert.Contains(t, output.String(), "Need clarification: Which directory?")
+	assert.Contains(t, output.String(), `Clarification: {"response":"internal"}`)
 	assert.Contains(t, output.String(), "done")
+}
+
+func TestFormatTaskClarificationTrace(t *testing.T) {
+	assert.Equal(t, `Clarification: {"response":"internal"}`, formatTaskClarificationTrace("internal", false))
+
+	longResponse := strings.Repeat("a", 120)
+	assert.Equal(t, `Clarification: {"response":"`+strings.Repeat("a", 100)+`..."}`, formatTaskClarificationTrace(longResponse, false))
+}
+
+func TestVisualLineCountUsesDisplayWidth(t *testing.T) {
+	assert.Equal(t, 2, visualLineCount("abcd", 3))
+	assert.Equal(t, 1, visualLineCount("e\u0301", 1))
+	assert.Equal(t, 2, visualLineCount("界", 1))
+	assert.Equal(t, 1, visualLineCount("", 10))
+}
+
+func TestTaskCommandSuppressesClarificationTraceWhenPrintDisabled(t *testing.T) {
+	originalNewService := newService
+	defer func() {
+		newService = originalNewService
+	}()
+
+	newService = func() app.Service {
+		return &fakeTaskService{events: func(_ context.Context, req app.TaskRequest) (<-chan app.Event, error) {
+			ch := make(chan app.Event)
+			go func() {
+				defer close(ch)
+				clarified := make(chan struct{})
+				ch <- app.Event{
+					Type: app.EventClarificationNeeded,
+					Clarification: &app.TaskClarificationEvent{
+						Question: "Which directory?",
+						Reply: func(response string) error {
+							close(clarified)
+							return nil
+						},
+					},
+				}
+				<-clarified
+				ch <- app.Event{Type: app.EventCompleted, FinalOutput: "done", Status: req.Message}
+			}()
+			return ch, nil
+		}}
+	}
+
+	cmd := NewTaskCommand(config.NewDefaultConfig())
+	input := bytes.NewBufferString("internal\n")
+	output := &bytes.Buffer{}
+	cmd.SetIn(input)
+	cmd.SetOut(output)
+	cmd.SetErr(output)
+	cmd.Flags().String("device", "", "")
+	cmd.SetArgs([]string{"--print=false", "inspect", "repo"})
+
+	err := cmd.ExecuteContext(context.Background())
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "Need clarification: Which directory?")
+	assert.NotContains(t, output.String(), "Clarification:")
+	assert.NotContains(t, output.String(), "done")
 }
 
 func TestFormatTaskStreamedCommandOmitsRuntimeControls(t *testing.T) {

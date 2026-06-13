@@ -58,7 +58,25 @@ func TestFileEditToolRunSchemaWithContextRejectsPathsOutsideRoot(t *testing.T) {
 	}, ToolExecutionContext{RootDir: rootDir, CurrentDir: currentDir})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "outside working directory")
+	assert.Contains(t, err.Error(), "outside allowed working directories")
+}
+
+func TestFileEditToolRunSchemaWithContextAllowsAdditionalRoot(t *testing.T) {
+	rootDir := t.TempDir()
+	extraRoot := t.TempDir()
+	targetPath := filepath.Join(extraRoot, "hello.txt")
+
+	tool := NewFileEditTool(rootDir)
+	_, err := tool.RunSchemaWithContext(map[string]any{
+		"path":      targetPath,
+		"operation": "write",
+		"content":   "hello",
+	}, ToolExecutionContext{RootDir: rootDir, CurrentDir: rootDir, AllowedRootDirs: []string{extraRoot}})
+
+	require.NoError(t, err)
+	content, readErr := os.ReadFile(targetPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, "hello", string(content))
 }
 
 func TestPythonToolRunSchemaWithContextUsesCurrentDir(t *testing.T) {
@@ -156,7 +174,7 @@ func TestReadToolRejectsPathsOutsideRoot(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "outside working directory")
+	assert.Contains(t, err.Error(), "outside allowed working directories")
 }
 
 func TestReadToolResolvesPathsRelativeToCurrentDir(t *testing.T) {

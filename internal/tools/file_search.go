@@ -27,7 +27,7 @@ func NewFileSearchTool(workDir string) *FileSearchTool {
 	properties := map[string]any{
 		"root": map[string]string{
 			"type":        "string",
-			"description": "Root directory for the search (defaults to working directory)",
+			"description": "Root directory for the search (defaults to working directory). Roots outside the current read scope require user permission.",
 		},
 		"name_pattern": map[string]string{
 			"type":        "string",

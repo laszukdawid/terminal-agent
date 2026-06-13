@@ -66,8 +66,10 @@ type ProcessesStartedWriter interface {
 }
 
 type ToolExecutionContext struct {
-	RootDir    string
-	CurrentDir string
+	RootDir         string
+	CurrentDir      string
+	AllowedRootDirs []string
+	AllowedPaths    []string
 	// Output is an optional live, user-facing output sink. Tools should still
 	// return their captured result for agent reasoning; Output is only for
 	// incremental display and may be ignored by tools without useful live output.

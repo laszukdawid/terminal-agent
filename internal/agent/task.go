@@ -85,8 +85,10 @@ const (
 )
 
 type TaskDirs struct {
-	RootDir    string
-	CurrentDir string
+	RootDir           string
+	CurrentDir        string
+	ReadAllowedRoots  []string
+	WriteAllowedPaths []string
 }
 
 type taskToolOutput struct {
@@ -321,7 +323,6 @@ func (a *Agent) handleTaskToolResponse(ctx context.Context, logger *zap.SugaredL
 		run.state.ToolCalls++
 		return TaskRunResult{}, false, nil
 	}
-
 	allowed, err := run.confirmTool(tool, response)
 	if err != nil {
 		logger.Errorw("Tool confirmation failed", "tool", response.ToolName, "error", err)
@@ -331,11 +332,41 @@ func (a *Agent) handleTaskToolResponse(ctx context.Context, logger *zap.SugaredL
 		run.recordDeclined(response)
 		return TaskRunResult{}, false, nil
 	}
+	run.expandAllowedScopeForApprovedTool(tool, response)
 	if err := ctx.Err(); err != nil {
 		return TaskRunResult{}, false, err
 	}
 
 	return a.executeTaskTool(ctx, logger, run, tool, response)
+}
+
+func (r *taskExecutionState) expandAllowedScopeForApprovedTool(tool tools.Tool, response connector.LlmResponseWithTools) {
+	scope := r.requestedAdditionalScope(tool, response.ToolInput)
+	if scope == "" {
+		return
+	}
+	switch tool.Name() {
+	case tools.ToolNameFileSearch:
+		r.state.Dirs.ReadAllowedRoots = appendAllowedRoot(r.state.Dirs.ReadAllowedRoots, scope)
+	case tools.ToolNameFileEdit:
+		r.state.Dirs.WriteAllowedPaths = appendAllowedPath(r.state.Dirs.WriteAllowedPaths, scope)
+	}
+	if r.state.Dirs.CurrentDir == "" {
+		r.state.Dirs.CurrentDir = r.state.Dirs.RootDir
+	}
+}
+
+func (r *taskExecutionState) requestedAdditionalScope(tool tools.Tool, input map[string]any) string {
+	switch tool.Name() {
+	case tools.ToolNameFileEdit:
+		path, _ := input["path"].(string)
+		return additionalWritePathForFilePath(path, r.state.Dirs)
+	case tools.ToolNameFileSearch:
+		root, _ := input["root"].(string)
+		return additionalRootForDirPath(root, r.state.Dirs)
+	default:
+		return ""
+	}
 }
 
 func (a *Agent) executeTaskTool(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState, tool tools.Tool, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
@@ -448,12 +479,18 @@ func (r *taskExecutionState) autoAllowsTool(tool tools.Tool, input map[string]an
 
 	switch permissionCategoryFor(tool) {
 	case tools.PermissionRead:
+		if tool.Name() == tools.ToolNameFileSearch {
+			root, _ := input["root"].(string)
+			return additionalRootForDirPath(root, r.state.Dirs) == ""
+		}
 		return true
 	case tools.PermissionWrite:
 		path, _ := input["path"].(string)
-		return tools.PathWithinRoot(path, tools.ToolExecutionContext{
-			RootDir:    r.state.Dirs.RootDir,
-			CurrentDir: r.state.Dirs.CurrentDir,
+		return tools.PathAllowedInContext(path, tools.ToolExecutionContext{
+			RootDir:         r.state.Dirs.RootDir,
+			CurrentDir:      r.state.Dirs.CurrentDir,
+			AllowedRootDirs: []string{r.state.Dirs.RootDir},
+			AllowedPaths:    r.state.Dirs.WriteAllowedPaths,
 		})
 	default:
 		return false
