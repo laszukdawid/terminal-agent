@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/history"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
+	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -136,6 +138,12 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 					}
 					if replyErr := event.Clarification.Reply(answer); replyErr != nil {
 						return replyErr
+					}
+					if printFlag {
+						if liveOutput.NeedsNewlineBeforeFinal() {
+							cmd.Print("\n")
+						}
+						cmd.Println(formatTaskClarificationTrace(answer, isTerminalWriter(cmd.OutOrStdout())))
 					}
 				case app.EventCompleted:
 					result.Response = event.FinalOutput
@@ -483,6 +491,11 @@ func promptTaskClarification(cmd *cobra.Command, reader *bufio.Reader, clarifica
 	if clarification == nil {
 		return "", fmt.Errorf("missing clarification request")
 	}
+	stdinFile, stdinOk := cmd.InOrStdin().(*os.File)
+	stderrFile, stderrOk := cmd.ErrOrStderr().(*os.File)
+	if stdinOk && stderrOk && term.IsTerminal(int(stdinFile.Fd())) && term.IsTerminal(int(stderrFile.Fd())) {
+		return promptTaskClarificationInteractive(stderrFile, reader, clarification)
+	}
 
 	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "\nNeed clarification: %s\n> ", clarification.Question); err != nil {
 		return "", err
@@ -494,4 +507,90 @@ func promptTaskClarification(cmd *cobra.Command, reader *bufio.Reader, clarifica
 	}
 
 	return strings.TrimRight(response, "\r\n"), nil
+}
+
+func promptTaskClarificationInteractive(stderr *os.File, reader *bufio.Reader, clarification *app.TaskClarificationEvent) (string, error) {
+	prompt := newInteractiveClarification(clarification.Question, stderr)
+	if err := prompt.render(); err != nil {
+		return "", err
+	}
+	defer prompt.cleanup()
+
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	prompt.captureAnswer(response)
+	return strings.TrimRight(response, "\r\n"), nil
+}
+
+type interactiveClarification struct {
+	question        string
+	writer          *os.File
+	termWidth       int
+	lastVisualLines int
+}
+
+func newInteractiveClarification(question string, writer *os.File) *interactiveClarification {
+	width, _, err := term.GetSize(int(writer.Fd()))
+	if err != nil || width <= 0 {
+		width = 80
+	}
+	return &interactiveClarification{question: question, writer: writer, termWidth: width}
+}
+
+func (c *interactiveClarification) render() error {
+	lines := []string{"", "Need clarification: " + c.question, "> "}
+	totalVisual := 0
+	for _, line := range lines {
+		totalVisual += visualLineCount(line, c.termWidth)
+	}
+	c.lastVisualLines = totalVisual
+	_, err := fmt.Fprint(c.writer, strings.Join(lines, "\r\n"))
+	return err
+}
+
+func (c *interactiveClarification) captureAnswer(response string) {
+	answer := strings.TrimRight(response, "\r\n")
+	c.lastVisualLines += visualLineCount("> "+answer, c.termWidth) - visualLineCount("> ", c.termWidth)
+}
+
+func (c *interactiveClarification) cleanup() {
+	if c.lastVisualLines <= 0 {
+		return
+	}
+	for i := 0; i < c.lastVisualLines; i++ {
+		fmt.Fprint(c.writer, "\x1b[1A")
+	}
+	fmt.Fprint(c.writer, "\r\x1b[J")
+}
+
+const taskClarificationTraceLimit = 100
+
+func formatTaskClarificationTrace(response string, styled bool) string {
+	payload := map[string]string{"response": truncateTaskClarificationTrace(response)}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return formatTaskTrace("Clarification", fmt.Sprintf("{response:%q}", payload["response"]), styled)
+	}
+	return formatTaskTrace("Clarification", string(encoded), styled)
+}
+
+func truncateTaskClarificationTrace(response string) string {
+	trimmed := strings.TrimSpace(response)
+	if len(trimmed) <= taskClarificationTraceLimit {
+		return trimmed
+	}
+	return trimmed[:taskClarificationTraceLimit] + "..."
+}
+
+func visualLineCount(value string, width int) int {
+	if width <= 0 || value == "" {
+		return 1
+	}
+	displayWidth := runewidth.StringWidth(value)
+	if displayWidth == 0 {
+		return 1
+	}
+	return (displayWidth + width - 1) / width
 }

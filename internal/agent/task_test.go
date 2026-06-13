@@ -1267,6 +1267,159 @@ func TestTaskWithOptionsResultRejectsMalformedToolInputBeforeExecution(t *testin
 	assert.Contains(t, conn.toolPrompts[1], "Failed to execute schema_tool: invalid tool input: field \"command\" must be a string")
 }
 
+func TestTaskWithOptionsResultPromptsAndExpandsScopeForOutOfRootFileEdit(t *testing.T) {
+	utils.GetLogger()
+	rootDir := t.TempDir()
+	outsideDir := t.TempDir()
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	targetPath := filepath.Join(outsideDir, "README.md")
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: tools.ToolNameFileEdit, ToolInput: map[string]any{"path": targetPath, "operation": "write", "content": "# test\n"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tools.ToolNameFileEdit: tools.NewFileEditTool(rootDir),
+			ToolNameFinalAnswer:    NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "write outside root", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.confirmations, 1)
+	assert.Contains(t, interaction.confirmations[0].Action, targetPath)
+	written, readErr := os.ReadFile(targetPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, "# test\n", string(written))
+	require.Len(t, conn.toolPrompts, 2)
+	assert.Contains(t, conn.toolPrompts[1], "Status: succeeded")
+	assert.Contains(t, conn.toolPrompts[1], "Tool: file_edit")
+	assert.Contains(t, conn.toolPrompts[1], "wrote 7 bytes")
+}
+
+func TestTaskWithOptionsResultPromptsAndExpandsScopeForOutOfRootFileSearch(t *testing.T) {
+	utils.GetLogger()
+	rootDir := t.TempDir()
+	outsideDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outsideDir, "match.txt"), []byte("needle\n"), 0o644))
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: tools.ToolNameFileSearch, ToolInput: map[string]any{"root": outsideDir, "contains": "needle"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tools.ToolNameFileSearch: tools.NewFileSearchTool(rootDir),
+			ToolNameFinalAnswer:      NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "search outside root", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.confirmations, 1)
+	assert.Contains(t, interaction.confirmations[0].Action, outsideDir)
+	require.Len(t, conn.toolPrompts, 2)
+	assert.Contains(t, conn.toolPrompts[1], "Status: succeeded")
+	assert.Contains(t, conn.toolPrompts[1], "Tool: file_search")
+	assert.Contains(t, conn.toolPrompts[1], "match.txt:1: needle")
+}
+
+func TestTaskWithOptionsResultReadApprovalDoesNotGrantWriteScope(t *testing.T) {
+	utils.GetLogger()
+	rootDir := t.TempDir()
+	outsideDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outsideDir, "match.txt"), []byte("needle\n"), 0o644))
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: tools.ToolNameFileSearch, ToolInput: map[string]any{"root": outsideDir, "contains": "needle"}},
+			{ToolUse: true, ToolName: tools.ToolNameFileEdit, ToolInput: map[string]any{"path": filepath.Join(outsideDir, "write.txt"), "operation": "write", "content": "hello"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tools.ToolNameFileSearch: tools.NewFileSearchTool(rootDir),
+			tools.ToolNameFileEdit:   tools.NewFileEditTool(rootDir),
+			ToolNameFinalAnswer:      NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "search then write outside root", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.confirmations, 2)
+	assert.Contains(t, interaction.confirmations[0].Action, tools.ToolNameFileSearch)
+	assert.Contains(t, interaction.confirmations[1].Action, tools.ToolNameFileEdit)
+}
+
+func TestTaskWithOptionsResultWriteApprovalDoesNotGrantSiblingWriteScope(t *testing.T) {
+	utils.GetLogger()
+	rootDir := t.TempDir()
+	outsideDir := t.TempDir()
+	firstPath := filepath.Join(outsideDir, "first.txt")
+	secondPath := filepath.Join(outsideDir, "second.txt")
+	interaction := &fakeTaskInteraction{decision: TaskConfirmationDecision{Allowed: true}}
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{ToolUse: true, ToolName: tools.ToolNameFileEdit, ToolInput: map[string]any{"path": firstPath, "operation": "write", "content": "one"}},
+			{ToolUse: true, ToolName: tools.ToolNameFileEdit, ToolInput: map[string]any{"path": secondPath, "operation": "write", "content": "two"}},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector: conn,
+		Tools: map[string]tools.Tool{
+			tools.ToolNameFileEdit: tools.NewFileEditTool(rootDir),
+			ToolNameFinalAnswer:    NewFinalAnswerTool(),
+		},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "write two files outside root", TaskOptions{
+		Interaction: interaction,
+		Dirs:        TaskDirs{RootDir: rootDir, CurrentDir: rootDir},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.confirmations, 2)
+	assert.Contains(t, interaction.confirmations[0].Action, firstPath)
+	assert.Contains(t, interaction.confirmations[1].Action, secondPath)
+}
+
 func TestTaskWithOptionsResultExecutesValidToolInput(t *testing.T) {
 	utils.GetLogger()
 

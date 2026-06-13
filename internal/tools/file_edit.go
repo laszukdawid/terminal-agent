@@ -25,7 +25,7 @@ func NewFileEditTool(workDir string) *FileEditTool {
 		"properties": map[string]any{
 			"path": map[string]string{
 				"type":        "string",
-				"description": "File path relative to the working directory (or absolute within it)",
+				"description": "File path relative to the task working directory, or absolute. Paths outside the current write scope require user permission.",
 			},
 			"operation": map[string]any{
 				"type":        "string",

@@ -135,16 +135,20 @@ the live `Output` sink in `tools.ToolExecutionContext`.
 ## Permission / confirmation flow
 
 Whether a tool runs without prompting is decided in two stages. First, a
-per-tool **permission category** sets the default: `read` never prompts,
-`write` is allowed when the target resolves inside the workspace root,
-`execute` always prompts, and any undeclared tool is treated as `execute`.
-Second, the `allow` / `deny` / `ask` rule engine overrides that default.
+per-tool **permission category** sets the default: `read` generally does not
+prompt, `file_search` prompts when the requested root is outside the current
+read scope, `write` is allowed when the target resolves inside the workspace
+root or an exact approved write path, `execute` always prompts, and any
+undeclared tool is treated as `execute`. Second, the `allow` / `deny` / `ask`
+rule engine overrides that default.
 
 ```mermaid
 flowchart TD
     START["tool call"] --> CAT{"permissionCategoryFor"}
-    CAT -->|read| AUTO["auto-allow"]
-    CAT -->|write| INROOT{"path inside<br/>workspace root?"}
+    CAT -->|read| READSCOPE{"read target<br/>inside scope?"}
+    READSCOPE -->|yes| AUTO["auto-allow"]
+    READSCOPE -->|no| RULES
+    CAT -->|write| INROOT{"path inside workspace<br/>or exact write scope?"}
     INROOT -->|yes| AUTO
     INROOT -->|no| RULES
     CAT -->|execute / undeclared| RULES{"ConfirmWithPolicy<br/>allow / deny / ask"}

@@ -6,8 +6,8 @@ Tool execution permissions can be set in `~/.config/terminal-agent/config.json` 
 
 Whether a tool prompts by default (when no `allow`/`deny`/`ask` rule matches) is driven by a per-tool **permission category** rather than a hardcoded list. Tools declare their category via the optional `tools.CategorizedTool` interface (`PermissionCategory()` returning `read`, `write`, or `execute`):
 
-- **read** (`read`, `file_search`, `websearch`, `ask_user`, `final_answer`) — never prompts.
-- **write** (`file_edit`) — does not prompt when the target path resolves inside the task workspace root; prompts otherwise. `file_edit` is already physically confined to the root by `ensureWithinRoot`, so the prompt branch is a backstop for future write tools.
+- **read** (`read`, `file_search`, `websearch`, `ask_user`, `final_answer`) — generally does not prompt. `file_search` prompts when the requested root is outside the current read scope; if approved, that directory is added to the read scope for the rest of the run.
+- **write** (`file_edit`) — does not prompt when the target path resolves inside the task workspace root; prompts otherwise. If the user approves an out-of-root file edit, that exact file path is added to the write scope for the rest of the run. Read-scope approvals do not grant write scope.
 - **execute** (`unix`, `python`) — always prompts; arbitrary effect.
 - **undeclared** (MCP tools, any new tool not implementing the interface) — treated as `execute` and gated by default. This is deliberate: a tool with no declared category must not run silently.
 

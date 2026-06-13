@@ -33,11 +33,66 @@ func normalizeExecutionContext(ctx ToolExecutionContext, fallbackDir string) (To
 	if err != nil {
 		return ToolExecutionContext{}, fmt.Errorf("failed to resolve current directory: %w", err)
 	}
-	if err := ensureWithinRoot(currentDir, rootDir); err != nil {
+	allowedRoots, err := normalizeAllowedRoots(rootDir, ctx.AllowedRootDirs)
+	if err != nil {
+		return ToolExecutionContext{}, err
+	}
+	if err := ensureWithinAllowedRoots(currentDir, allowedRoots); err != nil {
 		return ToolExecutionContext{}, err
 	}
 
-	return ToolExecutionContext{RootDir: rootDir, CurrentDir: currentDir, Output: ctx.Output, Progress: ctx.Progress}, nil
+	allowedPaths, err := normalizeAllowedPaths(ctx.AllowedPaths)
+	if err != nil {
+		return ToolExecutionContext{}, err
+	}
+
+	return ToolExecutionContext{RootDir: rootDir, CurrentDir: currentDir, AllowedRootDirs: allowedRoots, AllowedPaths: allowedPaths, Output: ctx.Output, Progress: ctx.Progress}, nil
+}
+
+func normalizeAllowedRoots(rootDir string, extraRoots []string) ([]string, error) {
+	roots := []string{rootDir}
+	for _, root := range extraRoots {
+		trimmed := strings.TrimSpace(root)
+		if trimmed == "" {
+			continue
+		}
+		absRoot, err := filepath.Abs(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve allowed root directory: %w", err)
+		}
+		roots = append(roots, absRoot)
+	}
+	return uniqueCleanPaths(roots), nil
+}
+
+func uniqueCleanPaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	unique := make([]string, 0, len(paths))
+	for _, value := range paths {
+		cleaned := filepath.Clean(value)
+		if seen[cleaned] {
+			continue
+		}
+		seen[cleaned] = true
+		unique = append(unique, cleaned)
+	}
+	return unique
+}
+
+func normalizeAllowedPaths(paths []string) ([]string, error) {
+	normalized := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		absPath, err := filepath.Abs(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve allowed path: %w", err)
+		}
+		normalized = append(normalized, absPath)
+	}
+	return uniqueCleanPaths(normalized), nil
 }
 
 func ensureWithinRoot(path string, root string) error {
@@ -49,6 +104,25 @@ func ensureWithinRoot(path string, root string) error {
 		return fmt.Errorf("path outside working directory: %s", path)
 	}
 	return nil
+}
+
+func ensureWithinAllowedRoots(path string, roots []string) error {
+	for _, root := range roots {
+		if ensureWithinRoot(path, root) == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("path outside allowed working directories: %s", path)
+}
+
+func ensureAllowedPath(path string, roots []string, exactPaths []string) error {
+	cleanPath := filepath.Clean(path)
+	for _, exactPath := range exactPaths {
+		if cleanPath == exactPath {
+			return nil
+		}
+	}
+	return ensureWithinAllowedRoots(cleanPath, roots)
 }
 
 func resolvePathInContext(path string, ctx ToolExecutionContext, fallbackDir string) (string, error) {
@@ -72,7 +146,7 @@ func resolvePathInContext(path string, ctx ToolExecutionContext, fallbackDir str
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve path: %w", err)
 	}
-	if err := ensureWithinRoot(absPath, normalizedCtx.RootDir); err != nil {
+	if err := ensureAllowedPath(absPath, normalizedCtx.AllowedRootDirs, normalizedCtx.AllowedPaths); err != nil {
 		return "", err
 	}
 
@@ -90,9 +164,9 @@ func resolveRootInContext(root string, ctx ToolExecutionContext, fallbackDir str
 	return resolvePathInContext(root, normalizedCtx, fallbackDir)
 }
 
-// PathWithinRoot reports whether path resolves to a location inside the
-// context's workspace root. An empty or unresolvable path returns false.
-func PathWithinRoot(path string, ctx ToolExecutionContext) bool {
+// PathAllowedInContext reports whether path resolves inside the context's
+// allowed roots or exact allowed paths. An empty or unresolvable path returns false.
+func PathAllowedInContext(path string, ctx ToolExecutionContext) bool {
 	_, err := resolvePathInContext(path, ctx, ctx.CurrentDir)
 	return err == nil
 }

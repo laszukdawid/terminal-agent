@@ -251,6 +251,20 @@ func TestSystemPromptTaskClarificationUsesTool(t *testing.T) {
 	}
 }
 
+func TestSystemPromptTaskFileToolsScopeConstraint(t *testing.T) {
+	prompt := SystemPromptTask
+
+	if !strings.Contains(prompt, "file_edit and file_search are confined to the current allowed scope") {
+		t.Fatal("expected task prompt to explain file tool scope confinement")
+	}
+	if !strings.Contains(prompt, "attempts outside that scope require user permission") {
+		t.Fatal("expected task prompt to explain permission-gated scope expansion")
+	}
+	if !strings.Contains(prompt, "Read approval does not grant write approval") {
+		t.Fatal("expected task prompt to explain read/write scope separation")
+	}
+}
+
 func requireWriteFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
