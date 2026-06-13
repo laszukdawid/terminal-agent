@@ -9,19 +9,25 @@ import (
 )
 
 const (
-	awkLongOptionFile    = "--file"
-	awkOptionAssign      = "-v"
-	awkOptionFile        = "-f"
-	awkOptionFieldSep    = "-F"
-	sedLongOptionFile    = "--file"
-	sedLongOptionInPlace = "--in-place"
-	sedOptionExpression  = "-e"
-	sedOptionFile        = "-f"
-	sedOptionInPlace     = "-i"
-	unixCommandCD        = "cd"
-	unixBracketTestClose = "]"
-	parentRelPath        = ".."
-	sedSubstituteCommand = 's'
+	awkLongOptionFile             = "--file"
+	awkOptionAssign               = "-v"
+	awkOptionFile                 = "-f"
+	awkOptionFieldSep             = "-F"
+	journalctlOptionFlush         = "--flush"
+	journalctlOptionRelinquishVar = "--relinquish-var"
+	journalctlOptionRotate        = "--rotate"
+	journalctlOptionSync          = "--sync"
+	journalctlOptionUpdateCatalog = "--update-catalog"
+	journalctlOptionVacuumPrefix  = "--vacuum-"
+	sedLongOptionFile             = "--file"
+	sedLongOptionInPlace          = "--in-place"
+	sedOptionExpression           = "-e"
+	sedOptionFile                 = "-f"
+	sedOptionInPlace              = "-i"
+	unixCommandCD                 = "cd"
+	unixBracketTestClose          = "]"
+	parentRelPath                 = ".."
+	sedSubstituteCommand          = 's'
 )
 
 type readOnlyCommandPolicy struct {
@@ -30,46 +36,47 @@ type readOnlyCommandPolicy struct {
 }
 
 var readOnlyUnixCommands = map[string]readOnlyCommandPolicy{
-	":":         {},
-	"[":         {validateArgs: bracketTestAllowsArgs},
-	"awk":       {validateArgs: awkAllowsArgs},
-	"basename":  {},
-	"cat":       {},
-	"cut":       {},
-	"date":      {},
-	"df":        {},
-	"diff":      {},
-	"dirname":   {},
-	"du":        {},
-	"echo":      {allowLoopVars: true},
-	"env":       {validateArgs: envAllowsArgs},
-	"false":     {validateArgs: noArgsAllowed},
-	"file":      {},
-	"find":      {validateArgs: findAllowsArgs},
-	"grep":      {},
-	"head":      {},
-	"id":        {},
-	"ls":        {},
-	"printenv":  {},
-	"printf":    {},
-	"ps":        {},
-	"pwd":       {},
-	"realpath":  {},
-	"rg":        {},
-	"sed":       {validateArgs: sedAllowsArgs},
-	"sha256sum": {},
-	"sort":      {},
-	"stat":      {},
-	"tail":      {},
-	"test":      {},
-	"tr":        {},
-	"tree":      {},
-	"true":      {validateArgs: noArgsAllowed},
-	"uname":     {},
-	"uniq":      {},
-	"wc":        {},
-	"which":     {},
-	"whoami":    {},
+	":":          {},
+	"[":          {validateArgs: bracketTestAllowsArgs},
+	"awk":        {validateArgs: awkAllowsArgs},
+	"basename":   {},
+	"cat":        {},
+	"cut":        {},
+	"date":       {},
+	"df":         {},
+	"diff":       {},
+	"dirname":    {},
+	"du":         {},
+	"echo":       {allowLoopVars: true},
+	"env":        {validateArgs: envAllowsArgs},
+	"false":      {validateArgs: noArgsAllowed},
+	"file":       {},
+	"find":       {validateArgs: findAllowsArgs},
+	"grep":       {},
+	"head":       {},
+	"id":         {},
+	"journalctl": {validateArgs: journalctlAllowsArgs},
+	"ls":         {},
+	"printenv":   {},
+	"printf":     {},
+	"ps":         {},
+	"pwd":        {},
+	"realpath":   {},
+	"rg":         {},
+	"sed":        {validateArgs: sedAllowsArgs},
+	"sha256sum":  {},
+	"sort":       {},
+	"stat":       {},
+	"tail":       {},
+	"test":       {},
+	"tr":         {},
+	"tree":       {},
+	"true":       {validateArgs: noArgsAllowed},
+	"uname":      {},
+	"uniq":       {},
+	"wc":         {},
+	"which":      {},
+	"whoami":     {},
 }
 
 var unsafeFindFlags = map[string]struct{}{
@@ -324,6 +331,21 @@ func envAllowsArgs(args []string) bool {
 	// still just alter the environment display for env itself.
 	for _, arg := range args {
 		if !strings.Contains(arg, "=") {
+			return false
+		}
+	}
+	return true
+}
+
+func journalctlAllowsArgs(args []string) bool {
+	for _, arg := range args {
+		switch {
+		case arg == journalctlOptionFlush,
+			arg == journalctlOptionRelinquishVar,
+			arg == journalctlOptionRotate,
+			arg == journalctlOptionSync,
+			arg == journalctlOptionUpdateCatalog,
+			strings.HasPrefix(arg, journalctlOptionVacuumPrefix):
 			return false
 		}
 	}

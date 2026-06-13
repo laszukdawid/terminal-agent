@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,6 +48,14 @@ func NewPythonTool(workDir string) *PythonTool {
 				"description": "Single argument value",
 			},
 			"description": "Arguments to pass to the Python command",
+		},
+		"timeout": map[string]string{
+			"type":        "string",
+			"description": "Optional Go duration string bounding this Python process (for example 30s, 2m, 1h). Omit for the safe default; set to 0 for unlimited.",
+		},
+		"max_bytes": map[string]any{
+			"type":        "integer",
+			"description": "Optional maximum bytes of Python output captured by the process runner. Omit for the safe default; set to 0 for unlimited. Live display and later task-history rendering have separate limits.",
 		},
 		"final": map[string]string{
 			"type":        "boolean",
@@ -111,11 +120,19 @@ func (t *PythonTool) RunSchema(input map[string]any) (string, error) {
 }
 
 func (t *PythonTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutionContext) (string, error) {
+	return t.RunSchemaContext(context.Background(), input, ctx)
+}
+
+func (t *PythonTool) RunSchemaContext(ctx context.Context, input map[string]any, execCtx ToolExecutionContext) (string, error) {
 	pathValue, _ := input["path"].(string)
 	code, _ := input["code"].(string)
 	runner, _ := input["runner"].(string)
 	uvMode, _ := input["uv_mode"].(string)
 	args := parseStringArray(input["args"])
+	opts, err := processOptionsFromInput(input)
+	if err != nil {
+		return "", err
+	}
 
 	if pathValue == "" && code == "" {
 		return "", fmt.Errorf("path or code is required")
@@ -129,7 +146,7 @@ func (t *PythonTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutio
 		return "", err
 	}
 
-	normalizedCtx, err := normalizeExecutionContext(ctx, t.workDir)
+	normalizedCtx, err := normalizeExecutionContext(execCtx, t.workDir)
 	if err != nil {
 		return "", err
 	}
@@ -150,14 +167,17 @@ func (t *PythonTool) RunSchemaWithContext(input map[string]any, ctx ToolExecutio
 		defer cleanup()
 	}
 
-	cmd := exec.Command(commandName, commandArgs...)
+	processCtx, cancel := processContext(ctx, opts.Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(processCtx, commandName, commandArgs...)
+	configureCommandCancellation(cmd)
 	cmd.Dir = normalizedCtx.CurrentDir
-	output, err := runCombinedOutput(cmd, ctx.Output)
+	result, err := runProcess(ctx, processCtx, cmd, execCtx.Output, opts)
 	if err != nil {
-		return string(output), fmt.Errorf("python execution failed: %w", err)
+		return result.Output, fmt.Errorf("python execution failed: %w", err)
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	return strings.TrimSpace(result.Output), nil
 }
 
 func (t *PythonTool) buildCommand(runner string, uvMode string, pathValue string, code string, args []string, currentDir string) (string, []string, string, func(), error) {

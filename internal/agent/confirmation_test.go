@@ -83,9 +83,11 @@ func TestConfirmWithPolicyAutoApproveRespectsDeny(t *testing.T) {
 
 func TestBuildActionString(t *testing.T) {
 	action := BuildActionString(tools.ToolNameUnix, map[string]any{
-		"command": "aws login sso",
-		"final":   true,
-		"flag":    "value",
+		"command":   "aws login sso",
+		"final":     true,
+		"timeout":   "2m",
+		"max_bytes": 65536,
+		"flag":      "value",
 	})
 
 	if action != tools.ToolNameUnix+"(\"aws login sso\", flag=\"value\")" {
