@@ -46,6 +46,8 @@ type Config interface {
 	GetTaskLiveOutputLimit() int
 	GetMemory() bool
 	SetMemory(bool) error
+	GetWebSearch() bool
+	SetWebSearch(bool) error
 	GetPermissions() Permissions
 	GetProjectContext() bool
 }
@@ -75,6 +77,7 @@ type config struct {
 	TaskTimeout         string            `json:"task_timeout,omitempty"`
 	TaskLiveOutputLimit *int              `json:"task_live_output_limit,omitempty"`
 	Memory              bool              `json:"memory"`
+	WebSearch           *bool             `json:"web_search,omitempty"`
 	ProjectContext      *bool             `json:"project_context,omitempty"`
 	Permissions         Permissions       `json:"permissions,omitempty"`
 }
@@ -498,6 +501,22 @@ func (config *config) GetMemory() bool {
 func (config *config) SetMemory(enabled bool) error {
 	log.Debugw("Setting memory", "enabled", enabled)
 	config.Memory = enabled
+	return SaveConfig(config)
+}
+
+// GetWebSearch reports whether the ask command may use the websearch tool.
+// It defaults to true when unset so web search is on out of the box; setting
+// web_search to false in config disables it for quicker, offline answers.
+func (config *config) GetWebSearch() bool {
+	if config.WebSearch == nil {
+		return true
+	}
+	return *config.WebSearch
+}
+
+func (config *config) SetWebSearch(enabled bool) error {
+	log.Debugw("Setting web search", "enabled", enabled)
+	config.WebSearch = &enabled
 	return SaveConfig(config)
 }
 

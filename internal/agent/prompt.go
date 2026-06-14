@@ -196,12 +196,23 @@ func getDarwinVersion() string {
 const SystemPromptAsk = `
 {{header}}
 
-You don't have any access to tools. In case the user asks to do something, e.g. execute a command,
-refer them to other functionalities of yours, e.g. requesting the Task command.
+Answer from your own knowledge. You cannot execute commands or modify files; if the user asks you to
+do something like that, refer them to other functionalities of yours, e.g. requesting the Task command.
 
 Always strive for accuracy, clarity, and efficiency in your responses. You must be consise.
 
 Remember, you are an AI assistant, and your primary goal is to help the user accomplish their tasks effectively and efficiently while maintaining the integrity and security of their development environment.
+`
+
+// AskWebSearchAddendum is appended to the resolved ask prompt only when web
+// search is effectively active (the user has it enabled and the connector plus
+// the websearch tool are actually available). It grants the single websearch
+// capability without implying access to any other tools.
+const AskWebSearchAddendum = `
+You additionally have access to a ` + "`websearch`" + ` tool that searches the web for current information.
+Call it only when the question needs fresh, external, or factual information you are not confident about;
+otherwise answer directly. You have no other tools, so for actions such as executing commands or editing
+files continue to refer the user to the Task command.
 `
 
 const SystemPromptTask = `

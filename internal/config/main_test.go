@@ -349,6 +349,27 @@ func TestGetProjectContext(t *testing.T) {
 	})
 }
 
+func TestGetWebSearch(t *testing.T) {
+	t.Run("defaults to true when nil", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		assert.True(t, cfg.GetWebSearch())
+	})
+
+	t.Run("returns true when explicitly set", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		val := true
+		cfg.WebSearch = &val
+		assert.True(t, cfg.GetWebSearch())
+	})
+
+	t.Run("returns false when explicitly disabled", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		val := false
+		cfg.WebSearch = &val
+		assert.False(t, cfg.GetWebSearch())
+	})
+}
+
 func TestGetTaskTimeout(t *testing.T) {
 	tests := []struct {
 		name        string

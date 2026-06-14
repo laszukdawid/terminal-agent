@@ -25,6 +25,9 @@ agent ask --plain "Explain how pipes work in bash"
 # Stream the response (see output as it's generated)
 agent ask --stream "What are the benefits of using Go for CLI applications?"
 
+# Disable web search for a quicker, offline answer
+agent ask --websearch=false "Explain the CAP theorem"
+
 # Include file context
 agent ask --context README.md "Summarize the setup steps"
 
@@ -47,6 +50,7 @@ agent ask "what happened here" -5
 | `--stream` | `-s` | `false` | Stream the response to the stdout as it's generated |
 | `--plain` | `-k` | `false` | Render the response as plain text (no markdown) |
 | `--memory` | `-M` | `false` | Include memory entries in the system prompt |
+| `--websearch` | `-w` | From config (`true`) | Allow the answer to use web search; pass `--websearch=false` for quicker answers |
 | `--context` | `-c` | `[]` | Include file content as context (repeatable) |
 | `--use-terminal-context` |  | `0` (off) | Include latest N terminal entries as context; N must be 1-5 (requires bash-reader plugin) |
 | `--terminal-context-1` | `-1` | `false` | Shortcut for `--use-terminal-context 1` |
@@ -92,6 +96,26 @@ When using the `--stream` flag, you'll see the output appear gradually as it's g
 ```sh
 agent ask --stream "How does Docker containerization work?"
 ```
+
+## Web Search
+
+By default, `ask` may use the built-in `websearch` tool to pull in up-to-date information from the internet before answering. The model decides whether a given question needs a search; questions it can answer from its own knowledge are answered directly.
+
+Web search activates only when all of the following hold:
+
+- It is enabled (the default; configurable with `web_search` in config or the `--websearch` flag).
+- The `TAVILY_KEY` environment variable is set (the `websearch` tool requires it).
+- The selected provider supports tool calling (the local `llama` provider does not).
+
+When any of these is not met, `ask` answers in a single shot without searching, so there is no error or slowdown if web search is unavailable.
+
+Use `--websearch=false` when you want the quickest possible answer and do not need fresh information:
+
+```sh
+agent ask --websearch=false "What is a mutex?"
+```
+
+To turn web search off for every `ask` by default, set `"web_search": false` in `~/.config/terminal-agent/config.json`.
 
 ## Logging
 

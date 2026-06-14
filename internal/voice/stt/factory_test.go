@@ -45,5 +45,7 @@ func (c factoryConfig) GetTaskTimeout() time.Duration                  { return 
 func (c factoryConfig) GetTaskLiveOutputLimit() int                    { return 0 }
 func (c factoryConfig) GetMemory() bool                                { return false }
 func (c factoryConfig) SetMemory(bool) error                           { return nil }
+func (c factoryConfig) GetWebSearch() bool                             { return true }
+func (c factoryConfig) SetWebSearch(bool) error                        { return nil }
 func (c factoryConfig) GetPermissions() config.Permissions             { return config.Permissions{} }
 func (c factoryConfig) GetProjectContext() bool                        { return false }
