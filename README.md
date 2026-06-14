@@ -54,7 +54,17 @@ brew install laszukdawid/tap/terminal-agent
 
 This will install the `agent` binary and keep it updated with `brew upgrade`.
 
-### Option 2: Download pre-built binary
+### Option 2: Snap (Recommended for Linux)
+
+If you use a Linux distribution with [Snap](https://snapcraft.io/docs/installing-snapd), install Terminal Agent with:
+
+```sh
+sudo snap install terminal-agent --classic
+```
+
+This installs the `agent` command and keeps it updated automatically through Snap. Classic confinement is required because Terminal Agent works with your shell, project files, and local configuration.
+
+### Option 3: Download pre-built binary
 
 Download the `terminal-agent_*_*.tar.gz` archive from [Releases](https://github.com/laszukdawid/terminal-agent/releases). Choose the appropriate version for your system:
 - **macOS (Apple Silicon)**: `terminal-agent_Darwin_arm64.tar.gz`
@@ -72,7 +82,7 @@ mv agent ~/.local/bin/  # or another directory in your PATH
 
 To test the installation: `agent --help`
 
-### Option 3: go install (Recommended for Go users)
+### Option 4: go install (Recommended for Go users)
 
 If you have Go installed, you can install directly from the repository:
 
@@ -82,7 +92,7 @@ go install github.com/laszukdawid/terminal-agent/cmd/agent@latest
 
 This will install the `agent` binary in your `$GOPATH/bin` directory (typically `~/go/bin`). Make sure this directory is in your PATH.
 
-### Option 4: Compile from source
+### Option 5: Compile from source
 
 <img src="./docs/assets/gui.png" width="400" alt="example of simple gui" />
 

@@ -108,6 +108,29 @@ release:
   mode: replace
   name_template: "{{.ProjectName}} v{{.Version}}"
 
+# Snapcraft package configuration
+snapcrafts:
+  - id: terminal-agent
+    ids:
+      - agent
+    name: terminal-agent
+    title: Terminal Agent
+    publish: true
+    summary: LLM-powered assistant for your terminal.
+    description: |
+      Terminal Agent is a CLI-first AI assistant for asking questions, running supervised terminal workflows, and switching between hosted model APIs and local runtimes.
+    grade: stable
+    confinement: classic
+    license: Apache-2.0
+    base: core22
+    channel_templates:
+      - stable
+    apps:
+      terminal-agent:
+        command: agent
+        aliases:
+          - agent
+
 # Homebrew Tap configuration
 homebrew_casks:
   - name: terminal-agent

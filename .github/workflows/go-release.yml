@@ -1,5 +1,5 @@
 # This workflow builds and releases the project using GoReleaser
-# It also updates the Homebrew tap automatically
+# It also updates the Homebrew tap and Snap Store automatically
 # For more information see: https://goreleaser.com/ci/actions/
 
 name: Go Release
@@ -29,6 +29,9 @@ jobs:
       - name: Install GUI build dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
 
+      - name: Install Snapcraft
+        run: sudo snap install snapcraft --classic
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -40,3 +43,4 @@ jobs:
           # Token for updating the Homebrew tap repository
           # This should be a PAT with repo scope for laszukdawid/homebrew-tap
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

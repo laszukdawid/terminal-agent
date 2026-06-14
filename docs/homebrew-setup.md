@@ -1,6 +1,6 @@
-# Homebrew Distribution Setup
+# Release Distribution Setup
 
-This document explains how to set up Homebrew distribution for Terminal Agent.
+This document explains how to set up Homebrew and Snap distribution for Terminal Agent.
 
 ## Overview
 
@@ -8,6 +8,7 @@ Terminal Agent uses [GoReleaser](https://goreleaser.com/) to automate the releas
 - Building binaries for multiple platforms (Linux/macOS, amd64/arm64)
 - Creating GitHub releases with changelogs
 - Automatically updating the Homebrew tap formula
+- Publishing the Linux CLI snap to the Snap Store
 
 ## Prerequisites
 
@@ -47,6 +48,19 @@ Add the token as a repository secret:
 3. Name: `HOMEBREW_TAP_GITHUB_TOKEN`
 4. Value: (paste the token from step 2)
 
+### 4. Create Snap Store Credentials
+
+Register the `terminal-agent` snap name in the [Snapcraft dashboard](https://snapcraft.io/snaps), then export store credentials for GitHub Actions:
+
+```sh
+snapcraft login
+snapcraft export-login --snaps terminal-agent --channels stable -
+```
+
+Add the exported value as a repository secret named `SNAPCRAFT_STORE_CREDENTIALS`.
+
+The snap uses classic confinement because Terminal Agent needs normal shell, project-file, and configuration access. Classic confinement requires Snap Store review before stable publication.
+
 ## How It Works
 
 ### Release Flow
@@ -59,6 +73,7 @@ Add the token as a repository secret:
    - Generates checksums
    - Creates a GitHub release
    - Updates the formula in `laszukdawid/homebrew-tap`
+   - Publishes the `terminal-agent` snap to the stable channel
 
 ### Formula Auto-Update
 
@@ -103,6 +118,16 @@ agent --help
 brew upgrade terminal-agent
 ```
 
+### Test Snap Installation
+
+After a release, test the installation:
+
+```sh
+sudo snap install terminal-agent --classic
+agent --help
+sudo snap refresh terminal-agent
+```
+
 ## Troubleshooting
 
 ### Formula Not Updating
@@ -111,6 +136,13 @@ brew upgrade terminal-agent
 2. Verify `HOMEBREW_TAP_GITHUB_TOKEN` secret is set correctly
 3. Ensure the token has `repo` scope
 4. Check if the tap repository exists and is accessible
+
+### Snap Not Publishing
+
+1. Check the GitHub Actions logs for Snapcraft errors
+2. Verify `SNAPCRAFT_STORE_CREDENTIALS` is set correctly
+3. Ensure the `terminal-agent` snap name is registered in Snapcraft
+4. Confirm classic confinement has been approved for stable publication
 
 ### Installation Fails
 
@@ -144,6 +176,6 @@ For most projects, a personal tap is sufficient and easier to maintain.
 
 ## Files Reference
 
-- [`.goreleaser.yaml`](../.goreleaser.yaml) - GoReleaser configuration
-- [`.github/workflows/go-release.yml`](../.github/workflows/go-release.yml) - Release workflow
-- [`Formula/terminal-agent.rb`](../Formula/terminal-agent.rb) - Template formula (reference only)
+- `.goreleaser.yaml` - GoReleaser configuration
+- `.github/workflows/go-release.yml` - Release workflow
+- `Formula/terminal-agent.rb` - Template formula (reference only)

@@ -9,6 +9,16 @@ Terminal Agent is an LLM-powered CLI tool designed to help you interact with you
 
 ## Installation
 
+### Snap on Linux
+
+If your Linux distribution supports [Snap](https://snapcraft.io/docs/installing-snapd), install Terminal Agent with:
+
+```sh
+sudo snap install terminal-agent --classic
+```
+
+This installs the `agent` command and keeps it updated automatically. Classic confinement is required because Terminal Agent works with your shell, project files, and local configuration.
+
 ### Download Pre-built Binary (Recommended)
 
 The easiest way to get started is to download the pre-built binary from [GitHub Releases](https://github.com/laszukdawid/terminal-agent/releases):
