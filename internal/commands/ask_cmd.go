@@ -49,6 +49,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 			streamFlag, _ := flags.GetBool("stream")
 			plainFlag, _ := flags.GetBool("plain")
 			memoryFlag, _ := flags.GetBool("memory")
+			webSearchFlag, _ := flags.GetBool("websearch")
 
 			// Concatenate all remaining args to form the query
 			userQuestion := strings.Join(args, " ")
@@ -68,6 +69,7 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 				ContextFiles:         contextFiles,
 				TerminalContextCount: terminalContextCount,
 				Stream:               streamFlag,
+				UseWebSearch:         webSearchFlag,
 				Device:               device,
 				Config:               execConfig,
 			})
@@ -122,6 +124,12 @@ func NewQuestionCommand(config config.Config) *cobra.Command {
 
 	// 'memory' flag whether to include memory in the system prompt (default: false)
 	cmd.Flags().BoolP("memory", "M", false, "Include memory in the system prompt")
+
+	// 'websearch' flag whether ask may use the websearch tool. Defaults to the
+	// config value (on unless disabled); use --websearch=false for quicker,
+	// offline answers. Web search additionally requires TAVILY_KEY and a
+	// tool-calling provider, otherwise ask answers without it.
+	cmd.Flags().BoolP("websearch", "w", config.GetWebSearch(), "Allow web search for up-to-date information (use --websearch=false for quicker answers)")
 
 	// 'context' flag to include file contents as context (can be used multiple times)
 	cmd.Flags().StringArrayVarP(&contextFiles, "context", "c", []string{}, "Include file content as context (can be used multiple times)")

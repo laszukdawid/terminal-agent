@@ -7,7 +7,6 @@ import (
 
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
-	"github.com/laszukdawid/terminal-agent/internal/connector"
 	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 )
 
@@ -22,6 +21,7 @@ type AskRequest struct {
 	ContextFiles         []string
 	TerminalContextCount int
 	Stream               bool
+	UseWebSearch         bool
 	Device               string
 	Config               config.Config
 }
@@ -74,23 +74,41 @@ func (s *service) AskEvents(ctx context.Context, req AskRequest) (<-chan Event, 
 			return
 		}
 
-		qParams := connector.QueryParams{
-			UserPrompt: &userQuestion,
-			SysPrompt:  &prompts.Ask,
-			Stream:     req.Stream,
-			MaxTokens:  req.Config.GetMaxTokens(),
-			Device:     req.Device,
+		opts := internalagent.AskOptions{
+			Query:        userQuestion,
+			UseWebSearch: req.UseWebSearch,
+			Stream:       req.Stream,
+			OnStep: func(step internalagent.AskStep) {
+				recorder.Write(sessionlog.Record{
+					Type:      sessionlog.RecordToolCall,
+					Kind:      string(RunKindAsk),
+					Iteration: step.Iteration,
+					ToolName:  step.ToolName,
+					ToolInput: step.ToolInput,
+				})
+				result := sessionlog.Record{
+					Type:       sessionlog.RecordToolResult,
+					Kind:       string(RunKindAsk),
+					Iteration:  step.Iteration,
+					ToolName:   step.ToolName,
+					ToolResult: step.ToolResult,
+				}
+				if step.Err != nil {
+					result.Error = step.Err.Error()
+				}
+				recorder.Write(result)
+			},
 		}
 
 		if req.Stream {
-			qParams.OnStream = func(chunk string) error {
+			opts.OnStream = func(chunk string) error {
 				event := newEvent(RunKindAsk, EventOutputDelta)
 				event.Text = chunk
 				return emitEvent(ctx, events, event)
 			}
 		}
 
-		response, err := agentInstance.Connector.Query(ctx, &qParams)
+		response, err := agentInstance.QuestionWithWebSearch(ctx, opts)
 		if err != nil {
 			failed := newEvent(RunKindAsk, EventFailed)
 			failed.Err = err

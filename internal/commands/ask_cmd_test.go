@@ -3,10 +3,40 @@ package commands
 import (
 	"testing"
 
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestWebSearchFlag verifies the --websearch flag default is bound to the config
+// value (on by default) and can be explicitly overridden on the command line.
+func TestWebSearchFlag(t *testing.T) {
+	t.Run("defaults to config value when on", func(t *testing.T) {
+		cmd := NewQuestionCommand(config.NewDefaultConfig())
+		val, err := cmd.Flags().GetBool("websearch")
+		require.NoError(t, err)
+		assert.True(t, val, "web search defaults on")
+	})
+
+	t.Run("config disabled flips the default off", func(t *testing.T) {
+		cfg := config.NewDefaultConfig()
+		off := false
+		cfg.WebSearch = &off
+		cmd := NewQuestionCommand(cfg)
+		val, err := cmd.Flags().GetBool("websearch")
+		require.NoError(t, err)
+		assert.False(t, val, "config default carries into the flag default")
+	})
+
+	t.Run("--websearch=false overrides an on default", func(t *testing.T) {
+		cmd := NewQuestionCommand(config.NewDefaultConfig())
+		require.NoError(t, cmd.Flags().Parse([]string{"--websearch=false"}))
+		val, err := cmd.Flags().GetBool("websearch")
+		require.NoError(t, err)
+		assert.False(t, val)
+	})
+}
 
 // TestMemoryFlagBehavior tests the logic that determines when memory should be included
 func TestMemoryFlagBehavior(t *testing.T) {

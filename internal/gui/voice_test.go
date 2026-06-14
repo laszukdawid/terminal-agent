@@ -257,6 +257,8 @@ func (c voiceGUIConfig) GetTaskTimeout() time.Duration                  { return
 func (c voiceGUIConfig) GetTaskLiveOutputLimit() int                    { return 0 }
 func (c voiceGUIConfig) GetMemory() bool                                { return false }
 func (c voiceGUIConfig) SetMemory(bool) error                           { return nil }
+func (c voiceGUIConfig) GetWebSearch() bool                             { return true }
+func (c voiceGUIConfig) SetWebSearch(bool) error                        { return nil }
 func (c voiceGUIConfig) GetPermissions() config.Permissions             { return config.Permissions{} }
 func (c voiceGUIConfig) GetProjectContext() bool                        { return false }
 

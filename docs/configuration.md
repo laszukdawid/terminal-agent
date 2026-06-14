@@ -225,6 +225,21 @@ export YZMA_LIB=$HOME/.local/share/yzma/lib
 
 For persistent CLI configuration, add this to your shell profile (`.bashrc`, `.zshrc`, etc.).
 
+### Web Search
+
+The `ask` command can use the built-in `websearch` tool to fetch up-to-date information before answering. It is enabled by default and relies on the [Tavily](https://tavily.com) API.
+
+| Environment Variable | Description |
+|----------------------|-------------|
+| `TAVILY_KEY` | API key used by the `websearch` tool. Web search is skipped when it is unset. |
+
+To control web search:
+
+- Per run: pass `--websearch=false` to `agent ask` for a quicker answer with no search.
+- Globally: set `"web_search": false` in `~/.config/terminal-agent/config.json` (the key defaults to `true` when omitted).
+
+Web search additionally requires a provider that supports tool calling; the local `llama` provider does not, so `ask` answers without searching there. See [Ask Command](./commands/ask.md#web-search) for details.
+
 ### GUI Environment Loading
 
 Desktop-launched GUI processes usually do not source shell startup files directly. On startup, `agent-gui` resolves supported environment variables in this order:
