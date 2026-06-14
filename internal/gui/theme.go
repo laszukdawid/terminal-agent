@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -83,11 +84,32 @@ var (
 // so standard widgets pick up the look without per-widget styling.
 type brandTheme struct{}
 
+type forcedVariantTheme struct {
+	fyne.Theme
+	variant fyne.ThemeVariant
+}
+
 type promptEntryTheme struct{ fyne.Theme }
 
-var _ fyne.Theme = brandTheme{}
+var (
+	_ fyne.Theme = brandTheme{}
+	_ fyne.Theme = forcedVariantTheme{}
+)
 
-func newBrandTheme() fyne.Theme { return brandTheme{} }
+func newBrandTheme() fyne.Theme {
+	switch os.Getenv("FYNE_THEME") {
+	case "light":
+		return forcedVariantTheme{Theme: brandTheme{}, variant: theme.VariantLight}
+	case "dark":
+		return forcedVariantTheme{Theme: brandTheme{}, variant: theme.VariantDark}
+	default:
+		return brandTheme{}
+	}
+}
+
+func (t forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	return t.Theme.Color(name, t.variant)
+}
 
 func (t promptEntryTheme) Size(name fyne.ThemeSizeName) float32 {
 	if name == theme.SizeNameInputBorder {
@@ -104,6 +126,12 @@ func brandPaletteForVariant(variant fyne.ThemeVariant) brandPalette {
 }
 
 func currentBrandPalette() brandPalette {
+	switch os.Getenv("FYNE_THEME") {
+	case "light":
+		return brandLightPalette
+	case "dark":
+		return brandDarkPalette
+	}
 	if fyne.CurrentApp() == nil {
 		return brandDarkPalette
 	}

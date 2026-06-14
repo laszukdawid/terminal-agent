@@ -9,7 +9,33 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 )
+
+type screenshotApp struct {
+	fyne.App
+	settings *screenshotSettings
+}
+
+func (a *screenshotApp) Settings() fyne.Settings {
+	return a.settings
+}
+
+type screenshotSettings struct {
+	fyne.Settings
+	variant fyne.ThemeVariant
+}
+
+func (s *screenshotSettings) ThemeVariant() fyne.ThemeVariant {
+	return s.variant
+}
+
+func screenshotThemeVariant() fyne.ThemeVariant {
+	if os.Getenv("GUI_THEME_VARIANT") == "light" {
+		return theme.VariantLight
+	}
+	return theme.VariantDark
+}
 
 // TestCaptureScreenshots renders the real App in several representative states
 // and writes them to PNGs using Fyne's software renderer, so the GUI can be
@@ -32,9 +58,18 @@ func TestCaptureScreenshots(t *testing.T) {
 		t.Fatalf("mkdir screenshots: %v", err)
 	}
 
+	baseApp := test.NewApp()
+	wrappedApp := &screenshotApp{
+		App: baseApp,
+		settings: &screenshotSettings{
+			Settings: baseApp.Settings(),
+			variant:  screenshotThemeVariant(),
+		},
+	}
+
 	g := NewApp(&recordingService{}, voiceGUIConfig{}, AppOptions{
 		AppID:   "terminal-agent-screenshot",
-		FyneApp: test.NewApp(),
+		FyneApp: wrappedApp,
 	})
 	t.Cleanup(func() { g.fyneApp.Quit() })
 
