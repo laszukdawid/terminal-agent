@@ -62,6 +62,7 @@ type popupWindow struct {
 	historySection  *fyne.Container
 	historyBody     *fyne.Container
 	historyDetail   *widget.PopUp
+	settings        *settingsDialog
 	outputField     *widget.RichText
 	transcriptBody  *fyne.Container
 	outputBody      fyne.CanvasObject

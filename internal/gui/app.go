@@ -222,8 +222,13 @@ func (g *App) wire() {
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
 	g.popup.input.onVoiceToggle = g.toggleVoice
 	g.popup.window.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
-		if key.Name == fyne.KeyEscape && g.popup.dismissHistoryDetail() {
-			return
+		if key.Name == fyne.KeyEscape {
+			if g.popup.dismissHistoryDetail() {
+				return
+			}
+			if g.popup.dismissSettingsIfUnchanged() {
+				return
+			}
 		}
 		if key.Name == fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey()) {
 			g.toggleVoice()

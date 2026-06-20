@@ -119,11 +119,60 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	updateHints(options.InitialProvider)
 
 	dlg = dialog.NewCustomWithoutButtons("Settings", content, win)
-	if options.OnClosed != nil {
-		dlg.SetOnClosed(options.OnClosed)
+
+	// Escape closes the panel only when nothing has been edited; pending edits
+	// must be resolved explicitly via Save or Cancel so they are never lost to a
+	// stray keypress. The baseline is captured after updateHints so a value
+	// auto-populated while building the dialog does not count as an edit.
+	settings := &settingsDialog{
+		dialog:           dlg,
+		provider:         providerInput,
+		model:            modelEntry,
+		baselineProvider: providerInput.Text,
+		baselineModel:    modelEntry.Text,
 	}
+	providerInput.onEscape = func() { p.dismissSettingsIfUnchanged() }
+	modelEntry.onEscape = func() { p.dismissSettingsIfUnchanged() }
+	p.settings = settings
+	dlg.SetOnClosed(func() {
+		p.settings = nil
+		if options.OnClosed != nil {
+			options.OnClosed()
+		}
+	})
 	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
+}
+
+// settingsDialog tracks an open Settings panel so Escape can dismiss it only
+// when the user has not edited any field.
+type settingsDialog struct {
+	dialog           dialog.Dialog
+	provider         *providerEntry
+	model            *settingsTextEntry
+	baselineProvider string
+	baselineModel    string
+}
+
+// changed reports whether the provider or model differs from the values shown
+// when the dialog opened, ignoring surrounding whitespace.
+func (s *settingsDialog) changed() bool {
+	return strings.TrimSpace(s.provider.Text) != strings.TrimSpace(s.baselineProvider) ||
+		strings.TrimSpace(s.model.Text) != strings.TrimSpace(s.baselineModel)
+}
+
+// dismissSettingsIfUnchanged closes the Settings dialog on Escape when it is
+// open and has no unsaved edits. It returns true when a Settings dialog is open
+// so the caller treats Escape as handled; pending edits leave the dialog open
+// to be resolved via Save or Cancel.
+func (p *popupWindow) dismissSettingsIfUnchanged() bool {
+	if p.settings == nil {
+		return false
+	}
+	if !p.settings.changed() {
+		p.settings.dialog.Hide()
+	}
+	return true
 }
 
 func environmentSummaryText(result EnvironmentLoadResult) string {

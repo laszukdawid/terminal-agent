@@ -28,6 +28,7 @@ type popupEntry struct {
 
 type settingsTextEntry struct {
 	widget.Entry
+	onEscape func()
 }
 
 func newPopupEntry(app fyne.App) *popupEntry {
@@ -45,6 +46,17 @@ func newSettingsTextEntry(initial string) *settingsTextEntry {
 	entry.Wrapping = fyne.TextWrap(fyne.TextTruncateClip)
 	entry.SetText(initial)
 	return entry
+}
+
+// TypedKey routes Escape to onEscape when set so the Settings dialog can close
+// on Escape while the model field has focus; every other key keeps the default
+// entry editing behavior.
+func (e *settingsTextEntry) TypedKey(key *fyne.KeyEvent) {
+	if key.Name == fyne.KeyEscape && e.onEscape != nil {
+		e.onEscape()
+		return
+	}
+	e.Entry.TypedKey(key)
 }
 
 func (e *popupEntry) FocusGained() {

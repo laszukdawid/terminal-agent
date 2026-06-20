@@ -17,6 +17,7 @@ type providerEntry struct {
 	shown []string
 	query string
 
+	onEscape func()
 }
 
 // newProviderEntry builds an editable autocomplete field for choosing a
@@ -80,6 +81,18 @@ func (e *providerEntry) FocusGained() {
 
 func (e *providerEntry) FocusLost() {
 	e.CompletionEntry.FocusLost()
+}
+
+// TypedKey routes Escape to onEscape when set so the Settings dialog can close
+// on Escape while the provider field has focus. While the completion popup is
+// open its navigable list owns key handling and closes the popup on Escape, so
+// this override is only reached once the popup is gone.
+func (e *providerEntry) TypedKey(key *fyne.KeyEvent) {
+	if key.Name == fyne.KeyEscape && e.onEscape != nil {
+		e.onEscape()
+		return
+	}
+	e.CompletionEntry.TypedKey(key)
 }
 
 // matchSegments splits text into RichText segments, emphasizing the first
