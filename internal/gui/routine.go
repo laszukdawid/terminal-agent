@@ -136,11 +136,13 @@ func (g *App) showRoutineDetail(view appservice.RoutineView) {
 	palette := currentBrandPalette()
 	r := view.Routine
 
-	// Emphasized routine name (large, accent), with the status dot.
+	// Emphasized routine name (large, accent) with the status dot on the left, and
+	// the routine actions in the top-right corner of the header.
 	title := canvas.NewText(routineTitle(r), palette.accentGreen)
 	title.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	title.TextSize = theme.TextSize() + 5
-	titleRow := container.NewHBox(vCenter(newStatusDot(routineStatusColor(view.Status))), vCenter(title))
+	titleLeft := container.NewHBox(vCenter(newStatusDot(routineStatusColor(view.Status))), vCenter(title))
+	header := container.NewBorder(nil, nil, titleLeft, vCenter(g.routineHeaderActions(view)), nil)
 
 	settings := fmt.Sprintf(
 		"Status: %s\nSchedule: %s\nProvider / Model: %s / %s\nTimeout: %s\nTokens: %s\nTools: %s",
@@ -164,7 +166,7 @@ func (g *App) showRoutineDetail(view appservice.RoutineView) {
 	promptBox := borderedBox(container.NewPadded(promptBody), palette.borderBright)
 
 	objects := []fyne.CanvasObject{
-		titleRow,
+		header,
 		settingsLabel,
 		brandSeparator(),
 		brandSectionLabel("PROMPT"),
@@ -173,7 +175,6 @@ func (g *App) showRoutineDetail(view appservice.RoutineView) {
 		brandSectionLabel("RUN LOGS"),
 	}
 	objects = append(objects, g.routineLogList(r.ID)...)
-	objects = append(objects, brandSeparator(), g.routineActionBar(view))
 
 	g.popup.presentRoutineDetail(container.NewVBox(objects...))
 }
@@ -202,7 +203,9 @@ func (g *App) routineLogList(id string) []fyne.CanvasObject {
 	return rows
 }
 
-func (g *App) routineActionBar(view appservice.RoutineView) fyne.CanvasObject {
+// routineHeaderActions builds the routine action buttons shown in the top-right
+// of the detail header.
+func (g *App) routineHeaderActions(view appservice.RoutineView) fyne.CanvasObject {
 	r := view.Routine
 	runButton := widget.NewButton("Run now", func() { g.runRoutineNow(r.ID) })
 	runButton.Importance = widget.HighImportance
@@ -224,7 +227,7 @@ func (g *App) routineActionBar(view appservice.RoutineView) fyne.CanvasObject {
 	deleteButton := widget.NewButton("Delete", func() { g.confirmDeleteRoutine(r.ID) })
 	deleteButton.Importance = widget.DangerImportance
 
-	return container.NewHBox(runButton, toggleButton, editButton, layout.NewSpacer(), deleteButton)
+	return container.NewHBox(runButton, toggleButton, editButton, deleteButton)
 }
 
 func (g *App) openRoutineLog(ref appservice.RoutineLogRef) {
@@ -436,17 +439,20 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 	cancel := widget.NewButton("Cancel", func() { dlg.Hide() })
 	footer := container.NewBorder(nil, nil, nil, container.NewHBox(cancel, save))
 
-	// Scroll only the fields; keep the error message and Save/Cancel pinned at the
-	// bottom so they are always reachable on a short window.
-	fields := container.NewVScroll(container.NewVBox(form, toolsField, enabled))
+	// Pin the error + Save/Cancel at the bottom and scroll only the fields. Sizing
+	// the field scroll to the fields' natural height (capped to the window) keeps
+	// the dialog lean (no wasted gap) while the footer stays visible; a tall form
+	// scrolls instead of overflowing.
+	fields := container.NewVBox(form, toolsField, enabled)
 	bottom := container.NewVBox(errorLabel, footer)
-	content := container.NewBorder(nil, bottom, nil, nil, fields)
+	scroll := container.NewVScroll(fields)
+	scroll.SetMinSize(fyne.NewSize(560, routineScrollHeight(win, fields, bottom)))
 	title := "New routine"
 	if isEdit {
 		title = "Edit routine"
 	}
-	dlg = dialog.NewCustomWithoutButtons(title, content, win)
-	dlg.Resize(fyne.NewSize(600, routineFormHeight(win)))
+	dlg = dialog.NewCustomWithoutButtons(title, container.NewBorder(nil, bottom, nil, nil, scroll), win)
+	dlg.Resize(fyne.NewSize(600, 0))
 	dlg.SetOnClosed(g.FocusInput)
 	dlg.Show()
 }
@@ -521,11 +527,12 @@ func (g *App) showRoutineDefaultsForm() {
 	cancel := widget.NewButton("Cancel", func() { dlg.Hide() })
 	footer := container.NewBorder(nil, nil, nil, container.NewHBox(cancel, save))
 
-	fields := container.NewVScroll(container.NewVBox(enabled, form))
+	fields := container.NewVBox(enabled, form)
 	bottom := container.NewVBox(errorLabel, footer)
-	content := container.NewBorder(nil, bottom, nil, nil, fields)
-	dlg = dialog.NewCustomWithoutButtons("Routine defaults", content, win)
-	dlg.Resize(fyne.NewSize(520, routineFormHeight(win)))
+	scroll := container.NewVScroll(fields)
+	scroll.SetMinSize(fyne.NewSize(480, routineScrollHeight(win, fields, bottom)))
+	dlg = dialog.NewCustomWithoutButtons("Routine defaults", container.NewBorder(nil, bottom, nil, nil, scroll), win)
+	dlg.Resize(fyne.NewSize(520, 0))
 	dlg.Show()
 }
 
@@ -567,16 +574,20 @@ func formFieldLabel(text string) fyne.CanvasObject {
 	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 }
 
-// routineFormHeight sizes the create/edit dialog to fit within the window.
-func routineFormHeight(win fyne.Window) float32 {
-	available := win.Canvas().Size().Height - 48
-	if available > 640 {
-		return 640
+// routineScrollHeight sizes the scrolling field area to the fields' natural
+// height so the dialog hugs the content (no wasted space above the pinned
+// footer), capped at the window height (less the footer) so a tall form scrolls
+// instead of overflowing.
+func routineScrollHeight(win fyne.Window, fields, footer fyne.CanvasObject) float32 {
+	available := win.Canvas().Size().Height - 120 - footer.MinSize().Height
+	if available < 200 {
+		available = 200
 	}
-	if available < 360 {
-		return 360
+	natural := fields.MinSize().Height
+	if natural > available {
+		return available
 	}
-	return available
+	return natural
 }
 
 func routineTitle(r routines.Routine) string {
