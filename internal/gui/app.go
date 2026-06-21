@@ -98,6 +98,9 @@ func (g *App) applyThemeVariant(variant fyne.ThemeVariant, devMode bool) {
 	if g.state.mode == guiModeHistory {
 		g.loadHistory()
 	}
+	if g.state.mode == guiModeRoutine {
+		g.loadRoutines()
+	}
 	g.render()
 	if g.state.isVisible {
 		g.FocusInput()

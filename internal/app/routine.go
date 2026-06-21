@@ -34,6 +34,9 @@ type RoutineService interface {
 	Delete(ctx context.Context, idOrName string, purge bool) error
 	Run(ctx context.Context, req RoutineRunRequest) (RoutineRunResult, error)
 	Logs(ctx context.Context, idOrName string) ([]RoutineLogRef, error)
+	// ReadLog returns the content of a stored run log, keeping filesystem access
+	// behind the facade rather than in callers (e.g. the GUI).
+	ReadLog(ctx context.Context, ref RoutineLogRef) (string, error)
 	// LaunchNotice returns a one-line summary of routine runs that completed
 	// since the user last saw routine activity, then advances the seen marker.
 	// It returns an empty string when there is nothing to report.
@@ -206,6 +209,14 @@ func (s *routineService) Logs(ctx context.Context, idOrName string) ([]RoutineLo
 	}
 	sort.Slice(refs, func(i, j int) bool { return refs[i].ModTime.After(refs[j].ModTime) })
 	return refs, nil
+}
+
+func (s *routineService) ReadLog(ctx context.Context, ref RoutineLogRef) (string, error) {
+	data, err := os.ReadFile(ref.Path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (s *routineService) Run(ctx context.Context, req RoutineRunRequest) (RoutineRunResult, error) {

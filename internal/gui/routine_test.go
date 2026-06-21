@@ -84,6 +84,28 @@ func TestRoutineStatusColorDistinct(t *testing.T) {
 	assert.Equal(t, palette.error, routineStatusColor(routines.StatusError))
 }
 
+func TestSubmitIgnoredInBrowseModes(t *testing.T) {
+	// In a browse mode submit() must return before touching the (here nil) popup or
+	// service, so no run starts. If the isBrowseMode guard regressed, this would
+	// dereference the nil popup and panic.
+	for _, mode := range []guiMode{guiModeHistory, guiModeRoutine} {
+		g := &App{state: &state{mode: mode}}
+		g.submit()
+		assert.False(t, g.state.isRunning, "submit must not start a run in %s mode", mode)
+	}
+}
+
+func TestRoutineToolsRepresentable(t *testing.T) {
+	assert.True(t, routineToolsRepresentable(nil), "default policy is representable")
+	assert.True(t, routineToolsRepresentable(routineToolsFromWebSearch(true)), "local+websearch set is representable")
+	assert.False(t, routineToolsRepresentable([]string{"unix"}), "a custom list is not representable (preserved on edit)")
+	assert.False(t, routineToolsRepresentable([]string{}), "an explicit empty list is custom")
+
+	assert.True(t, equalStringSet([]string{"a", "b"}, []string{"b", "a"}))
+	assert.False(t, equalStringSet([]string{"a"}, []string{"a", "b"}))
+	assert.False(t, equalStringSet([]string{"a", "a"}, []string{"a", "b"}))
+}
+
 func TestSetRoutinesPopulatesBody(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()

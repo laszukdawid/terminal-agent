@@ -165,6 +165,7 @@ func (p *popupWindow) rebuildContent(app fyne.App, devMode bool) {
 	p.mascotActIndex = 0
 	p.mascotOneShot = nil
 	p.dismissHistoryDetail()
+	p.dismissRoutineDetail()
 
 	p.buildInput(app)
 	p.buildOutput()

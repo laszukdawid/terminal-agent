@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -177,7 +176,7 @@ func (g *App) routineActionBar(view appservice.RoutineView) fyne.CanvasObject {
 }
 
 func (g *App) openRoutineLog(ref appservice.RoutineLogRef) {
-	data, err := os.ReadFile(ref.Path)
+	data, err := g.routineService.ReadLog(context.Background(), ref)
 	if err != nil {
 		dialog.ShowError(err, g.popup.window)
 		return
@@ -185,7 +184,7 @@ func (g *App) openRoutineLog(ref appservice.RoutineLogRef) {
 	content := container.NewVBox(
 		widget.NewLabelWithStyle(ref.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true, Monospace: true}),
 		brandSeparator(),
-		historyDetailSection("Log", string(data)),
+		historyDetailSection("Log", data),
 	)
 	g.popup.presentRoutineDetail(content)
 }
@@ -198,7 +197,10 @@ func (g *App) runRoutineNow(id string) {
 			Trigger:  routines.TriggerManual,
 		})
 		g.voiceSchedule(func() {
-			if err != nil && !errors.Is(err, routines.ErrRunInProgress) {
+			switch {
+			case errors.Is(err, routines.ErrRunInProgress):
+				dialog.ShowInformation("Already running", "Routine \""+id+"\" was already running; this run was skipped.", g.popup.window)
+			case err != nil:
 				dialog.ShowError(err, g.popup.window)
 			}
 			if g.state.mode == guiModeRoutine {
@@ -206,7 +208,7 @@ func (g *App) runRoutineNow(id string) {
 			}
 		})
 	}()
-	dialog.ShowInformation("Routine started", "Running \""+id+"\". The list updates when it finishes.", g.popup.window)
+	dialog.ShowInformation("Routine running", "Running \""+id+"\" in the background. The list updates when it finishes.", g.popup.window)
 }
 
 func (g *App) toggleRoutine(r routines.Routine) {
@@ -272,6 +274,16 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 		enabled.SetChecked(existing.Enabled)
 	}
 
+	// A routine with a custom tool allow-list (set via the CLI) cannot be
+	// represented by the single web-search checkbox; lock the control and preserve
+	// the list on save rather than silently flattening it.
+	toolsCustom := isEdit && !routineToolsRepresentable(existing.Tools)
+	toolsItem := widget.NewFormItem("", webSearch)
+	if toolsCustom {
+		webSearch.Disable()
+		toolsItem = widget.NewFormItem("Tools", widget.NewLabel("custom tool list — edit via CLI"))
+	}
+
 	items := []*widget.FormItem{
 		widget.NewFormItem("Name", name),
 		widget.NewFormItem("Prompt", prompt),
@@ -283,7 +295,7 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 		widget.NewFormItem("Max turns", maxTurns),
 		widget.NewFormItem("Max tool calls", maxToolCalls),
 		widget.NewFormItem("Deny rules", deny),
-		widget.NewFormItem("", webSearch),
+		toolsItem,
 		widget.NewFormItem("", enabled),
 	}
 
@@ -307,7 +319,11 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 		routine.Timeout = strings.TrimSpace(timeout.Text)
 		routine.Deny = splitNonEmptyLines(deny.Text)
 		routine.Enabled = enabled.Checked
-		routine.Tools = routineToolsFromWebSearch(webSearch.Checked)
+		if toolsCustom {
+			routine.Tools = existing.Tools // preserve a CLI-authored allow-list
+		} else {
+			routine.Tools = routineToolsFromWebSearch(webSearch.Checked)
+		}
 
 		budgets := map[string]*string{
 			"token budget":   ptr(tokenBudget.Text),
@@ -494,6 +510,35 @@ func routineToolPolicyText(toolsList []string) string {
 		return "(none)"
 	}
 	return strings.Join(toolsList, ", ")
+}
+
+// routineToolsRepresentable reports whether a tool allow-list can be round-tripped
+// through the GUI's single web-search checkbox: nil (default policy) or exactly the
+// local tools plus web search. Anything else is a custom list edited via the CLI.
+func routineToolsRepresentable(toolsList []string) bool {
+	if toolsList == nil {
+		return true
+	}
+	return equalStringSet(toolsList, routineToolsFromWebSearch(true))
+}
+
+func equalStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, s := range a {
+		counts[s]++
+	}
+	for _, s := range b {
+		counts[s]--
+	}
+	for _, c := range counts {
+		if c != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func routineToolsAllowWebSearch(toolsList []string) bool {

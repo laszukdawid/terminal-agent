@@ -16,7 +16,9 @@ func (g *App) submit() {
 	if g.state.isRunning {
 		return
 	}
-	if g.state.mode == guiModeHistory {
+	// Browse modes (History, Routine) have no input to submit; guard every
+	// non-button entry point (e.g. voice auto-submit) from starting an Ask run.
+	if isBrowseMode(g.state.mode) {
 		return
 	}
 
