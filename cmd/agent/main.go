@@ -125,6 +125,7 @@ func mainRun() exitCode {
 	cmd.AddCommand(commands.NewToolCommand(c))
 	cmd.AddCommand(commands.NewTaskCommand(c))
 	cmd.AddCommand(commands.NewRoutineCommand(c))
+	cmd.AddCommand(commands.NewDaemonCommand(c))
 	cmd.AddCommand(commands.NewMemoryCommand())
 	cmd.AddCommand(commands.NewAuthCommand())
 	cmd.AddCommand(commands.NewPluginCommand())

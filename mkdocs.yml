@@ -44,6 +44,7 @@ nav:
       - Ask Command: commands/ask.md
       - Task Command: commands/task.md
       - Routine Command: commands/routine.md
+      - Daemon Command: commands/daemon.md
       - Tool Command: commands/tool.md
       - Plugin Command: commands/plugin.md
       - Config Command: commands/config.md

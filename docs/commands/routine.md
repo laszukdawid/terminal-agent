@@ -89,6 +89,8 @@ agent routine list                      # see status and recent activity
 
 ## Scheduling
 
-Defining a schedule records it on the routine. Automatic firing is provided by the routine
-daemon (`agent daemon`); until it is running, schedules are informational and you can run a
-routine manually with `agent routine run <id>` or from your own scheduler.
+A routine's `--cron` schedule is fired automatically by the [routine daemon](daemon.md).
+Start it once with `agent daemon install` (or run `agent daemon start` in the foreground) and
+enabled routines run on their schedules; `agent daemon status` shows what is scheduled and the
+next fire time. You can always trigger a run yourself with `agent routine run <id>` regardless
+of the daemon.
