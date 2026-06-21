@@ -47,6 +47,9 @@ func (r Routine) Validate() error {
 	if !idPattern.MatchString(r.ID) {
 		return fmt.Errorf("routine id %q must match %s", r.ID, idPattern.String())
 	}
+	if err := ValidateSchedule(r.Schedule); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -237,3 +237,34 @@ func TestPromptPreview(t *testing.T) {
 	assert.Equal(t, "summarize the latest…", r.PromptPreview(21))
 	assert.Equal(t, "short", Routine{Prompt: "short"}.PromptPreview(20))
 }
+
+func TestValidateSchedule(t *testing.T) {
+	tests := []struct {
+		name    string
+		expr    string
+		wantErr bool
+	}{
+		{name: "empty is manual", expr: "", wantErr: false},
+		{name: "whitespace is manual", expr: "   ", wantErr: false},
+		{name: "standard 5-field", expr: "0 9 * * 1-5", wantErr: false},
+		{name: "descriptor", expr: "@daily", wantErr: false},
+		{name: "every", expr: "@every 1h", wantErr: false},
+		{name: "garbage", expr: "not a cron", wantErr: true},
+		{name: "too many fields", expr: "0 0 0 0 0 0 0", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateSchedule(tt.expr)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestRoutineValidateRejectsBadCron(t *testing.T) {
+	assert.Error(t, Routine{ID: "r", Prompt: "p", Schedule: "nope"}.Validate())
+	assert.NoError(t, Routine{ID: "r", Prompt: "p", Schedule: "@daily"}.Validate())
+}

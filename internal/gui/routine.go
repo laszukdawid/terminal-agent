@@ -23,7 +23,13 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
 
-const routineLogLimit = 25
+const (
+	routineLogLimit = 25
+	// statusRunning is a GUI-only status shown while a routine launched from the
+	// GUI is executing (the persisted statuses are active/inactive/error).
+	statusRunning       = "running"
+	routineCronExamples = "Examples: 0 9 * * 1-5 (weekdays 9:00) · @daily · @hourly · empty = manual"
+)
 
 // routineLocalToolNames are the built-in, non-external tools enabled when a
 // routine opts into web search via the GUI form (the explicit allow-list then
@@ -37,11 +43,36 @@ var routineLocalToolNames = []string{
 	tools.ToolNamePython,
 }
 
+func (g *App) markRoutineRunning(id string, running bool) {
+	g.runningMu.Lock()
+	defer g.runningMu.Unlock()
+	if g.runningRoutines == nil {
+		g.runningRoutines = map[string]bool{}
+	}
+	if running {
+		g.runningRoutines[id] = true
+	} else {
+		delete(g.runningRoutines, id)
+	}
+}
+
+func (g *App) isRoutineRunning(id string) bool {
+	g.runningMu.Lock()
+	defer g.runningMu.Unlock()
+	return g.runningRoutines[id]
+}
+
 func (g *App) loadRoutines() {
 	views, err := g.routineService.List(context.Background())
 	if err != nil {
 		g.popup.setRoutines(nil, "Routines unavailable: "+err.Error(), nil)
 		return
+	}
+	// Overlay the live "running" status for routines launched from the GUI.
+	for i := range views {
+		if g.isRoutineRunning(views[i].Routine.ID) {
+			views[i].Status = statusRunning
+		}
 	}
 	g.popup.setRoutines(views, "", g.showRoutineDetail)
 }
@@ -102,27 +133,44 @@ func routineCardContent(view appservice.RoutineView) fyne.CanvasObject {
 }
 
 func (g *App) showRoutineDetail(view appservice.RoutineView) {
+	palette := currentBrandPalette()
 	r := view.Routine
-	info := fmt.Sprintf(
+
+	// Emphasized routine name (large, accent), with the status dot.
+	title := canvas.NewText(routineTitle(r), palette.accentGreen)
+	title.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	title.TextSize = theme.TextSize() + 5
+	titleRow := container.NewHBox(vCenter(newStatusDot(routineStatusColor(view.Status))), vCenter(title))
+
+	settings := fmt.Sprintf(
 		"Status: %s\nSchedule: %s\nProvider / Model: %s / %s\nTimeout: %s\nTokens: %s\nTools: %s",
 		view.Status, view.Frequency, orDefaultText(r.Provider), orDefaultText(r.Model),
 		orDefaultText(r.Timeout), routineBudgetText(r.TokenBudget), routineToolPolicyText(r.Tools),
 	)
 	if view.HasRun {
-		info += "\nLast run: " + routineTimeText(view.Run.LastRunAt) + " (" + view.Run.LastStatus + ")"
+		settings += "\nLast run: " + routineTimeText(view.Run.LastRunAt) + " (" + view.Run.LastStatus + ")"
 		if view.Run.LastError != "" {
-			info += "\nLast error: " + view.Run.LastError
+			settings += "\nLast error: " + view.Run.LastError
 		}
 	}
-	infoLabel := widget.NewLabel(info)
-	infoLabel.Wrapping = fyne.TextWrapWord
+	settingsLabel := widget.NewLabel(settings)
+	settingsLabel.Wrapping = fyne.TextWrapWord
+
+	// The prompt is set apart in its own framed, padded box so it reads as the
+	// routine's content rather than more metadata; the label above is clearly a
+	// heading, not the first line of the prompt.
+	promptBody := widget.NewLabel(r.Prompt)
+	promptBody.Wrapping = fyne.TextWrapWord
+	promptBox := borderedBox(container.NewPadded(promptBody), palette.borderBright)
 
 	objects := []fyne.CanvasObject{
-		widget.NewLabelWithStyle(routineTitle(r), fyne.TextAlignLeading, fyne.TextStyle{Bold: true, Monospace: true}),
-		infoLabel,
+		titleRow,
+		settingsLabel,
 		brandSeparator(),
-		historyDetailSection("Prompt", r.Prompt),
-		widget.NewLabelWithStyle("Run logs", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		brandSectionLabel("PROMPT"),
+		promptBox,
+		brandSeparator(),
+		brandSectionLabel("RUN LOGS"),
 	}
 	objects = append(objects, g.routineLogList(r.ID)...)
 	objects = append(objects, brandSeparator(), g.routineActionBar(view))
@@ -158,6 +206,10 @@ func (g *App) routineActionBar(view appservice.RoutineView) fyne.CanvasObject {
 	r := view.Routine
 	runButton := widget.NewButton("Run now", func() { g.runRoutineNow(r.ID) })
 	runButton.Importance = widget.HighImportance
+	if g.isRoutineRunning(r.ID) {
+		runButton.SetText("Running…")
+		runButton.Disable()
+	}
 
 	toggleLabel := "Disable"
 	if !r.Enabled {
@@ -191,24 +243,26 @@ func (g *App) openRoutineLog(ref appservice.RoutineLogRef) {
 
 func (g *App) runRoutineNow(id string) {
 	g.popup.dismissRoutineDetail()
+	// Mark the routine running and refresh the list so its status reads "running"
+	// until the (background) run finishes.
+	g.markRoutineRunning(id, true)
+	g.loadRoutines()
 	go func() {
 		_, err := g.routineService.Run(context.Background(), appservice.RoutineRunRequest{
 			IDOrName: id,
 			Trigger:  routines.TriggerManual,
 		})
 		g.voiceSchedule(func() {
+			g.markRoutineRunning(id, false)
 			switch {
 			case errors.Is(err, routines.ErrRunInProgress):
 				dialog.ShowInformation("Already running", "Routine \""+id+"\" was already running; this run was skipped.", g.popup.window)
 			case err != nil:
 				dialog.ShowError(err, g.popup.window)
 			}
-			if g.state.mode == guiModeRoutine {
-				g.loadRoutines()
-			}
+			g.loadRoutines()
 		})
 	}()
-	dialog.ShowInformation("Routine running", "Running \""+id+"\" in the background. The list updates when it finishes.", g.popup.window)
 }
 
 func (g *App) toggleRoutine(r routines.Routine) {
@@ -235,29 +289,54 @@ func (g *App) confirmDeleteRoutine(id string) {
 	}, g.popup.window)
 }
 
+// showRoutineForm presents the create/edit dialog. It is built as a brand-themed
+// custom dialog (not dialog.NewForm) so the inputs show the native cursor, the
+// prompt wraps, the cron field validates live, and the footer buttons are clear.
 func (g *App) showRoutineForm(existing *routines.Routine) {
+	win := g.popup.window
 	isEdit := existing != nil
+	var dlg dialog.Dialog
 
-	name := widget.NewEntry()
+	name := newSettingsTextEntry("")
+	name.SetPlaceHolder("Daily standup")
 	prompt := widget.NewMultiLineEntry()
-	prompt.SetMinRowsVisible(4)
-	cron := widget.NewEntry()
-	cron.SetPlaceHolder("0 9 * * 1-5   (empty = manual only)")
-	provider := widget.NewEntry()
+	prompt.Wrapping = fyne.TextWrapWord
+	prompt.SetMinRowsVisible(5)
+	prompt.SetPlaceHolder("What should this routine do?")
+	cron := newSettingsTextEntry("")
+	cron.SetPlaceHolder("0 9 * * 1-5")
+	provider := newSettingsTextEntry("")
 	provider.SetPlaceHolder("(default)")
-	model := widget.NewEntry()
+	model := newSettingsTextEntry("")
 	model.SetPlaceHolder("(default)")
-	timeout := widget.NewEntry()
+	timeout := newSettingsTextEntry("")
 	timeout.SetPlaceHolder("15m   (0 = unlimited)")
-	tokenBudget := widget.NewEntry()
+	tokenBudget := newSettingsTextEntry("")
 	tokenBudget.SetPlaceHolder("1000000   (0 = unlimited)")
-	maxTurns := widget.NewEntry()
-	maxToolCalls := widget.NewEntry()
+	maxTurns := newSettingsTextEntry("")
+	maxTurns.SetPlaceHolder("(default)")
+	maxToolCalls := newSettingsTextEntry("")
+	maxToolCalls.SetPlaceHolder("(default)")
 	deny := widget.NewMultiLineEntry()
-	deny.SetPlaceHolder("one deny rule per line, e.g. unix(\"rm ...\")")
-	webSearch := widget.NewCheck("Allow web search (and other external tools off by default)", nil)
+	deny.Wrapping = fyne.TextWrapWord
+	deny.SetMinRowsVisible(2)
+	deny.SetPlaceHolder("one rule per line, e.g. unix(\"rm ...\")")
+	webSearch := widget.NewCheck("Allow web search (external tools are off by default)", nil)
 	enabled := widget.NewCheck("Enabled", nil)
 	enabled.SetChecked(true)
+
+	cronHint := widget.NewLabel(routineCronExamples)
+	cronHint.TextStyle = fyne.TextStyle{Italic: true}
+	cronHint.Wrapping = fyne.TextWrapWord
+	cron.OnChanged = func(value string) {
+		if routines.ValidateSchedule(value) != nil {
+			cronHint.Importance = widget.DangerImportance
+			cronHint.SetText("Invalid cron expression.")
+			return
+		}
+		cronHint.Importance = widget.MediumImportance
+		cronHint.SetText(routineCronExamples)
+	}
 
 	if isEdit {
 		name.SetText(existing.Name)
@@ -278,35 +357,31 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 	// represented by the single web-search checkbox; lock the control and preserve
 	// the list on save rather than silently flattening it.
 	toolsCustom := isEdit && !routineToolsRepresentable(existing.Tools)
-	toolsItem := widget.NewFormItem("", webSearch)
+	var toolsField fyne.CanvasObject = webSearch
 	if toolsCustom {
 		webSearch.Disable()
-		toolsItem = widget.NewFormItem("Tools", widget.NewLabel("custom tool list — edit via CLI"))
+		toolsField = widget.NewLabel("Tools: custom list set via the CLI (unchanged).")
 	}
 
-	items := []*widget.FormItem{
-		widget.NewFormItem("Name", name),
-		widget.NewFormItem("Prompt", prompt),
-		widget.NewFormItem("Cron", cron),
-		widget.NewFormItem("Provider", provider),
-		widget.NewFormItem("Model", model),
-		widget.NewFormItem("Timeout", timeout),
-		widget.NewFormItem("Token budget", tokenBudget),
-		widget.NewFormItem("Max turns", maxTurns),
-		widget.NewFormItem("Max tool calls", maxToolCalls),
-		widget.NewFormItem("Deny rules", deny),
-		toolsItem,
-		widget.NewFormItem("", enabled),
-	}
+	errorLabel := widget.NewLabel("")
+	errorLabel.Wrapping = fyne.TextWrapWord
+	errorLabel.Importance = widget.DangerImportance
 
-	title := "New routine"
-	if isEdit {
-		title = "Edit routine"
-	}
-	formDialog := dialog.NewForm(title, "Save", "Cancel", items, func(ok bool) {
-		if !ok {
-			return
-		}
+	form := container.New(layout.NewFormLayout(),
+		formFieldLabel("Name"), themedFormField(name),
+		formFieldLabel("Prompt"), themedFormField(prompt),
+		formFieldLabel("Cron"), themedFormField(cron),
+		widget.NewLabel(""), cronHint,
+		formFieldLabel("Provider"), themedFormField(provider),
+		formFieldLabel("Model"), themedFormField(model),
+		formFieldLabel("Timeout"), themedFormField(timeout),
+		formFieldLabel("Token budget"), themedFormField(tokenBudget),
+		formFieldLabel("Max turns"), themedFormField(maxTurns),
+		formFieldLabel("Max tool calls"), themedFormField(maxToolCalls),
+		formFieldLabel("Deny rules"), themedFormField(deny),
+	)
+
+	save := widget.NewButton("Save", func() {
 		routine := routines.Routine{}
 		if isEdit {
 			routine = *existing
@@ -320,28 +395,26 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 		routine.Deny = splitNonEmptyLines(deny.Text)
 		routine.Enabled = enabled.Checked
 		if toolsCustom {
-			routine.Tools = existing.Tools // preserve a CLI-authored allow-list
+			routine.Tools = existing.Tools
 		} else {
 			routine.Tools = routineToolsFromWebSearch(webSearch.Checked)
 		}
 
-		budgets := map[string]*string{
-			"token budget":   ptr(tokenBudget.Text),
-			"max turns":      ptr(maxTurns.Text),
-			"max tool calls": ptr(maxToolCalls.Text),
-		}
-		parsed := map[string]**int{
-			"token budget":   &routine.TokenBudget,
-			"max turns":      &routine.MaxTurns,
-			"max tool calls": &routine.MaxToolCalls,
-		}
-		for label, raw := range budgets {
-			value, err := parseOptionalInt(*raw)
+		for _, b := range []struct {
+			label string
+			text  string
+			dest  **int
+		}{
+			{"Token budget", tokenBudget.Text, &routine.TokenBudget},
+			{"Max turns", maxTurns.Text, &routine.MaxTurns},
+			{"Max tool calls", maxToolCalls.Text, &routine.MaxToolCalls},
+		} {
+			value, err := parseOptionalInt(b.text)
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("%s must be a number", label), g.popup.window)
+				errorLabel.SetText(b.label + " must be a number.")
 				return
 			}
-			*parsed[label] = value
+			*b.dest = value
 		}
 
 		var saveErr error
@@ -351,85 +424,109 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 			_, saveErr = g.routineService.Create(context.Background(), routine)
 		}
 		if saveErr != nil {
-			dialog.ShowError(saveErr, g.popup.window)
+			errorLabel.SetText(saveErr.Error())
 			return
 		}
+		dlg.Hide()
 		if g.state.mode == guiModeRoutine {
 			g.loadRoutines()
 		}
-	}, g.popup.window)
-	formDialog.Resize(fyne.NewSize(560, 0))
-	formDialog.Show()
+	})
+	save.Importance = widget.HighImportance
+	cancel := widget.NewButton("Cancel", func() { dlg.Hide() })
+	footer := container.NewBorder(nil, nil, nil, container.NewHBox(cancel, save))
+
+	// Scroll only the fields; keep the error message and Save/Cancel pinned at the
+	// bottom so they are always reachable on a short window.
+	fields := container.NewVScroll(container.NewVBox(form, toolsField, enabled))
+	bottom := container.NewVBox(errorLabel, footer)
+	content := container.NewBorder(nil, bottom, nil, nil, fields)
+	title := "New routine"
+	if isEdit {
+		title = "Edit routine"
+	}
+	dlg = dialog.NewCustomWithoutButtons(title, content, win)
+	dlg.Resize(fyne.NewSize(600, routineFormHeight(win)))
+	dlg.SetOnClosed(g.FocusInput)
+	dlg.Show()
 }
 
 // showRoutineDefaultsForm edits the defaults applied to routines that do not set
-// their own values, plus the global routines on/off toggle. It is reached from
+// their own values, plus the global routines on/off toggle. Reached from
 // Settings → "Routine defaults…".
 func (g *App) showRoutineDefaultsForm() {
+	win := g.popup.window
 	defaults := g.cfg.GetRoutineDefaults()
+	var dlg dialog.Dialog
 
 	enabled := widget.NewCheck("Routines enabled", nil)
 	enabled.SetChecked(g.cfg.GetRoutinesEnabled())
-	provider := widget.NewEntry()
-	provider.SetText(defaults.Provider)
-	provider.SetPlaceHolder("(uses the global provider)")
-	model := widget.NewEntry()
-	model.SetText(defaults.Model)
-	model.SetPlaceHolder("(uses the provider's default model)")
-	timeout := widget.NewEntry()
-	timeout.SetText(defaults.Timeout)
-	tokenBudget := widget.NewEntry()
-	tokenBudget.SetText(intPtrText(defaults.TokenBudget))
-	maxTurns := widget.NewEntry()
-	maxTurns.SetText(intPtrText(defaults.MaxTurns))
-	maxToolCalls := widget.NewEntry()
-	maxToolCalls.SetText(intPtrText(defaults.MaxToolCalls))
+	provider := newSettingsTextEntry(defaults.Provider)
+	provider.SetPlaceHolder("(global provider)")
+	model := newSettingsTextEntry(defaults.Model)
+	model.SetPlaceHolder("(provider default)")
+	timeout := newSettingsTextEntry(defaults.Timeout)
+	timeout.SetPlaceHolder("15m")
+	tokenBudget := newSettingsTextEntry(intPtrText(defaults.TokenBudget))
+	tokenBudget.SetPlaceHolder("1000000")
+	maxTurns := newSettingsTextEntry(intPtrText(defaults.MaxTurns))
+	maxToolCalls := newSettingsTextEntry(intPtrText(defaults.MaxToolCalls))
 
-	items := []*widget.FormItem{
-		widget.NewFormItem("", enabled),
-		widget.NewFormItem("Provider", provider),
-		widget.NewFormItem("Model", model),
-		widget.NewFormItem("Timeout", timeout),
-		widget.NewFormItem("Token budget", tokenBudget),
-		widget.NewFormItem("Max turns", maxTurns),
-		widget.NewFormItem("Max tool calls", maxToolCalls),
-	}
+	errorLabel := widget.NewLabel("")
+	errorLabel.Wrapping = fyne.TextWrapWord
+	errorLabel.Importance = widget.DangerImportance
 
-	dialog.ShowForm("Routine defaults", "Save", "Cancel", items, func(ok bool) {
-		if !ok {
-			return
-		}
+	form := container.New(layout.NewFormLayout(),
+		formFieldLabel("Provider"), themedFormField(provider),
+		formFieldLabel("Model"), themedFormField(model),
+		formFieldLabel("Timeout"), themedFormField(timeout),
+		formFieldLabel("Token budget"), themedFormField(tokenBudget),
+		formFieldLabel("Max turns"), themedFormField(maxTurns),
+		formFieldLabel("Max tool calls"), themedFormField(maxToolCalls),
+	)
+
+	save := widget.NewButton("Save", func() {
 		updated := config.RoutineDefaults{
 			Provider: strings.TrimSpace(provider.Text),
 			Model:    strings.TrimSpace(model.Text),
 			Timeout:  strings.TrimSpace(timeout.Text),
 		}
-		budgets := []struct {
+		for _, b := range []struct {
 			label string
 			text  string
 			dest  **int
 		}{
-			{"token budget", tokenBudget.Text, &updated.TokenBudget},
-			{"max turns", maxTurns.Text, &updated.MaxTurns},
-			{"max tool calls", maxToolCalls.Text, &updated.MaxToolCalls},
-		}
-		for _, b := range budgets {
+			{"Token budget", tokenBudget.Text, &updated.TokenBudget},
+			{"Max turns", maxTurns.Text, &updated.MaxTurns},
+			{"Max tool calls", maxToolCalls.Text, &updated.MaxToolCalls},
+		} {
 			value, err := parseOptionalInt(b.text)
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("%s must be a number", b.label), g.popup.window)
+				errorLabel.SetText(b.label + " must be a number.")
 				return
 			}
 			*b.dest = value
 		}
 		if err := g.cfg.SetRoutinesEnabled(enabled.Checked); err != nil {
-			dialog.ShowError(err, g.popup.window)
+			errorLabel.SetText(err.Error())
 			return
 		}
 		if err := g.cfg.SetRoutineDefaults(updated); err != nil {
-			dialog.ShowError(err, g.popup.window)
+			errorLabel.SetText(err.Error())
 			return
 		}
-	}, g.popup.window)
+		dlg.Hide()
+	})
+	save.Importance = widget.HighImportance
+	cancel := widget.NewButton("Cancel", func() { dlg.Hide() })
+	footer := container.NewBorder(nil, nil, nil, container.NewHBox(cancel, save))
+
+	fields := container.NewVScroll(container.NewVBox(enabled, form))
+	bottom := container.NewVBox(errorLabel, footer)
+	content := container.NewBorder(nil, bottom, nil, nil, fields)
+	dlg = dialog.NewCustomWithoutButtons("Routine defaults", content, win)
+	dlg.Resize(fyne.NewSize(520, routineFormHeight(win)))
+	dlg.Show()
 }
 
 func (p *popupWindow) presentRoutineDetail(content fyne.CanvasObject) {
@@ -459,6 +556,29 @@ func (p *popupWindow) dismissRoutineDetail() bool {
 
 // --- helpers ---
 
+// themedFormField wraps a form input so it picks up the prompt entry theme, which
+// restores the native text cursor that the brand theme otherwise hides by zeroing
+// the input border.
+func themedFormField(o fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewThemeOverride(o, promptEntryTheme{Theme: newBrandTheme()})
+}
+
+func formFieldLabel(text string) fyne.CanvasObject {
+	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+}
+
+// routineFormHeight sizes the create/edit dialog to fit within the window.
+func routineFormHeight(win fyne.Window) float32 {
+	available := win.Canvas().Size().Height - 48
+	if available > 640 {
+		return 640
+	}
+	if available < 360 {
+		return 360
+	}
+	return available
+}
+
 func routineTitle(r routines.Routine) string {
 	if strings.TrimSpace(r.Name) != "" {
 		return r.Name
@@ -473,6 +593,8 @@ func routineStatusColor(status string) color.Color {
 		return palette.error
 	case routines.StatusInactive:
 		return palette.disabledText
+	case statusRunning:
+		return palette.warning
 	default:
 		return palette.accentGreen
 	}

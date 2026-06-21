@@ -82,6 +82,7 @@ func TestRoutineStatusColorDistinct(t *testing.T) {
 	assert.Equal(t, palette.accentGreen, routineStatusColor(routines.StatusActive))
 	assert.Equal(t, palette.disabledText, routineStatusColor(routines.StatusInactive))
 	assert.Equal(t, palette.error, routineStatusColor(routines.StatusError))
+	assert.Equal(t, palette.warning, routineStatusColor(statusRunning))
 }
 
 func TestSubmitIgnoredInBrowseModes(t *testing.T) {

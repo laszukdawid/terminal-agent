@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -30,6 +31,11 @@ type App struct {
 	voiceController *voice.Controller
 	voiceSchedule   func(func())
 	themeVariant    fyne.ThemeVariant
+
+	// runningRoutines tracks routines launched via the GUI "Run now" so the list
+	// can show a live "running" status until the run finishes.
+	runningRoutines map[string]bool
+	runningMu       sync.Mutex
 }
 
 type AppOptions struct {
@@ -52,15 +58,16 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		fyneApp = app.NewWithID(options.AppID)
 	}
 	gui := &App{
-		fyneApp:        fyneApp,
-		service:        service,
-		routineService: appservice.NewRoutineService(cfg),
-		cfg:            cfg,
-		state:          &state{mode: guiModeAsk},
-		quit:           fyneApp.Quit,
-		stopIndicator:  make(chan struct{}),
-		version:        options.Version,
-		voiceSchedule:  fyne.Do,
+		fyneApp:         fyneApp,
+		service:         service,
+		routineService:  appservice.NewRoutineService(cfg),
+		cfg:             cfg,
+		state:           &state{mode: guiModeAsk},
+		quit:            fyneApp.Quit,
+		stopIndicator:   make(chan struct{}),
+		version:         options.Version,
+		voiceSchedule:   fyne.Do,
+		runningRoutines: map[string]bool{},
 	}
 	if options.Voice.Schedule != nil {
 		gui.voiceSchedule = options.Voice.Schedule
