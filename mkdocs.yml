@@ -2,6 +2,7 @@ site_name: Terminal Agent
 site_description: An LLM Agent to help you from and within the terminal
 repo_url: https://github.com/laszukdawid/terminal-agent
 repo_name: laszukdawid/terminal-agent
+copyright: By <a href="https://laszukdawid.com">Dawid Laszuk</a> @ Canada
 
 theme:
   name: material
