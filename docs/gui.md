@@ -136,7 +136,10 @@ of what you have run.
 
 The **Routine** tab manages [routines](commands/routine.md): scheduled, unattended
 agent runs. Each card shows a status dot (active / inactive / error), the schedule,
-model, last and next run times, and a preview of the prompt. Click a card to open a
+model, last and next run times, and a preview of the prompt.
+
+![Terminal Agent popup GUI listing scheduled routines](assets/screenshots/gui-routine.png)
+ Click a card to open a
 detail view with the full prompt, resolved settings, and the list of past run logs
 (open any to read its transcript or summary); from there you can **Run now**,
 **Enable/Disable**, **Edit**, or **Delete** the routine. Use **NEW** to create one.

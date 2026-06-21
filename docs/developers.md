@@ -242,6 +242,18 @@ visual checks of GUI changes.
 
 ![Terminal Agent GUI settings dialog](assets/screenshots/gui-settings.png)
 
+**Routine** — the list of scheduled routines with their status, schedule, and next run:
+
+![Terminal Agent GUI Routine list](assets/screenshots/gui-routine.png)
+
+**Routine detail** — a routine's prompt, settings, run logs, and actions:
+
+![Terminal Agent GUI Routine detail](assets/screenshots/gui-routine-detail.png)
+
+**Routine form** — creating or editing a routine:
+
+![Terminal Agent GUI Routine form](assets/screenshots/gui-routine-form.png)
+
 ### Regenerating the screenshots
 
 ```sh
@@ -259,6 +271,9 @@ The committed files are:
 | `gui-ask.png` | Ask mode with a rendered markdown response |
 | `gui-task.png` | Task mode transcript (tool-call line + final answer) |
 | `gui-settings.png` | Settings dialog (provider/model) |
+| `gui-routine.png` | Routine list (status, schedule, model, last/next run) |
+| `gui-routine-detail.png` | Routine detail (prompt, settings, run logs, actions) |
+| `gui-routine-form.png` | Routine create/edit form |
 
 ### How it works
 
@@ -267,8 +282,10 @@ The task runs a single env-gated test, `TestCaptureScreenshots` in
 
 1. Builds the real `gui.App` with a Fyne test app (`test.NewApp()`), so the
    actual widgets, layout, and brand theme are exercised.
-2. Drives `App`/`state` into each scenario (mode, input text, output, or the
-   Settings dialog) and calls `render()`.
+2. Drives `App`/`state` into each scenario (mode, input text, output, the Settings
+   dialog, or the Routine list/detail/form) and calls `render()`. For the Routine
+   views it redirects the routine stores to a temp dir and seeds representative
+   routines so the captures are deterministic and never touch real user data.
 3. Captures the window with `win.Canvas().Capture()` (Fyne's software renderer)
    and writes the image with `png.Encode`.
 
