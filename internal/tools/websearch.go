@@ -106,6 +106,12 @@ func (w *WebsearchTool) PermissionCategory() PermissionCategory {
 	return PermissionRead
 }
 
+// ExternalFacing marks web search as reaching an outside service (Tavily), so
+// unattended runs disable it unless it is explicitly enabled.
+func (w *WebsearchTool) ExternalFacing() bool {
+	return true
+}
+
 func (w *WebsearchTool) Description() string {
 	return w.description
 }

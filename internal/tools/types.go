@@ -41,6 +41,21 @@ type AvailabilityAwareTool interface {
 	IsAvailable() bool
 }
 
+// ExternalFacingTool lets a tool declare that it reaches services outside the
+// local machine (e.g. web search, MCP servers). Unattended runs such as routines
+// disable external-facing tools by default; they must be opted in explicitly.
+// Tools that do not implement this interface are treated as local.
+type ExternalFacingTool interface {
+	Tool
+	ExternalFacing() bool
+}
+
+// IsExternalFacing reports whether a tool declares itself external-facing.
+func IsExternalFacing(tool Tool) bool {
+	external, ok := tool.(ExternalFacingTool)
+	return ok && external.ExternalFacing()
+}
+
 // PermissionCategory describes a tool's blast radius for confirmation policy.
 type PermissionCategory string
 

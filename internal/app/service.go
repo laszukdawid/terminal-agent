@@ -16,9 +16,10 @@ type Service interface {
 type RunKind string
 
 const (
-	RunKindAsk  RunKind = "ask"
-	RunKindChat RunKind = "chat"
-	RunKindTask RunKind = "task"
+	RunKindAsk     RunKind = "ask"
+	RunKindChat    RunKind = "chat"
+	RunKindTask    RunKind = "task"
+	RunKindRoutine RunKind = "routine"
 )
 
 type EventType string

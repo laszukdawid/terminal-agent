@@ -50,6 +50,9 @@ type Config interface {
 	SetWebSearch(bool) error
 	GetPermissions() Permissions
 	GetProjectContext() bool
+	GetRoutinesEnabled() bool
+	GetRoutineDefaults() RoutineDefaults
+	SetRoutineDefaults(RoutineDefaults) error
 }
 
 const (
@@ -61,6 +64,13 @@ const (
 	DefaultGUIVoiceSTTBackend           = "openai"
 	DefaultGUIVoiceSTTModel             = "gpt-4o-mini-transcribe"
 	DefaultBedrockModel                 = "zai.glm-4.7-flash"
+	// DefaultRoutineTimeout is the built-in wall-clock budget applied to a
+	// routine run when neither the routine nor the configured defaults set one.
+	DefaultRoutineTimeout = "15m"
+	// DefaultRoutineTokenBudget is the built-in token budget applied to a routine
+	// run when neither the routine nor the configured defaults set one. A value of
+	// 0 means unlimited; the product default is one million tokens.
+	DefaultRoutineTokenBudget = 1_000_000
 )
 
 type config struct {
@@ -80,6 +90,28 @@ type config struct {
 	WebSearch           *bool             `json:"web_search,omitempty"`
 	ProjectContext      *bool             `json:"project_context,omitempty"`
 	Permissions         Permissions       `json:"permissions,omitempty"`
+	Routines            RoutinesConfig    `json:"routines,omitempty"`
+}
+
+// RoutinesConfig holds the master toggle and default settings applied to
+// routine runs when a routine does not specify its own values.
+type RoutinesConfig struct {
+	Enabled  *bool           `json:"enabled,omitempty"`
+	Defaults RoutineDefaults `json:"defaults,omitempty"`
+}
+
+// RoutineDefaults are the per-field fallbacks for routines. Empty/nil fields mean
+// "not configured": the run resolves them against the routine's own fields first,
+// then these defaults, then the built-in product defaults. Durations are Go
+// duration strings; pointer fields distinguish "unset" from a deliberate zero.
+type RoutineDefaults struct {
+	Provider     string `json:"provider,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Timeout      string `json:"timeout,omitempty"`
+	TokenBudget  *int   `json:"token_budget,omitempty"`
+	MaxTurns     *int   `json:"max_turns,omitempty"`
+	MaxToolCalls *int   `json:"max_tool_calls,omitempty"`
+	WorkingDir   string `json:"working_dir,omitempty"`
 }
 
 type GUIConfig struct {
@@ -529,6 +561,39 @@ func (config *config) GetProjectContext() bool {
 		return true
 	}
 	return *config.ProjectContext
+}
+
+// GetRoutinesEnabled reports whether routines are enabled. It defaults to true
+// when unset so routines work out of the box; set routines.enabled to false to
+// disable scheduled execution globally.
+func (config *config) GetRoutinesEnabled() bool {
+	if config.Routines.Enabled == nil {
+		return true
+	}
+	return *config.Routines.Enabled
+}
+
+// GetRoutineDefaults returns the configured routine defaults with the built-in
+// product defaults applied for timeout and token budget when the user has not
+// set them. Step limits are left unset (nil) so the agent loop applies its own
+// default; provider/model/working-dir are left empty so the run can fall back to
+// the global provider config and the current directory.
+func (config *config) GetRoutineDefaults() RoutineDefaults {
+	defaults := config.Routines.Defaults
+	if strings.TrimSpace(defaults.Timeout) == "" {
+		defaults.Timeout = DefaultRoutineTimeout
+	}
+	if defaults.TokenBudget == nil {
+		budget := DefaultRoutineTokenBudget
+		defaults.TokenBudget = &budget
+	}
+	return defaults
+}
+
+func (config *config) SetRoutineDefaults(defaults RoutineDefaults) error {
+	log.Debugw("Setting routine defaults", "defaults", defaults)
+	config.Routines.Defaults = defaults
+	return SaveConfig(config)
 }
 
 var SetProviderCmd = &cobra.Command{

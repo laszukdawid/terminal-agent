@@ -49,3 +49,8 @@ func (c factoryConfig) GetWebSearch() bool                             { return 
 func (c factoryConfig) SetWebSearch(bool) error                        { return nil }
 func (c factoryConfig) GetPermissions() config.Permissions             { return config.Permissions{} }
 func (c factoryConfig) GetProjectContext() bool                        { return false }
+func (c factoryConfig) GetRoutinesEnabled() bool                       { return true }
+func (c factoryConfig) GetRoutineDefaults() config.RoutineDefaults     { return config.RoutineDefaults{} }
+func (c factoryConfig) SetRoutineDefaults(config.RoutineDefaults) error {
+	return nil
+}

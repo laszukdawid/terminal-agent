@@ -17,6 +17,11 @@ var ErrEmptyQuery = fmt.Errorf("empty query")
 // tool or model failures so callers can identify timeout-driven stops.
 var ErrTaskTimeout = fmt.Errorf("task timed out")
 
+// ErrTokenBudgetExceeded is returned when a task run is stopped because its
+// estimated token usage reached the configured token budget. It is distinct
+// from timeout, caller cancellation, and tool/model failures.
+var ErrTokenBudgetExceeded = fmt.Errorf("token budget exceeded")
+
 const MaxTokens = 400
 
 type Agent struct {

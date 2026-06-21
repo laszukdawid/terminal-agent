@@ -20,10 +20,14 @@ const (
 	UserClarificationToolName = "user_clarification"
 	ToolNameChangeDirectory   = "change_directory"
 	ToolNameFinalAnswer       = "final_answer"
+	// tokenEstimateCharsPerToken is the divisor for the fallback token estimate
+	// used when the provider does not report usage: characters exchanged ÷ 5.
+	tokenEstimateCharsPerToken = 5
 )
 
 type TaskOptions struct {
 	Allow        []string
+	Deny         []string
 	AutoApprove  bool
 	Dirs         TaskDirs
 	Interaction  TaskInteraction
@@ -34,6 +38,21 @@ type TaskOptions struct {
 	// Timeout bounds the whole task run. A value of 0 means no task-level
 	// timeout (unlimited). Caller context cancellation always takes precedence.
 	Timeout time.Duration
+	// MaxTurns and MaxToolCalls bound the run's step budget. A value of 0 means
+	// "use the package default" (MaxTurns / MaxToolCalls consts).
+	MaxTurns     int
+	MaxToolCalls int
+	// TokenBudget caps the estimated total tokens for the run. 0 means unlimited.
+	TokenBudget int
+	// EnabledTools selects which tools the run may use. A nil slice exposes all
+	// available tools (subject to DisableExternalTools); a non-nil slice is an
+	// explicit allow-list of tool names (external-facing tools run only when named
+	// here).
+	EnabledTools []string
+	// DisableExternalTools, when true and EnabledTools is nil, drops external-facing
+	// tools (web search, MCP) from the run. Routines set this; interactive task runs
+	// leave it false to preserve access to all available tools.
+	DisableExternalTools bool
 }
 
 type TaskToolOutputEvent struct {
@@ -73,6 +92,9 @@ type TaskRunResult struct {
 	RawOutput       string
 	RawOutputTool   string
 	DirectRawOutput bool
+	// TokensUsed is the run's estimated (or provider-reported) total token usage,
+	// populated for both successful and failed runs.
+	TokensUsed int
 }
 
 type TaskPhase string
@@ -103,9 +125,14 @@ type TaskState struct {
 	ToolCalls     int
 	MaxIterations int
 	MaxTurns      int
-	Phase         TaskPhase
-	Dirs          TaskDirs
-	Steps         []TaskStep
+	// TokenBudget caps the estimated tokens for the run; 0 means unlimited.
+	// TokensUsed accumulates the running estimate (or provider-reported usage
+	// when available) across model calls.
+	TokenBudget int
+	TokensUsed  int
+	Phase       TaskPhase
+	Dirs        TaskDirs
+	Steps       []TaskStep
 }
 
 type taskExecutionState struct {
@@ -184,12 +211,15 @@ func (a *Agent) TaskWithOptionsResult(ctx context.Context, s string, options Tas
 
 	result, err := a.runTaskLoop(ctx, s, options)
 	if err != nil && context.Cause(ctx) == ErrTaskTimeout {
-		return TaskRunResult{}, ErrTaskTimeout
+		return TaskRunResult{TokensUsed: result.TokensUsed}, ErrTaskTimeout
 	}
 	return result, err
 }
 
-func (a *Agent) runTaskLoop(ctx context.Context, s string, options TaskOptions) (TaskRunResult, error) {
+// runTaskLoop uses a named result so a deferred stamp records the run's token
+// usage on every return path once the execution state exists, including error
+// returns (timeout, token-budget, model/tool failures).
+func (a *Agent) runTaskLoop(ctx context.Context, s string, options TaskOptions) (result TaskRunResult, err error) {
 	logger := log.Sugar()
 	if err := ctx.Err(); err != nil {
 		return TaskRunResult{}, err
@@ -199,10 +229,14 @@ func (a *Agent) runTaskLoop(ctx context.Context, s string, options TaskOptions) 
 	if err != nil {
 		return TaskRunResult{}, err
 	}
+	defer func() { result.TokensUsed = run.state.TokensUsed }()
 
 	for run.state.Phase == TaskPhaseRunning && run.state.Iterations < run.state.MaxTurns && run.state.ToolCalls < run.state.MaxIterations {
 		if err := ctx.Err(); err != nil {
 			return TaskRunResult{}, err
+		}
+		if run.tokenBudgetExceeded() {
+			return TaskRunResult{}, ErrTokenBudgetExceeded
 		}
 		run.state.Iterations++
 
@@ -213,6 +247,12 @@ func (a *Agent) runTaskLoop(ctx context.Context, s string, options TaskOptions) 
 		if done {
 			return result, nil
 		}
+	}
+
+	// A run that consumed its token budget stops here rather than spending more
+	// tokens on a finalizing summary; the caller surfaces the distinct error.
+	if run.tokenBudgetExceeded() {
+		return TaskRunResult{}, ErrTokenBudgetExceeded
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -232,21 +272,37 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		return nil, fmt.Errorf("failed to load permissions: %w", err)
 	}
 
+	maxTurns := MaxTurns
+	if options.MaxTurns > 0 {
+		maxTurns = options.MaxTurns
+	}
+	maxToolCalls := MaxToolCalls
+	if options.MaxToolCalls > 0 {
+		maxToolCalls = options.MaxToolCalls
+	}
+
 	interaction := options.Interaction
 	confirmationRequester := taskUserConfirmationRequester{interaction: interaction}
 	rememberer := taskPermissionRememberer{store: store}
 	confirmations := NewConfirmationManager(options.Allow, ruleSets, confirmationRequester.RequestUserConfirmation, rememberer.Remember)
+	// Per-run deny rules (e.g. a routine's lockdown) are appended above the per-run
+	// allow rules (which NewConfirmationManager places at maxPriority+1), so a deny
+	// always wins — including under auto-approve and over any config/local allow.
+	if len(options.Deny) > 0 {
+		confirmations.appendPatterns(options.Deny, ruleDeny, confirmations.maxPriority+2)
+	}
 
 	return &taskExecutionState{
 		state: &TaskState{
 			OriginalQuery: query,
-			MaxIterations: MaxToolCalls,
-			MaxTurns:      MaxTurns,
+			MaxIterations: maxToolCalls,
+			MaxTurns:      maxTurns,
+			TokenBudget:   options.TokenBudget,
 			Phase:         TaskPhaseRunning,
 			Dirs:          taskDirs,
-			Steps:         make([]TaskStep, 0, MaxTurns),
+			Steps:         make([]TaskStep, 0, maxTurns),
 		},
-		tools:             a.buildTaskTools(interaction),
+		tools:             a.buildTaskTools(interaction, options.EnabledTools, options.DisableExternalTools),
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
 		onStep:            options.OnStep,
@@ -304,7 +360,30 @@ func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) 
 		return connector.LlmResponseWithTools{}, err
 	}
 	response.Response = strings.TrimSpace(response.Response)
+	run.accountTokens(promptWithState, response.Response)
 	return response, nil
+}
+
+// tokenBudgetExceeded reports whether the run has reached its token budget. A
+// budget of 0 means unlimited and is never exceeded.
+func (r *taskExecutionState) tokenBudgetExceeded() bool {
+	return r.state.TokenBudget > 0 && r.state.TokensUsed >= r.state.TokenBudget
+}
+
+// accountTokens adds one model exchange to the running token total. No connector
+// currently reports usage through the response type, so this uses the
+// characters-exchanged ÷ 5 estimate; if a usage field is added later, prefer it
+// here.
+func (r *taskExecutionState) accountTokens(prompt, response string) {
+	r.state.TokensUsed += estimateTokens(prompt, response)
+}
+
+func estimateTokens(parts ...string) int {
+	total := 0
+	for _, part := range parts {
+		total += len(part)
+	}
+	return total / tokenEstimateCharsPerToken
 }
 
 func (a *Agent) handleTaskToolResponse(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
@@ -554,10 +633,32 @@ func (r *taskExecutionState) finalAnswerResult(answer string) TaskRunResult {
 	return TaskRunResult{Response: answer}
 }
 
-func (a *Agent) buildTaskTools(interaction TaskInteraction) map[string]tools.Tool {
+// buildTaskTools assembles the tools available for a run. enabledTools selects
+// which of the agent's tools are exposed: a nil slice exposes every available
+// tool, except that when disableExternal is set, external-facing tools (web
+// search and MCP tools) are dropped (the routine default policy). A non-nil
+// enabledTools is an explicit allow-list of tool names, and a named
+// external-facing tool is included (explicit opt-in). The task-only tools
+// (user_clarification, final_answer, change_directory) are always appended.
+func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []string, disableExternal bool) map[string]tools.Tool {
 	taskTools := make(map[string]tools.Tool, len(a.Tools))
-	for name, tool := range a.Tools {
-		taskTools[name] = tool
+	if enabledTools == nil {
+		for name, tool := range a.Tools {
+			if disableExternal && tools.IsExternalFacing(tool) {
+				continue
+			}
+			taskTools[name] = tool
+		}
+	} else {
+		allowed := make(map[string]struct{}, len(enabledTools))
+		for _, name := range enabledTools {
+			allowed[name] = struct{}{}
+		}
+		for name, tool := range a.Tools {
+			if _, ok := allowed[name]; ok {
+				taskTools[name] = tool
+			}
+		}
 	}
 
 	askUserTool := NewAskUserTool(interaction)

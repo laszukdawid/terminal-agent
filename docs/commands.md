@@ -8,6 +8,7 @@ Terminal Agent provides several commands to help you interact with the terminal 
 |---------|-------------|
 | `ask` | Query the LLM with a question to get information |
 | `task` | Execute a task using LLM-generated commands |
+| `routine` | Define and run scheduled, unattended agent routines |
 | `tool` | Manage and execute specific tools |
 | `plugin` | Install and manage plugins |
 | `config` | Configure Terminal Agent settings |
@@ -32,6 +33,7 @@ For detailed information about each command, see:
 
 - [Ask Command](./commands/ask.md)
 - [Task Command](./commands/task.md)
+- [Routine Command](./commands/routine.md)
 - [Tool Command](./commands/tool.md)
 - [Plugin Command](./commands/plugin.md)
 - [Config Command](./commands/config.md)

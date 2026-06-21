@@ -74,6 +74,8 @@ func NewCommand() *cobra.Command {
 			}
 			defer logger.Sync()
 
+			// Surface routine runs that completed since the user was last here.
+			commands.PrintRoutineLaunchNotice(cmd)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			u.Logger.Debug("Running command", zap.Strings("args", args))
@@ -122,6 +124,7 @@ func mainRun() exitCode {
 	cmd.AddCommand(commands.NewConfigCommand(c))
 	cmd.AddCommand(commands.NewToolCommand(c))
 	cmd.AddCommand(commands.NewTaskCommand(c))
+	cmd.AddCommand(commands.NewRoutineCommand(c))
 	cmd.AddCommand(commands.NewMemoryCommand())
 	cmd.AddCommand(commands.NewAuthCommand())
 	cmd.AddCommand(commands.NewPluginCommand())
