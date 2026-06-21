@@ -29,6 +29,9 @@ const (
 	// GUI is executing (the persisted statuses are active/inactive/error).
 	statusRunning       = "running"
 	routineCronExamples = "Examples: 0 9 * * 1-5 (weekdays 9:00) · @daily · @hourly · empty = manual"
+	// routineHeaderTitleMax bounds the detail header title so a long name cannot
+	// collide with the action buttons on its right.
+	routineHeaderTitleMax = 36
 )
 
 // routineLocalToolNames are the built-in, non-external tools enabled when a
@@ -137,8 +140,10 @@ func (g *App) showRoutineDetail(view appservice.RoutineView) {
 	r := view.Routine
 
 	// Emphasized routine name (large, accent) with the status dot on the left, and
-	// the routine actions in the top-right corner of the header.
-	title := canvas.NewText(routineTitle(r), palette.accentGreen)
+	// the routine actions in the top-right corner of the header. The name is
+	// truncated so a long name cannot push into or overlap the action buttons
+	// (canvas.Text does not wrap or ellipsize on its own).
+	title := canvas.NewText(truncateRunes(routineTitle(r), routineHeaderTitleMax), palette.accentGreen)
 	title.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 	title.TextSize = theme.TextSize() + 5
 	titleLeft := container.NewHBox(vCenter(newStatusDot(routineStatusColor(view.Status))), vCenter(title))
@@ -249,7 +254,9 @@ func (g *App) runRoutineNow(id string) {
 	// Mark the routine running and refresh the list so its status reads "running"
 	// until the (background) run finishes.
 	g.markRoutineRunning(id, true)
-	g.loadRoutines()
+	if g.state.mode == guiModeRoutine {
+		g.loadRoutines()
+	}
 	go func() {
 		_, err := g.routineService.Run(context.Background(), appservice.RoutineRunRequest{
 			IDOrName: id,
@@ -263,7 +270,9 @@ func (g *App) runRoutineNow(id string) {
 			case err != nil:
 				dialog.ShowError(err, g.popup.window)
 			}
-			g.loadRoutines()
+			if g.state.mode == guiModeRoutine {
+				g.loadRoutines()
+			}
 		})
 	}()
 }
@@ -412,9 +421,9 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 			{"Max turns", maxTurns.Text, &routine.MaxTurns},
 			{"Max tool calls", maxToolCalls.Text, &routine.MaxToolCalls},
 		} {
-			value, err := parseOptionalInt(b.text)
+			value, err := parseOptionalNonNegativeInt(b.text)
 			if err != nil {
-				errorLabel.SetText(b.label + " must be a number.")
+				errorLabel.SetText(b.label + " " + err.Error() + ".")
 				return
 			}
 			*b.dest = value
@@ -446,13 +455,13 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 	fields := container.NewVBox(form, toolsField, enabled)
 	bottom := container.NewVBox(errorLabel, footer)
 	scroll := container.NewVScroll(fields)
-	scroll.SetMinSize(fyne.NewSize(560, routineScrollHeight(win, fields, bottom)))
+	scroll.SetMinSize(fyne.NewSize(routineDialogWidth(win, 560), routineScrollHeight(win, fields, bottom)))
 	title := "New routine"
 	if isEdit {
 		title = "Edit routine"
 	}
 	dlg = dialog.NewCustomWithoutButtons(title, container.NewBorder(nil, bottom, nil, nil, scroll), win)
-	dlg.Resize(fyne.NewSize(600, 0))
+	dlg.Resize(fyne.NewSize(routineDialogWidth(win, 600), 0))
 	dlg.SetOnClosed(g.FocusInput)
 	dlg.Show()
 }
@@ -506,9 +515,9 @@ func (g *App) showRoutineDefaultsForm() {
 			{"Max turns", maxTurns.Text, &updated.MaxTurns},
 			{"Max tool calls", maxToolCalls.Text, &updated.MaxToolCalls},
 		} {
-			value, err := parseOptionalInt(b.text)
+			value, err := parseOptionalNonNegativeInt(b.text)
 			if err != nil {
-				errorLabel.SetText(b.label + " must be a number.")
+				errorLabel.SetText(b.label + " " + err.Error() + ".")
 				return
 			}
 			*b.dest = value
@@ -530,9 +539,9 @@ func (g *App) showRoutineDefaultsForm() {
 	fields := container.NewVBox(enabled, form)
 	bottom := container.NewVBox(errorLabel, footer)
 	scroll := container.NewVScroll(fields)
-	scroll.SetMinSize(fyne.NewSize(480, routineScrollHeight(win, fields, bottom)))
+	scroll.SetMinSize(fyne.NewSize(routineDialogWidth(win, 480), routineScrollHeight(win, fields, bottom)))
 	dlg = dialog.NewCustomWithoutButtons("Routine defaults", container.NewBorder(nil, bottom, nil, nil, scroll), win)
-	dlg.Resize(fyne.NewSize(520, 0))
+	dlg.Resize(fyne.NewSize(routineDialogWidth(win, 520), 0))
 	dlg.Show()
 }
 
@@ -577,17 +586,54 @@ func formFieldLabel(text string) fyne.CanvasObject {
 // routineScrollHeight sizes the scrolling field area to the fields' natural
 // height so the dialog hugs the content (no wasted space above the pinned
 // footer), capped at the window height (less the footer) so a tall form scrolls
-// instead of overflowing.
+// instead of overflowing on a small window.
 func routineScrollHeight(win fyne.Window, fields, footer fyne.CanvasObject) float32 {
 	available := win.Canvas().Size().Height - 120 - footer.MinSize().Height
-	if available < 200 {
-		available = 200
+	if available < 120 {
+		available = 120
 	}
 	natural := fields.MinSize().Height
 	if natural > available {
 		return available
 	}
 	return natural
+}
+
+// routineDialogWidth caps a preferred dialog width to the window so the dialog
+// never renders wider than the screen.
+func routineDialogWidth(win fyne.Window, preferred float32) float32 {
+	available := win.Canvas().Size().Width - 40
+	if preferred > available {
+		return available
+	}
+	return preferred
+}
+
+// truncateRunes shortens s to at most n runes, appending an ellipsis when cut.
+func truncateRunes(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return strings.TrimSpace(string(runes[:n])) + "…"
+}
+
+// parseOptionalNonNegativeInt parses an optional integer field that must be zero
+// or positive (the budgets/limits use 0 to mean unlimited/default). It returns
+// user-facing error text suitable for prefixing with the field label.
+func parseOptionalNonNegativeInt(text string) (*int, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, nil
+	}
+	value, err := strconv.Atoi(text)
+	if err != nil {
+		return nil, fmt.Errorf("must be a number")
+	}
+	if value < 0 {
+		return nil, fmt.Errorf("must be zero or a positive number")
+	}
+	return &value, nil
 }
 
 func routineTitle(r routines.Routine) string {

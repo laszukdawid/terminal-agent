@@ -128,3 +128,41 @@ func TestSetRoutinesPopulatesBody(t *testing.T) {
 	p.setRoutines(nil, "boom", nil)
 	assert.Len(t, p.routineBody.Objects, 1, "error state is a single element")
 }
+
+func TestParseOptionalNonNegativeInt(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		wantNil bool
+		want    int
+		wantErr bool
+	}{
+		{name: "empty is nil", in: "  ", wantNil: true},
+		{name: "zero ok", in: "0", want: 0},
+		{name: "positive ok", in: "500", want: 500},
+		{name: "negative rejected", in: "-1", wantErr: true},
+		{name: "non-numeric rejected", in: "x", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseOptionalNonNegativeInt(tt.in)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			assert.NotNil(t, got)
+			assert.Equal(t, tt.want, *got)
+		})
+	}
+}
+
+func TestTruncateRunes(t *testing.T) {
+	assert.Equal(t, "short", truncateRunes("short", 10))
+	assert.Equal(t, "exactly10c", truncateRunes("exactly10c", 10))
+	assert.Equal(t, "abcde…", truncateRunes("abcdefghij", 5))
+}
