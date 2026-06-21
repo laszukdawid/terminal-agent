@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -568,12 +567,7 @@ func (c *interactiveClarification) cleanup() {
 const taskClarificationTraceLimit = 100
 
 func formatTaskClarificationTrace(response string, styled bool) string {
-	payload := map[string]string{"response": truncateTaskClarificationTrace(response)}
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return formatTaskTrace("Clarification", fmt.Sprintf("{response:%q}", payload["response"]), styled)
-	}
-	return formatTaskTrace("Clarification", string(encoded), styled)
+	return formatTaskTrace("Clarification", truncateTaskClarificationTrace(response), styled)
 }
 
 func truncateTaskClarificationTrace(response string) string {

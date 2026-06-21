@@ -1167,6 +1167,35 @@ func TestTaskWithOptionsResultFallsBackWithoutNativeToolCalling(t *testing.T) {
 	assert.Equal(t, "gpu", conn.devices[0])
 }
 
+func TestTaskWithOptionsResultUsesStructuredFallbackWhenNativeToolCallingReturnsProse(t *testing.T) {
+	utils.GetLogger()
+
+	interaction := &fakeTaskInteraction{answer: "the logs"}
+	conn := &scriptedToolConnector{
+		responses: []connector.LlmResponseWithTools{
+			{Response: "Could you clarify what you'd like me to show you?"},
+			{ToolUse: true, ToolName: ToolNameFinalAnswer, ToolInput: map[string]any{"answer": "done"}},
+		},
+		queryResponse: `{"action":"tool","tool":"user_clarification","input":{"question":"What would you like me to show you?"},"thought":"need clarification"}`,
+	}
+	sysPrompt := "task system prompt"
+	agent := &Agent{
+		Connector:        conn,
+		Tools:            map[string]tools.Tool{ToolNameFinalAnswer: NewFinalAnswerTool()},
+		systemPromptTask: &sysPrompt,
+		maxTokens:        MaxTokens,
+	}
+
+	result, err := agent.TaskWithOptionsResult(context.Background(), "please show me", TaskOptions{Interaction: interaction})
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", result.Response)
+	require.Len(t, interaction.clarifications, 1)
+	assert.Equal(t, "What would you like me to show you?", interaction.clarifications[0].Question)
+	assert.Equal(t, 2, conn.queryToolCalls)
+	assert.Equal(t, 1, conn.queryCalls)
+}
+
 func TestTaskWithOptionsResultRetriesMalformedFallbackResponse(t *testing.T) {
 	utils.GetLogger()
 

@@ -3,6 +3,8 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -27,8 +29,13 @@ const (
 	unixCommandCD                 = "cd"
 	unixBracketTestClose          = "]"
 	parentRelPath                 = ".."
+	readOnlyRedirFDDefault        = 1
+	readOnlyRedirFDStdout         = 1
+	readOnlyRedirFDStderr         = 2
 	sedSubstituteCommand          = 's'
 )
+
+var sedNumericPrintCommandPattern = regexp.MustCompile(`^\d+,\d+p$`)
 
 type readOnlyCommandPolicy struct {
 	allowLoopVars bool
@@ -176,7 +183,46 @@ func isReadOnlyPipelineStmt(stmt *syntax.Stmt, ctx *unixSafetyContext) bool {
 }
 
 func isCleanReadOnlyStmt(stmt *syntax.Stmt) bool {
-	return stmt != nil && !stmt.Negated && !stmt.Background && !stmt.Coprocess && !stmt.Disown && len(stmt.Redirs) == 0
+	return stmt != nil && !stmt.Negated && !stmt.Background && !stmt.Coprocess && !stmt.Disown && readOnlyRedirsAllowed(stmt.Redirs)
+}
+
+func readOnlyRedirsAllowed(redirs []*syntax.Redirect) bool {
+	for _, redir := range redirs {
+		if !readOnlyRedirAllowed(redir) {
+			return false
+		}
+	}
+	return true
+}
+
+func readOnlyRedirAllowed(redir *syntax.Redirect) bool {
+	if redir == nil || redir.Hdoc != nil || redir.Word == nil {
+		return false
+	}
+
+	switch redir.Op {
+	case syntax.RdrOut, syntax.AppOut:
+	default:
+		return false
+	}
+
+	fd := readOnlyRedirFDDefault
+	if redir.N != nil {
+		parsedFD, err := strconv.Atoi(redir.N.Value)
+		if err != nil {
+			return false
+		}
+		fd = parsedFD
+	}
+	if fd != readOnlyRedirFDStdout && fd != readOnlyRedirFDStderr {
+		return false
+	}
+
+	target, ok := staticShellWordValue(redir.Word)
+	if !ok {
+		return false
+	}
+	return filepath.Clean(target) == os.DevNull
 }
 
 func isReadOnlyCall(call *syntax.CallExpr, ctx *unixSafetyContext, allowDirectoryChange bool) bool {
@@ -450,11 +496,15 @@ func sedScriptAllowsReadOnly(script string) bool {
 		return false
 	}
 	for _, command := range commands {
-		if !sedSubstitutionAllowsReadOnly(strings.TrimSpace(command)) {
+		if !sedCommandAllowsReadOnly(strings.TrimSpace(command)) {
 			return false
 		}
 	}
 	return true
+}
+
+func sedCommandAllowsReadOnly(command string) bool {
+	return sedSubstitutionAllowsReadOnly(command) || sedNumericPrintCommandPattern.MatchString(command)
 }
 
 func sedSubstitutionAllowsReadOnly(command string) bool {

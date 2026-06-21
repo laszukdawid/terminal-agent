@@ -173,15 +173,15 @@ func TestTaskCommandHandlesInteractiveEvents(t *testing.T) {
 	assert.Equal(t, "internal", clarification)
 	assert.Contains(t, output.String(), "Run shell command?")
 	assert.Contains(t, output.String(), "Need clarification: Which directory?")
-	assert.Contains(t, output.String(), `Clarification: {"response":"internal"}`)
+	assert.Contains(t, output.String(), "Clarification: internal")
 	assert.Contains(t, output.String(), "done")
 }
 
 func TestFormatTaskClarificationTrace(t *testing.T) {
-	assert.Equal(t, `Clarification: {"response":"internal"}`, formatTaskClarificationTrace("internal", false))
+	assert.Equal(t, "Clarification: internal", formatTaskClarificationTrace("internal", false))
 
 	longResponse := strings.Repeat("a", 120)
-	assert.Equal(t, `Clarification: {"response":"`+strings.Repeat("a", 100)+`..."}`, formatTaskClarificationTrace(longResponse, false))
+	assert.Equal(t, "Clarification: "+strings.Repeat("a", 100)+"...", formatTaskClarificationTrace(longResponse, false))
 }
 
 func TestVisualLineCountUsesDisplayWidth(t *testing.T) {
