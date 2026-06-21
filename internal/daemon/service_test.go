@@ -1,6 +1,9 @@
 package daemon
 
 import (
+	"bytes"
+	"encoding/xml"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -59,7 +62,7 @@ func TestServiceManagerInstallUninstall(t *testing.T) {
 			name:        "linux systemd",
 			goos:        "linux",
 			unitPath:    func(home string) string { return home + "/.config/systemd/user/" + systemdUnit },
-			wantContent: "ExecStart=/usr/local/bin/agent daemon start",
+			wantContent: `ExecStart="/usr/local/bin/agent" daemon start`,
 			installCmd:  []string{"systemctl", "--user", "enable"},
 			uninstall:   []string{"systemctl", "--user", "disable"},
 		},
@@ -85,6 +88,38 @@ func TestServiceManagerInstallUninstall(t *testing.T) {
 			assert.True(t, rec.sawCommand(tt.uninstall...), "expected uninstall command %v in %v", tt.uninstall, rec.calls)
 		})
 	}
+}
+
+func TestServiceTemplatesEscapeSpecialCharsLinux(t *testing.T) {
+	t.Setenv(routines.DataDirEnv, t.TempDir())
+	home := t.TempDir()
+	m := &ServiceManager{goos: "linux", homeDir: home, exePath: "/opt/My Apps/agent%x", uid: 501, run: func(string, ...string) error { return nil }}
+	require.NoError(t, m.Install())
+
+	content, err := os.ReadFile(home + "/.config/systemd/user/" + systemdUnit)
+	require.NoError(t, err)
+	// Spaces are quoted and % is escaped to %% for systemd.
+	assert.Contains(t, string(content), `ExecStart="/opt/My Apps/agent%%x" daemon start`)
+}
+
+func TestServiceTemplatesProduceValidPlistXML(t *testing.T) {
+	t.Setenv(routines.DataDirEnv, t.TempDir())
+	home := t.TempDir()
+	m := &ServiceManager{goos: "darwin", homeDir: home, exePath: "/opt/a&b/agent", uid: 501, run: func(string, ...string) error { return nil }}
+	require.NoError(t, m.Install())
+
+	content, err := os.ReadFile(home + "/Library/LaunchAgents/" + launchdLabel + ".plist")
+	require.NoError(t, err)
+	// The plist must remain well-formed XML even with an & in the path.
+	decoder := xml.NewDecoder(bytes.NewReader(content))
+	for {
+		_, tokErr := decoder.Token()
+		if tokErr == io.EOF {
+			break
+		}
+		require.NoError(t, tokErr, "plist should be valid XML")
+	}
+	assert.Contains(t, string(content), "a&amp;b")
 }
 
 func TestServiceManagerUnsupportedOS(t *testing.T) {

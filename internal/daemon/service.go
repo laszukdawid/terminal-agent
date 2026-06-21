@@ -2,12 +2,14 @@ package daemon
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/laszukdawid/terminal-agent/internal/routines"
@@ -93,9 +95,9 @@ func (m *ServiceManager) installLaunchd() error {
 	path := m.launchdPlistPath()
 	logPath := filepath.Join(routines.DataDir(), "daemon.log")
 	content, err := renderTemplate(launchdPlistTemplate, map[string]string{
-		"Label":   launchdLabel,
-		"ExePath": m.exePath,
-		"LogPath": logPath,
+		"Label":   xmlEscape(launchdLabel),
+		"ExePath": xmlEscape(m.exePath),
+		"LogPath": xmlEscape(logPath),
 	})
 	if err != nil {
 		return err
@@ -112,13 +114,18 @@ func (m *ServiceManager) installLaunchd() error {
 func (m *ServiceManager) uninstallLaunchd() error {
 	target := "gui/" + strconv.Itoa(m.uid)
 	_ = m.run("launchctl", "bootout", target+"/"+launchdLabel)
-	return os.Remove(m.launchdPlistPath())
+	if err := os.Remove(m.launchdPlistPath()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func (m *ServiceManager) installSystemd() error {
 	path := m.systemdUnitPath()
 	content, err := renderTemplate(systemdUnitTemplate, map[string]string{
-		"ExePath": m.exePath,
+		// systemd treats % as a specifier (escape to %%) and parses the line with
+		// shell-like quoting, so the path is escaped and quoted to survive spaces.
+		"ExecStart": fmt.Sprintf("%q daemon start", strings.ReplaceAll(m.exePath, "%", "%%")),
 	})
 	if err != nil {
 		return err
@@ -155,6 +162,13 @@ func renderTemplate(tmpl *template.Template, data map[string]string) (string, er
 	return out.String(), nil
 }
 
+// xmlEscape escapes a value for safe inclusion in the launchd plist XML.
+func xmlEscape(s string) string {
+	var b bytes.Buffer
+	_ = xml.EscapeText(&b, []byte(s))
+	return b.String()
+}
+
 var launchdPlistTemplate = template.Must(template.New("plist").Parse(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -185,7 +199,7 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart={{.ExePath}} daemon start
+ExecStart={{.ExecStart}}
 Restart=on-failure
 RestartSec=5
 

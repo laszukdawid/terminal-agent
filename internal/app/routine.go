@@ -218,6 +218,18 @@ func (s *routineService) Run(ctx context.Context, req RoutineRunRequest) (Routin
 		trigger = routines.TriggerManual
 	}
 
+	// A cross-process run lock prevents overlapping runs of the same routine
+	// (manual + scheduled, or a run that outlived a daemon restart). If another
+	// run holds it, skip cleanly without recording a new run.
+	release, err := routines.AcquireRunLock(r.ID)
+	if err != nil {
+		if errors.Is(err, routines.ErrRunInProgress) {
+			return RoutineRunResult{Routine: r}, routines.ErrRunInProgress
+		}
+		return RoutineRunResult{}, err
+	}
+	defer release()
+
 	eff := s.resolve(r)
 	logDir := routines.LogDir(r.ID)
 

@@ -115,6 +115,26 @@ func TestRunRoutineRecordsFailureAndWritesArtifacts(t *testing.T) {
 	assert.True(t, hasSummary, "a result summary should be written for the failed run")
 }
 
+func TestRunRoutineSkipsWhenAlreadyRunning(t *testing.T) {
+	t.Setenv(routines.DataDirEnv, t.TempDir())
+	t.Setenv(routines.DefinitionsFileEnv, t.TempDir()+"/routines.json")
+	cfg := config.NewDefaultConfig()
+	store := routines.NewStore(routines.DefinitionsPath())
+	require.NoError(t, store.Upsert(routines.Routine{ID: "busy", Prompt: "p", Enabled: true}))
+
+	// Hold the run lock to simulate an in-flight run of the same routine.
+	release, err := routines.AcquireRunLock("busy")
+	require.NoError(t, err)
+	defer release()
+
+	_, runErr := NewRoutineService(cfg).Run(context.Background(), RoutineRunRequest{IDOrName: "busy"})
+	assert.ErrorIs(t, runErr, routines.ErrRunInProgress)
+
+	_, hasRun, err := routines.NewStateStore(routines.StatePath()).Get("busy")
+	require.NoError(t, err)
+	assert.False(t, hasRun, "a skipped run must not record state")
+}
+
 func TestLaunchNoticeReportsFailuresOnce(t *testing.T) {
 	t.Setenv(routines.DataDirEnv, t.TempDir())
 	cfg := config.NewDefaultConfig()

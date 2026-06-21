@@ -86,3 +86,30 @@ func processAlive(pid int) bool {
 	// EPERM means the process exists but is owned by another user.
 	return errors.Is(err, syscall.EPERM)
 }
+
+// daemonRunning reports whether a daemon currently holds the single-instance
+// lock. The flock is authoritative — unlike the PID file it cannot go stale after
+// a crash and cannot be fooled by PID reuse. When a daemon is running, the
+// recorded PID is returned for display/signaling.
+func daemonRunning() (running bool, pid int, err error) {
+	if err := os.MkdirAll(routines.DataDir(), 0o755); err != nil {
+		return false, 0, err
+	}
+	f, err := os.OpenFile(lockPath(), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return false, 0, err
+	}
+	defer f.Close()
+
+	lockErr := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if lockErr == nil {
+		// We acquired it, so no daemon is running; release immediately.
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return false, 0, nil
+	}
+	if errors.Is(lockErr, syscall.EWOULDBLOCK) {
+		pid, _ := readPIDFile()
+		return true, pid, nil
+	}
+	return false, 0, fmt.Errorf("checking daemon lock: %w", lockErr)
+}

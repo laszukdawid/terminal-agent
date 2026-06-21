@@ -73,6 +73,21 @@ func TestStateClaimPendingIsAtomicPerSnapshot(t *testing.T) {
 	assert.Empty(t, claimed)
 }
 
+func TestAcquireRunLock(t *testing.T) {
+	t.Setenv(DataDirEnv, t.TempDir())
+
+	release, err := AcquireRunLock("r")
+	require.NoError(t, err)
+
+	_, err = AcquireRunLock("r")
+	assert.ErrorIs(t, err, ErrRunInProgress, "a second acquire must report in-progress")
+
+	release()
+	release2, err := AcquireRunLock("r")
+	require.NoError(t, err, "lock is reacquirable after release")
+	release2()
+}
+
 func TestStoreResolveByNameAndPrefix(t *testing.T) {
 	store := NewStore(filepath.Join(t.TempDir(), "routines.json"))
 	require.NoError(t, store.Upsert(Routine{ID: "report-daily", Name: "Daily Report", Prompt: "x", Enabled: true}))

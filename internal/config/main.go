@@ -17,6 +17,12 @@ func getConfigPath() string {
 	return filepath.Join(os.Getenv("HOME"), ".config", "terminal-agent", "config.json")
 }
 
+// ConfigPath returns the absolute path of the main configuration file. Callers
+// that watch the config for changes (e.g. the routine daemon) use this.
+func ConfigPath() string {
+	return getConfigPath()
+}
+
 type Config interface {
 	GetDefaultProvider() string
 	GetDefaultModelId() string

@@ -43,11 +43,12 @@ type Daemon struct {
 	reconcileInterval time.Duration
 	now               func() time.Time
 
-	mu        sync.Mutex
-	cron      *cron.Cron
-	schedules map[string]cron.Schedule // id -> parsed schedule (for next-run refresh)
-	running   map[string]bool          // single-flight guard per routine id
-	lastMod   time.Time                // definitions file modtime for change detection
+	mu            sync.Mutex
+	cron          *cron.Cron
+	schedules     map[string]cron.Schedule // id -> parsed schedule (for next-run refresh)
+	running       map[string]bool          // single-flight guard per routine id
+	lastMod       time.Time                // definitions file modtime for change detection
+	lastConfigMod time.Time                // config file modtime (global toggle changes)
 }
 
 // New builds a daemon backed by the standard routine stores and the running
@@ -94,8 +95,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 		defer watcher.Close()
 	}
 	var events chan fsnotify.Event
+	var watchErrors chan error
 	if watcher != nil {
 		events = watcher.Events
+		watchErrors = watcher.Errors
 	}
 
 	ticker := time.NewTicker(d.reconcileInterval)
@@ -110,14 +113,22 @@ func (d *Daemon) Run(ctx context.Context) error {
 		case <-ticker.C:
 			d.reload(false)
 			d.refreshNextRuns()
-		case event, ok := <-events:
+		case _, ok := <-events:
 			if !ok {
 				events = nil
 				continue
 			}
-			if filepath.Base(event.Name) == filepath.Base(routines.DefinitionsPath()) {
-				d.reload(false)
+			// reload() decides relevance by comparing the definitions and config
+			// file modtimes, so any change in the watched directory is funneled here.
+			d.reload(false)
+		case err, ok := <-watchErrors:
+			// fsnotify requires draining Errors or the watcher can stall; the
+			// reconcile ticker still bounds staleness if the watch degrades.
+			if !ok {
+				watchErrors = nil
+				continue
 			}
+			log.Warnw("daemon: file watch error", "error", err)
 		}
 	}
 }
@@ -138,27 +149,43 @@ func (d *Daemon) startWatcher() *fsnotify.Watcher {
 	return watcher
 }
 
-// reload rebuilds the schedule when the definitions file changed (or force is set).
+// reload rebuilds the schedule when the definitions file or the config file
+// changed (or force is set). Watching the config file lets a change to the global
+// routines toggle take effect without a daemon restart.
 func (d *Daemon) reload(force bool) {
-	var mod time.Time
-	if info, err := os.Stat(routines.DefinitionsPath()); err == nil {
-		mod = info.ModTime()
-	}
+	routinesMod := fileModTime(routines.DefinitionsPath())
+	configMod := fileModTime(config.ConfigPath())
 	d.mu.Lock()
-	changed := force || !mod.Equal(d.lastMod)
-	d.lastMod = mod
+	changed := force || !routinesMod.Equal(d.lastMod) || !configMod.Equal(d.lastConfigMod)
+	d.lastMod = routinesMod
+	d.lastConfigMod = configMod
 	d.mu.Unlock()
 	if changed {
 		d.loadAndSchedule()
 	}
 }
 
-// loadAndSchedule rebuilds the cron from the current definitions and publishes
-// each routine's next run time.
+func fileModTime(path string) time.Time {
+	if info, err := os.Stat(path); err == nil {
+		return info.ModTime()
+	}
+	return time.Time{}
+}
+
+// loadAndSchedule reloads configuration, rebuilds the cron from the current
+// definitions, and publishes each routine's next run time. A failure to read the
+// definitions leaves the previous (last-good) schedule in place so a malformed
+// edit degrades gracefully rather than halting all automation.
 func (d *Daemon) loadAndSchedule() {
+	if cfg, err := config.LoadConfig(); err == nil {
+		d.cfg = cfg
+	} else {
+		log.Warnw("daemon: reloading config failed, keeping previous config", "error", err)
+	}
+
 	routineList, err := d.store.List()
 	if err != nil {
-		log.Warnw("daemon: loading routines failed", "error", err)
+		log.Errorw("daemon: reading routines failed, keeping previous schedule", "error", err)
 		return
 	}
 	schedules := selectSchedules(routineList, d.cfg.GetRoutinesEnabled())
@@ -172,11 +199,22 @@ func (d *Daemon) loadAndSchedule() {
 
 	d.mu.Lock()
 	old := d.cron
+	oldSchedules := d.schedules
 	d.cron = c
 	d.schedules = schedules
 	d.mu.Unlock()
 	if old != nil {
 		old.Stop()
+	}
+
+	// Clear the published next-run time for routines that are no longer scheduled
+	// (disabled or removed) so stale "next run" data does not linger.
+	for id := range oldSchedules {
+		if _, stillScheduled := schedules[id]; !stillScheduled {
+			if err := d.state.SetNextRun(id, time.Time{}); err != nil {
+				log.Warnw("daemon: clearing stale next run failed", "routine", id, "error", err)
+			}
+		}
 	}
 
 	d.refreshNextRuns()
@@ -270,23 +308,32 @@ type Status struct {
 	PID     int
 }
 
-// CurrentStatus reads the PID file and checks liveness.
+// CurrentStatus reports whether a daemon is running, using the single-instance
+// lock as the source of truth so a stale PID file is never reported as running.
 func CurrentStatus() (Status, error) {
-	pid, err := readPIDFile()
+	running, pid, err := daemonRunning()
 	if err != nil {
 		return Status{}, err
 	}
-	return Status{Running: pid != 0 && processAlive(pid), PID: pid}, nil
+	if !running {
+		removePIDFile() // clean up a stale PID file from a crashed daemon
+	}
+	return Status{Running: running, PID: pid}, nil
 }
 
-// Stop signals a running daemon to terminate gracefully.
+// Stop signals the running daemon to terminate gracefully. It relies on the lock
+// to confirm a daemon is actually running before signaling any PID.
 func Stop() error {
-	pid, err := readPIDFile()
+	running, pid, err := daemonRunning()
 	if err != nil {
 		return err
 	}
-	if pid == 0 || !processAlive(pid) {
+	if !running {
+		removePIDFile()
 		return ErrNotRunning
+	}
+	if pid <= 0 {
+		return fmt.Errorf("daemon is running but its PID is unknown")
 	}
 	return syscall.Kill(pid, syscall.SIGTERM)
 }

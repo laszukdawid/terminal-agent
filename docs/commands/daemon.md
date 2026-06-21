@@ -47,13 +47,17 @@ On unsupported platforms, run `agent daemon start` under your own supervisor.
 
 - Only **enabled** routines with a non-empty `--cron` schedule are scheduled; the
   global `routines.enabled` toggle disables all scheduling at once.
-- The daemon watches the routines definitions file and reloads on change, so
-  `create` / `enable` / `disable` / `delete` take effect without a restart.
+- The daemon watches both the routines definitions file and `config.json` and
+  reloads on change, so `create` / `enable` / `disable` / `delete` and toggling
+  `routines.enabled` all take effect without a restart.
 - It publishes each routine's next run time, which `agent routine list` / `show`
-  display.
-- A routine whose previous run is still in progress is skipped (single-flight), not
-  run concurrently.
-- Only one daemon runs at a time (single-instance lock).
+  display, and clears it when a routine is disabled or removed.
+- A routine whose previous run is still in progress is skipped, not run
+  concurrently. This single-flight guard is enforced across processes (a routine
+  lock), so a manual run and a scheduled run never overlap either.
+- Only one daemon runs at a time (single-instance lock). `status` and `stop` use
+  that lock as the source of truth, so a stale PID file left by a crash is not
+  mistaken for a running daemon.
 - Routine default changes (model, budgets) take effect on the next run with no
   daemon restart, because each run reloads configuration in its own process.
 

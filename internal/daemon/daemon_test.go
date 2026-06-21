@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -152,6 +153,38 @@ func TestReloadForceLoads(t *testing.T) {
 	_, ok := d.schedules["r"]
 	d.mu.Unlock()
 	assert.True(t, ok, "force reload should schedule the routine")
+}
+
+func TestCurrentStatusTreatsStalePIDAsStopped(t *testing.T) {
+	t.Setenv(routines.DataDirEnv, t.TempDir())
+	// No daemon is holding the lock, but a stale PID file exists from a crash.
+	require.NoError(t, writePIDFile(999999))
+
+	status, err := CurrentStatus()
+	require.NoError(t, err)
+	assert.False(t, status.Running, "a stale PID file must not be reported as running")
+
+	require.ErrorIs(t, Stop(), ErrNotRunning)
+}
+
+func TestLoadAndScheduleReloadsGlobalToggle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configDir := filepath.Join(home, ".config", "terminal-agent")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.json"), []byte(`{"routines":{"enabled":false}}`), 0o644))
+
+	runner := &fakeRunner{}
+	d := newTestDaemon(t, runner) // routine stores point at their own temp dir
+	require.NoError(t, d.store.Upsert(routines.Routine{ID: "r", Prompt: "p", Schedule: "0 2 * * *", Enabled: true}))
+
+	d.loadAndSchedule() // reloads config from disk (routines globally disabled)
+	defer d.stopCron()
+
+	d.mu.Lock()
+	count := len(d.schedules)
+	d.mu.Unlock()
+	assert.Equal(t, 0, count, "global routines.enabled=false must stop scheduling without a restart")
 }
 
 func TestRunHoldsSingleInstanceLock(t *testing.T) {

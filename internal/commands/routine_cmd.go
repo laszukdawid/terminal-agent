@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -198,6 +199,10 @@ func routineRunCommand(cfg config.Config) *cobra.Command {
 				IDOrName: args[0],
 				Trigger:  trigger,
 			})
+			if errors.Is(err, routines.ErrRunInProgress) {
+				cmd.Printf("Routine %q is already running; skipped.\n", args[0])
+				return nil
+			}
 			if err != nil {
 				return err
 			}
