@@ -12,6 +12,7 @@ import (
 
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/daemon"
 	"github.com/laszukdawid/terminal-agent/internal/routines"
 	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
 )
@@ -41,6 +42,9 @@ type RoutineService interface {
 	// since the user last saw routine activity, then advances the seen marker.
 	// It returns an empty string when there is nothing to report.
 	LaunchNotice(ctx context.Context) (string, error)
+	// DaemonRunning reports whether the scheduler daemon is currently running.
+	// Scheduled routines only fire while it is; surfaces should warn when it isn't.
+	DaemonRunning() bool
 }
 
 // RoutineView merges a routine definition with its latest run status for display.
@@ -92,6 +96,11 @@ func NewRoutineService(cfg config.Config) RoutineService {
 		store: routines.DefaultStore(),
 		state: routines.DefaultStateStore(),
 	}
+}
+
+func (s *routineService) DaemonRunning() bool {
+	status, err := daemon.CurrentStatus()
+	return err == nil && status.Running
 }
 
 func (s *routineService) List(ctx context.Context) ([]RoutineView, error) {

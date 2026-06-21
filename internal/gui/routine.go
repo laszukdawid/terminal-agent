@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,12 @@ const (
 	// routineHeaderTitleMax bounds the detail header title so a long name cannot
 	// collide with the action buttons on its right.
 	routineHeaderTitleMax = 36
+	// routineRefreshInterval is how often the Routine tab polls for runs produced
+	// out-of-process (the daemon or the CLI) while it is visible.
+	routineRefreshInterval = 4 * time.Second
+	// routineDaemonOffNotice is shown when scheduled routines exist but the
+	// scheduler daemon is not running, so the user knows why they will not fire.
+	routineDaemonOffNotice = "Scheduler is not running, so scheduled routines won't fire. Start it with `agent daemon install` (once) or `agent daemon start`."
 )
 
 // routineLocalToolNames are the built-in, non-external tools enabled when a
@@ -66,9 +73,10 @@ func (g *App) isRoutineRunning(id string) bool {
 }
 
 func (g *App) loadRoutines() {
+	g.lastRoutineMod = latestRoutineMod()
 	views, err := g.routineService.List(context.Background())
 	if err != nil {
-		g.popup.setRoutines(nil, "Routines unavailable: "+err.Error(), nil)
+		g.popup.setRoutines(nil, "Routines unavailable: "+err.Error(), nil, "")
 		return
 	}
 	// Overlay the live "running" status for routines launched from the GUI.
@@ -77,14 +85,56 @@ func (g *App) loadRoutines() {
 			views[i].Status = statusRunning
 		}
 	}
-	g.popup.setRoutines(views, "", g.showRoutineDetail)
+	// Warn when routines are scheduled but no scheduler is running to fire them.
+	notice := ""
+	if routinesHaveSchedule(views) && !g.routineService.DaemonRunning() {
+		notice = routineDaemonOffNotice
+	}
+	g.popup.setRoutines(views, "", g.showRoutineDetail, notice)
 }
 
-func (p *popupWindow) setRoutines(views []appservice.RoutineView, errorText string, onSelect func(appservice.RoutineView)) {
+// maybeRefreshRoutines reloads the Routine list when it is the visible tab and
+// the routine files changed since the last load, so out-of-process runs appear
+// without re-navigating, without rebuilding the list when nothing changed.
+func (g *App) maybeRefreshRoutines() {
+	if !g.state.isVisible || g.state.mode != guiModeRoutine {
+		return
+	}
+	if latestRoutineMod().Equal(g.lastRoutineMod) {
+		return
+	}
+	g.loadRoutines()
+}
+
+func routinesHaveSchedule(views []appservice.RoutineView) bool {
+	for _, v := range views {
+		if v.Routine.Enabled && strings.TrimSpace(v.Routine.Schedule) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// latestRoutineMod is the most recent modtime of the routine definitions and run
+// state files; it changes whenever a routine is edited or a run is recorded.
+func latestRoutineMod() time.Time {
+	var latest time.Time
+	for _, path := range []string{routines.DefinitionsPath(), routines.StatePath()} {
+		if info, err := os.Stat(path); err == nil && info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+	}
+	return latest
+}
+
+func (p *popupWindow) setRoutines(views []appservice.RoutineView, errorText string, onSelect func(appservice.RoutineView), notice string) {
 	if p.routineBody == nil {
 		return
 	}
 	p.routineBody.Objects = nil
+	if notice != "" {
+		p.routineBody.Add(routineNoticeBanner(notice))
+	}
 	switch {
 	case errorText != "":
 		label := widget.NewLabel(errorText)
@@ -111,6 +161,16 @@ func routineEmptyState() fyne.CanvasObject {
 	label := canvas.NewText("No routines yet. Use NEW to create one.", palette.secondaryText)
 	label.TextSize = theme.TextSize()
 	return container.NewPadded(label)
+}
+
+// routineNoticeBanner renders a warning banner shown above the routine list (e.g.
+// when the scheduler daemon is not running).
+func routineNoticeBanner(text string) fyne.CanvasObject {
+	palette := currentBrandPalette()
+	label := widget.NewLabel(text)
+	label.Wrapping = fyne.TextWrapWord
+	label.Importance = widget.WarningImportance
+	return container.New(layout.NewCustomPaddedLayout(0, historyCardGap, 0, 0), borderedBox(container.NewPadded(label), palette.warning))
 }
 
 func routineCardContent(view appservice.RoutineView) fyne.CanvasObject {

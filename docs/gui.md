@@ -151,6 +151,11 @@ leave fields blank — and the global routines on/off switch — live under **Se
 Routine defaults…**. Automatic firing requires the [daemon](commands/daemon.md);
 "Run now" works regardless.
 
+The list refreshes itself while it is open, so runs produced by the daemon or the CLI
+appear without re-navigating. If any routine has a schedule but the daemon is not
+running, a banner reminds you that scheduled routines will not fire until you start it
+(`agent daemon install` once, or `agent daemon start`).
+
 ## Appearance
 
 The popup uses a dark, terminal-native theme with monospace type and green

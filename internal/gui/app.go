@@ -36,6 +36,13 @@ type App struct {
 	// can show a live "running" status until the run finishes.
 	runningRoutines map[string]bool
 	runningMu       sync.Mutex
+
+	// routineRefreshStop stops the background poller that keeps the Routine list in
+	// sync with runs produced out-of-process (the daemon, the CLI). lastRoutineMod
+	// is the routine files' modtime at the last reload, so the poller only rebuilds
+	// the list when something actually changed.
+	routineRefreshStop chan struct{}
+	lastRoutineMod     time.Time
 }
 
 type AppOptions struct {
@@ -58,16 +65,17 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		fyneApp = app.NewWithID(options.AppID)
 	}
 	gui := &App{
-		fyneApp:         fyneApp,
-		service:         service,
-		routineService:  appservice.NewRoutineService(cfg),
-		cfg:             cfg,
-		state:           &state{mode: guiModeAsk},
-		quit:            fyneApp.Quit,
-		stopIndicator:   make(chan struct{}),
-		version:         options.Version,
-		voiceSchedule:   fyne.Do,
-		runningRoutines: map[string]bool{},
+		fyneApp:            fyneApp,
+		service:            service,
+		routineService:     appservice.NewRoutineService(cfg),
+		cfg:                cfg,
+		state:              &state{mode: guiModeAsk},
+		quit:               fyneApp.Quit,
+		stopIndicator:      make(chan struct{}),
+		version:            options.Version,
+		voiceSchedule:      fyne.Do,
+		runningRoutines:    map[string]bool{},
+		routineRefreshStop: make(chan struct{}),
 	}
 	if options.Voice.Schedule != nil {
 		gui.voiceSchedule = options.Voice.Schedule
@@ -82,7 +90,24 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 	gui.wire()
 	gui.render()
 	gui.watchThemeVariant(options.DevMode)
+	go gui.refreshRoutinesLoop()
 	return gui
+}
+
+// refreshRoutinesLoop keeps the Routine list current with runs that happen
+// out-of-process (the scheduler daemon, the CLI) by polling the routine files'
+// modtime while the Routine tab is visible. It rebuilds the list only on change.
+func (g *App) refreshRoutinesLoop() {
+	ticker := time.NewTicker(routineRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-g.routineRefreshStop:
+			return
+		case <-ticker.C:
+			fyne.Do(g.maybeRefreshRoutines)
+		}
+	}
 }
 
 func (g *App) watchThemeVariant(devMode bool) {
@@ -166,6 +191,13 @@ func (g *App) Quit() {
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
+	}
+	if g.routineRefreshStop != nil {
+		select {
+		case <-g.routineRefreshStop:
+		default:
+			close(g.routineRefreshStop)
+		}
 	}
 	g.quit()
 }

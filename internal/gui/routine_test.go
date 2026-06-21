@@ -119,13 +119,13 @@ func TestSetRoutinesPopulatesBody(t *testing.T) {
 		{Routine: routines.Routine{ID: "a", Prompt: "do a", TokenBudget: &tb}, Status: routines.StatusActive, Frequency: "Manual"},
 		{Routine: routines.Routine{ID: "b", Prompt: "do b"}, Status: routines.StatusInactive, Frequency: "0 9 * * *"},
 	}
-	p.setRoutines(views, "", nil)
+	p.setRoutines(views, "", nil, "")
 	assert.Len(t, p.routineBody.Objects, 2)
 
-	p.setRoutines(nil, "", nil)
+	p.setRoutines(nil, "", nil, "")
 	assert.Len(t, p.routineBody.Objects, 1, "empty state is a single element")
 
-	p.setRoutines(nil, "boom", nil)
+	p.setRoutines(nil, "boom", nil, "")
 	assert.Len(t, p.routineBody.Objects, 1, "error state is a single element")
 }
 
