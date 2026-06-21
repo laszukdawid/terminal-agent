@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -26,6 +27,33 @@ func TestBuildOutputWrapsGeneralResponseText(t *testing.T) {
 	}
 	if p.errorLabel.Wrapping != fyne.TextWrapBreak {
 		t.Fatalf("errorLabel.Wrapping = %v, want %v", p.errorLabel.Wrapping, fyne.TextWrapBreak)
+	}
+}
+
+func TestToolOutputScrollsHorizontallyInsteadOfWideningWindow(t *testing.T) {
+	test.NewApp()
+
+	p := &popupWindow{}
+	p.buildOutput()
+
+	// A single very long, unbreakable line (like the long paths in real tool
+	// output) that would otherwise force the whole window wider.
+	longLine := strings.Repeat("/System/Library/PrivateFrameworks/Accessory.framework/", 8)
+	p.setTranscript([]transcriptBlock{
+		{Kind: transcriptBlockToolOutput, Chunks: []string{longLine + "\n"}},
+	})
+
+	grid := p.transcriptViews[0].textGrid
+	if grid == nil {
+		t.Fatal("expected a tool-output text grid")
+	}
+	if grid.Scroll != fyne.ScrollHorizontalOnly {
+		t.Fatalf("tool-output grid Scroll = %v, want ScrollHorizontalOnly", grid.Scroll)
+	}
+	// The grid must not demand the full width of its longest line; otherwise the
+	// vertical-only outer scroll would propagate that width and widen the window.
+	if w := grid.MinSize().Width; w > 600 {
+		t.Fatalf("tool-output grid MinSize width = %.0f; want it bounded so the window keeps its width", w)
 	}
 }
 

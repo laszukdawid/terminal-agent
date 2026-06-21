@@ -139,6 +139,38 @@ func newCommandButton(label, iconPath string, onTap func()) *widget.Button {
 	return btn
 }
 
+// tappableBox wraps a content object so it reacts to clicks, invoking onTap and
+// showing a pointer cursor on hover. It is used to make the otherwise-inert
+// mascot image clickable without giving it any button chrome.
+type tappableBox struct {
+	widget.BaseWidget
+	content fyne.CanvasObject
+	onTap   func()
+}
+
+func newTappableBox(content fyne.CanvasObject, onTap func()) *tappableBox {
+	b := &tappableBox{content: content, onTap: onTap}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *tappableBox) Tapped(*fyne.PointEvent) {
+	if b.onTap != nil {
+		b.onTap()
+	}
+}
+
+func (b *tappableBox) Cursor() desktop.Cursor {
+	if b.onTap != nil {
+		return desktop.PointerCursor
+	}
+	return desktop.DefaultCursor
+}
+
+func (b *tappableBox) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(b.content)
+}
+
 // brandActionDivider is the muted "|" separator shown between COPY and EXPORT.
 func brandActionDivider() fyne.CanvasObject {
 	palette := currentBrandPalette()
@@ -625,30 +657,46 @@ func (r *dataLaneRenderer) Objects() []fyne.CanvasObject { return r.objects }
 func (r *dataLaneRenderer) Refresh() { canvas.Refresh(r.lane) }
 
 const (
-	// Host (receiving) node geometry and receive reaction. The node sits in a
-	// fixed box large enough for the icon to swell and shake on packet arrival.
-	hostNodeSize         float32 = 40
-	hostIconBase         float32 = 30
-	hostIconGrow         float32 = 5
-	hostShakeAmp         float32 = 2.5
+	// Host receive reaction: swap to the active (green) server icon once arrival
+	// proximity passes this level.
 	hostActiveLevelStart float32 = 0.3
+
+	// Receive-reaction geometry as fractions of the node's box size, so a host of
+	// any size swells and shakes proportionally. (At box=40 these reproduce the
+	// original 30px resting icon, 5px swell, and 2.5px shake.)
+	hostIconBaseFrac float32 = 0.75
+	hostIconGrowFrac float32 = 0.125
+	hostShakeAmpFrac float32 = 0.0625
 )
 
 // hostNode is the receiving host/server. It rests at a fixed size and, as a
 // packet arrives, swells slightly and jitters horizontally (a "shake"),
-// returning to rest as the packet leaves.
+// returning to rest as the packet leaves. The box size is configurable so the
+// same node can be a large hero element or a minimized inline signal.
 type hostNode struct {
 	widget.BaseWidget
 	image     *canvas.Image
 	idleRes   fyne.Resource
 	activeRes fyne.Resource
+	box       float32 // outer box size (also the widget MinSize)
+	base      float32 // resting icon size
+	grow      float32 // additional icon size at full arrival
+	shakeAmp  float32 // maximum horizontal jitter
 	size      float32
 	dx        float32
 	w, h      float32
 }
 
-func newHostNode(idle, active fyne.Resource) *hostNode {
-	n := &hostNode{idleRes: idle, activeRes: active, size: hostIconBase}
+func newHostNode(idle, active fyne.Resource, box float32) *hostNode {
+	n := &hostNode{
+		idleRes:   idle,
+		activeRes: active,
+		box:       box,
+		base:      box * hostIconBaseFrac,
+		grow:      box * hostIconGrowFrac,
+		shakeAmp:  box * hostShakeAmpFrac,
+	}
+	n.size = n.base
 	n.image = canvas.NewImageFromResource(idle)
 	n.image.FillMode = canvas.ImageFillContain
 	n.ExtendBaseWidget(n)
@@ -663,8 +711,8 @@ func (n *hostNode) SetState(level, shake float32) {
 	} else if level > 1 {
 		level = 1
 	}
-	n.size = hostIconBase + level*hostIconGrow
-	n.dx = shake * hostShakeAmp * level
+	n.size = n.base + level*n.grow
+	n.dx = shake * n.shakeAmp * level
 	res := n.idleRes
 	if level >= hostActiveLevelStart {
 		res = n.activeRes
@@ -700,7 +748,9 @@ func (r *hostNodeRenderer) Layout(size fyne.Size) {
 	r.node.reposition()
 }
 
-func (r *hostNodeRenderer) MinSize() fyne.Size { return fyne.NewSize(hostNodeSize, hostNodeSize) }
+func (r *hostNodeRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(r.node.box, r.node.box)
+}
 
 func (r *hostNodeRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.node.image} }
 

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -58,6 +59,7 @@ type popupWindow struct {
 	navHistory      *navRow
 	inputGroup      fyne.CanvasObject
 	responseHeading *canvas.Text
+	signalRow       *fyne.Container
 	responseSection *fyne.Container
 	historySection  *fyne.Container
 	historyBody     *fyne.Container
@@ -85,13 +87,36 @@ type popupWindow struct {
 	copyButton   *widget.Button
 	exportButton *widget.Button
 
-	mascotImage *canvas.Image
-	robotIdle   fyne.Resource
-	robotFrames []fyne.Resource
-	mascotFrame int
-	dataLane    *dataLane
-	host        *hostNode
-	mascotAnim  *fyne.Animation
+	mascotImage  *canvas.Image
+	robotIdle    fyne.Resource
+	mascotStroke color.Color
+	dataLane     *dataLane
+	host         *hostNode
+	mascotAnim   *fyne.Animation
+
+	// Mascot performance scheduler: a routine of distinct acts played one after
+	// another off a wall clock (see mascot_animation.go). mascotActive tracks
+	// whether a request is in flight; mascotRunning whether the ticker is live.
+	mascotActs      []mascotAct
+	mascotActIndex  int
+	mascotActStart  time.Time
+	mascotLaneStart time.Time
+	mascotActive    bool
+	mascotRunning   bool
+	mascotLastName  string
+
+	// mascotFrameCache memoizes rendered frames by pose name. Because the act
+	// timeline is quantized to a fixed frame grid (mascotFPS), the set of distinct
+	// poses is finite and recurs across loops, so this map (and Fyne's name-keyed
+	// raster cache underneath it) converge to a bounded working set rather than
+	// growing without bound on long-running requests.
+	mascotFrameCache map[string]fyne.Resource
+
+	// Click reactions: tapping the mascot plays a random one-shot act that takes
+	// priority over the routine. mascotOneShot, when set, is the act in flight;
+	// mascotLastReaction avoids picking the same reaction twice in a row.
+	mascotOneShot      *mascotAct
+	mascotLastReaction int
 
 	cwdLabel *marqueeLabel
 
@@ -128,6 +153,10 @@ func (p *popupWindow) rebuildContent(app fyne.App, devMode bool) {
 		p.mascotAnim.Stop()
 		p.mascotAnim = nil
 	}
+	p.mascotRunning = false
+	p.mascotActive = false
+	p.mascotActIndex = 0
+	p.mascotOneShot = nil
 	p.dismissHistoryDetail()
 
 	p.buildInput(app)
@@ -261,10 +290,14 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 		p.buildConnectionStatus(),
 	), palette.border)
 
+	// The mascot lives in the sidebar's open space, performing its routine where
+	// it adds personality without crowding the response area.
 	content := container.NewVBox(
 		p.buildWordmark(),
 		brandSeparator(),
 		nav,
+		layout.NewSpacer(),
+		container.NewCenter(p.buildMascot()),
 		layout.NewSpacer(),
 		listenPanel,
 	)
@@ -348,7 +381,9 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	)
 	inputPanel := borderedBox(inputRow, palette.borderBright)
 
-	p.responseHeading = brandSectionLabel(sectionResp)
+	// The RESPONSE heading shares its line with the minimized agent-to-host data
+	// signal (the data lane + host node), built together in buildSignalRow.
+	signalRow := p.buildSignalRow()
 
 	metaRow := container.NewVBox(brandSeparator(), p.metaLabel)
 	responsePanelInner := container.NewBorder(nil, metaRow, nil, nil, p.outputScroll)
@@ -369,7 +404,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	outputActions := container.NewHBox(p.copyButton, brandActionDivider(), p.exportButton)
 
 	p.responseSection = container.NewBorder(
-		container.NewVBox(p.responseHeading),
+		signalRow,
 		outputActions,
 		nil, nil,
 		responsePanel,
@@ -390,7 +425,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 
 	workspace := container.NewBorder(
 		p.inputGroup,
-		p.buildMascotPanel(),
+		nil,
 		nil, nil,
 		mainContent,
 	)
@@ -540,6 +575,11 @@ func (p *popupWindow) setResponseHeading(text string) {
 	}
 	p.responseHeading.Text = text
 	p.responseHeading.Refresh()
+	// The heading shares a row with the data signal; re-layout so the label's new
+	// width is reflected and the signal stays aligned beside it.
+	if p.signalRow != nil {
+		p.signalRow.Refresh()
+	}
 }
 
 func (p *popupWindow) setCwd(text string) {
@@ -558,9 +598,7 @@ func (p *popupWindow) setOutput(content string) {
 		return
 	}
 	p.lastRendered = content
-	p.outputField.ParseMarkdown(decorateDollarMarkers(unwrapMarkdownFence(content)))
-	p.outputField.Segments = colorizeDollarMarkers(p.outputField.Segments)
-	p.outputField.Refresh()
+	renderResponseMarkdown(p.outputField, content)
 }
 
 func (p *popupWindow) setError(content string) {

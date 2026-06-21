@@ -61,7 +61,13 @@ func newTranscriptBlockView(block transcriptBlock, showFinalSeparator bool) tran
 	switch block.Kind {
 	case transcriptBlockToolOutput:
 		grid := widget.NewTextGrid()
-		grid.Scroll = fyne.ScrollNone
+		// Tool output is monospaced and often has long, unbreakable lines (paths,
+		// command output). Scroll it horizontally within its own box so wide lines
+		// do not force the whole window wider: a horizontal-only scroll reports a
+		// small min width but keeps the grid's full height, so the box fills the
+		// available width and only scrolls when the content overflows. Vertical
+		// scrolling of the transcript as a whole stays with the outer scroll.
+		grid.Scroll = fyne.ScrollHorizontalOnly
 		appendTextGridText(grid, block.content())
 		view.textGrid = grid
 		view.root = borderedBox(grid, currentBrandPalette().border)
@@ -140,7 +146,5 @@ func appendTextGridTextNoRefresh(grid *widget.TextGrid, text string) {
 }
 
 func setTranscriptRichText(rt *widget.RichText, content string) {
-	rt.ParseMarkdown(decorateDollarMarkers(unwrapMarkdownFence(content)))
-	rt.Segments = colorizeDollarMarkers(rt.Segments)
-	rt.Refresh()
+	renderResponseMarkdown(rt, content)
 }
