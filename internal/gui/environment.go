@@ -37,6 +37,8 @@ var guiEnvironmentAllowlist = map[string]struct{}{
 	"OPENAI_BASE_URL":       {},
 	"PATH":                  {},
 	"TAVILY_KEY":            {},
+	"VLLM_API_KEY":          {},
+	"VLLM_BASE_URL":         {},
 	"YZMA_LIB":              {},
 }
 

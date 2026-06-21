@@ -90,7 +90,7 @@ The Graphical UI is designed for fast back-and-forth work: ask a quick prompt, s
 Before using Terminal Agent, you'll need to configure it with your preferred LLM provider:
 
 ```sh
-# Set your provider (e.g., "openai", "codex", "anthropic", "bedrock", "google", "ollama", "llama")
+# Set your provider (e.g., "openai", "codex", "anthropic", "bedrock", "google", "ollama", "llama", "vllm")
 agent config set provider openai
 
 # Set your preferred model
@@ -110,6 +110,8 @@ export ANTHROPIC_API_KEY=your_api_key_here
 export GEMINI_API_KEY=your_api_key_here
 
 # For Amazon Bedrock, configure your AWS credentials as usual
+
+# For vLLM, VLLM_BASE_URL defaults to http://localhost:8000/v1 and VLLM_API_KEY is optional
 ```
 
 If you use the Graphical UI from a desktop launcher or global shortcut, `agent-gui` loads GUI credentials from `~/.config/terminal-agent/.gui.env`.

@@ -18,6 +18,15 @@ func TestProviderSetupHintMiMo(t *testing.T) {
 	assert.Contains(t, providerSetupHint(connector.MiMoProvider), "MIMO_API_KEY")
 }
 
+func TestValidateProviderModelAcceptsVLLM(t *testing.T) {
+	assert.NoError(t, validateProviderModel(connector.VLLMProvider, connector.DefaultVLLMModel))
+}
+
+func TestProviderSetupHintVLLM(t *testing.T) {
+	assert.Contains(t, providerSetupHint(connector.VLLMProvider), "VLLM_BASE_URL")
+	assert.Contains(t, providerSetupHint(connector.VLLMProvider), "VLLM_API_KEY")
+}
+
 func TestProviderSetupHintOpenAIUsesAPIKeyOnly(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("OPENAI_API_KEY", "")
@@ -75,6 +84,17 @@ func TestProviderReadinessOllamaAvailable(t *testing.T) {
 
 	assert.True(t, status.Available)
 	assert.Contains(t, status.Message, "does not require an API key")
+}
+
+func TestProviderReadinessVLLMAvailableWithoutAPIKey(t *testing.T) {
+	t.Setenv("VLLM_API_KEY", "")
+	t.Setenv("VLLM_BASE_URL", "")
+
+	status := providerReadinessStatus(connector.VLLMProvider)
+
+	assert.True(t, status.Available)
+	assert.Contains(t, status.Message, "does not require an API key")
+	assert.Contains(t, status.Message, "http://localhost:8000/v1")
 }
 
 func TestFilterProviders(t *testing.T) {

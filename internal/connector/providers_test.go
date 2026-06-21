@@ -26,6 +26,7 @@ func TestDefaultModelFor(t *testing.T) {
 	assert.Equal(t, DefaultMistralModel, DefaultModelFor(MistralProvider))
 	assert.Equal(t, string(GLM47Flash), DefaultModelFor(BedrockProvider))
 	assert.Equal(t, DefaultAnthropicModel, DefaultModelFor(AnthropicProvider))
+	assert.Equal(t, DefaultVLLMModel, DefaultModelFor(VLLMProvider))
 	assert.Equal(t, "", DefaultModelFor("nope"))
 }
 

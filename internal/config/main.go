@@ -198,6 +198,7 @@ func NewDefaultConfig() *config {
 			"mistral":   "mistral-small-latest",
 			"openai":    "gpt-4o-mini",
 			"ollama":    "llama3.2",
+			"vllm":      "meta-llama/Llama-3.1-8B-Instruct",
 		},
 		Bedrock: BedrockConfig{Prices: map[string]map[string]BedrockPriceConfig{
 			"us-east-1": {

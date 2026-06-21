@@ -81,6 +81,7 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "gpt-4o-mini", config.Providers["openai"])
 		assert.Equal(t, "gemini-3.1-flash-lite", config.Providers["google"])
 		assert.Equal(t, "llama3.2", config.Providers["ollama"])
+		assert.Equal(t, "meta-llama/Llama-3.1-8B-Instruct", config.Providers["vllm"])
 		assert.Empty(t, config.GetLlamaModels())
 		assert.Empty(t, config.GetBedrockProfile())
 		assert.Empty(t, config.GetBedrockRegion())

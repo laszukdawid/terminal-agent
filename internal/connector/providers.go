@@ -23,6 +23,7 @@ var providerRegistry = []ProviderInfo{
 	{Name: MistralProvider, DefaultModel: DefaultMistralModel},
 	{Name: OllamaProvider, DefaultModel: DefaultOllamaModel},
 	{Name: OpenaiProvider, DefaultModel: string(DefaultOpenAIModel)},
+	{Name: VLLMProvider, DefaultModel: DefaultVLLMModel},
 }
 
 // SupportedProviders returns the provider names in stable alphabetical order.

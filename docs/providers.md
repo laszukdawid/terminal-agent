@@ -196,6 +196,42 @@ export MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 - Supports streaming output with the `--stream` flag
 - Tool usage capability for the `task` command when supported by the selected MiMo model
 
+### vLLM
+
+The `vllm` provider targets a local or remote vLLM server through its OpenAI-compatible chat completions API.
+
+**Setup:**
+1. Start a vLLM server with a chat-capable model, for example:
+   ```sh
+   vllm serve meta-llama/Llama-3.1-8B-Instruct
+   ```
+2. If your server is not on the default local endpoint, set `VLLM_BASE_URL`:
+   ```sh
+   export VLLM_BASE_URL=http://localhost:8000/v1
+   ```
+3. If the server requires an API key, set it too:
+   ```sh
+   export VLLM_API_KEY=your_api_key_here
+   ```
+
+**Configuration:**
+```sh
+agent config set provider vllm
+agent config set model meta-llama/Llama-3.1-8B-Instruct
+```
+
+**Recommended Models:**
+- `meta-llama/Llama-3.1-8B-Instruct` - Default vLLM model in the sample config
+
+**Special Features:**
+- Uses the OpenAI-compatible chat completions protocol exposed by vLLM
+- Supports streaming output with the `--stream` flag
+- Supports native tool usage for `task` when the served model and vLLM server are configured for tool calling
+
+**Notes:**
+- `VLLM_BASE_URL` defaults to `http://localhost:8000/v1`
+- `VLLM_API_KEY` is optional because many local vLLM servers run without authentication
+
 ### Anthropic
 
 **Setup:**

@@ -57,6 +57,8 @@ func providerSetupHint(provider string) string {
 		if os.Getenv("MIMO_API_KEY") == "" {
 			return "MiMo requires MIMO_API_KEY to be set."
 		}
+	case connector.VLLMProvider:
+		return "vLLM uses VLLM_BASE_URL when set and optionally VLLM_API_KEY for protected servers."
 	case connector.LlamaProvider:
 		return "Llama uses local GGUF model aliases from config.json under llama_models."
 	case connector.OllamaProvider:
@@ -103,6 +105,14 @@ func providerReadinessStatusWithEnvironment(provider string, envResult Environme
 		return envProviderReadinessWithEnvironment("Mistral", "MISTRAL_API_KEY", envResult)
 	case connector.MiMoProvider:
 		return envProviderReadinessWithEnvironment("MiMo", "MIMO_API_KEY", envResult)
+	case connector.VLLMProvider:
+		if os.Getenv("VLLM_API_KEY") != "" {
+			return providerReadiness{Available: true, Message: availableEnvMessage("VLLM_API_KEY", envResult)}
+		}
+		if os.Getenv("VLLM_BASE_URL") != "" {
+			return providerReadiness{Available: true, Message: availableEnvMessage("VLLM_BASE_URL", envResult)}
+		}
+		return providerReadiness{Available: true, Message: "Available: vLLM does not require an API key; VLLM_BASE_URL defaults to http://localhost:8000/v1."}
 	case connector.LlamaProvider:
 		if os.Getenv("YZMA_LIB") != "" {
 			return providerReadiness{Available: true, Message: availableEnvMessage("YZMA_LIB", envResult)}

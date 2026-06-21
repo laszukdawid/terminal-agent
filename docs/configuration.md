@@ -206,6 +206,7 @@ Stored credentials are managed with the `agent auth` command and take effect aut
 | Google | `GEMINI_API_KEY` | — | API key for Google AI (Gemini) |
 | Xiaomi MiMo | `MIMO_API_KEY` | — | API key for Xiaomi MiMo models |
 | Mistral | `MISTRAL_API_KEY` | — | API key for Mistral AI models |
+| vLLM | `VLLM_API_KEY` | — | Optional API key for protected vLLM servers; use `VLLM_BASE_URL` to override the default endpoint |
 | AWS Bedrock | AWS credentials | — | Standard AWS credential configuration |
 | Llama.cpp | `YZMA_LIB` | — | Path to the directory containing the local llama.cpp shared libraries used by the `llama` provider |
 | Ollama | `OLLAMA_HOST` | — | Host URL for Ollama server |

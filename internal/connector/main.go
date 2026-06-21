@@ -32,6 +32,8 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 		connector = NewOllamaConnector(&modelID)
 	case MistralProvider:
 		connector, err = NewMistralConnector(&modelID)
+	case VLLMProvider:
+		connector = NewVLLMConnector(&modelID)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", provider)
 	}
