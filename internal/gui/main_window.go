@@ -31,6 +31,7 @@ const (
 	sectionAsk          = "ASK THE TERMINAL AGENT"
 	sectionTask         = "TASK THE TERMINAL AGENT TO DO"
 	sectionHistory      = "HISTORY"
+	sectionRoutine      = "ROUTINES"
 	sectionResp         = "RESPONSE"
 	sectionErr          = "ERROR"
 	sendButtonText      = "SEND  ›"
@@ -57,6 +58,7 @@ type popupWindow struct {
 	navAsk          *navRow
 	navTask         *navRow
 	navHistory      *navRow
+	navRoutine      *navRow
 	inputGroup      fyne.CanvasObject
 	responseHeading *canvas.Text
 	signalRow       *fyne.Container
@@ -64,6 +66,9 @@ type popupWindow struct {
 	historySection  *fyne.Container
 	historyBody     *fyne.Container
 	historyDetail   *widget.PopUp
+	routineSection  *fyne.Container
+	routineBody     *fyne.Container
+	routineDetail   *widget.PopUp
 	settings        *settingsDialog
 	outputField     *widget.RichText
 	transcriptBody  *fyne.Container
@@ -132,6 +137,8 @@ type popupWindow struct {
 	onSelectAsk     func()
 	onSelectTask    func()
 	onSelectHistory func()
+	onSelectRoutine func()
+	onCreateRoutine func()
 	onTest          func()
 	onInput         func(string)
 	onQuit          func()
@@ -259,7 +266,12 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 			p.onSelectHistory()
 		}
 	})
-	nav := container.NewVBox(p.navAsk, p.navTask, p.navHistory)
+	p.navRoutine = newNavRow(sectionRoutine, iconPathRoutine, false, func() {
+		if p.onSelectRoutine != nil {
+			p.onSelectRoutine()
+		}
+	})
+	nav := container.NewVBox(p.navAsk, p.navTask, p.navHistory, p.navRoutine)
 	// ENV and TOOLS are not wired up yet, so they are only shown in dev mode
 	// where we can build them out without exposing dead nav entries.
 	if devMode {
@@ -421,7 +433,23 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 		borderedBox(container.NewVScroll(p.historyBody), palette.border),
 	)
 	p.historySection.Hide()
-	mainContent := container.NewStack(p.responseSection, p.historySection)
+
+	p.routineBody = container.NewVBox()
+	newRoutineButton := newCommandButton("NEW", iconPathRoutine, func() {
+		if p.onCreateRoutine != nil {
+			p.onCreateRoutine()
+		}
+	})
+	routineHeader := container.NewBorder(nil, nil, brandSectionLabel(sectionRoutine), newRoutineButton, nil)
+	p.routineSection = container.NewBorder(
+		container.NewVBox(routineHeader),
+		nil,
+		nil, nil,
+		borderedBox(container.NewVScroll(p.routineBody), palette.border),
+	)
+	p.routineSection.Hide()
+
+	mainContent := container.NewStack(p.responseSection, p.historySection, p.routineSection)
 
 	workspace := container.NewBorder(
 		p.inputGroup,
@@ -544,6 +572,9 @@ func (p *popupWindow) setMode(mode guiMode) {
 	}
 	if p.navHistory != nil {
 		p.navHistory.setActive(mode == guiModeHistory)
+	}
+	if p.navRoutine != nil {
+		p.navRoutine.setActive(mode == guiModeRoutine)
 	}
 	p.setInputHeading(inputHeadingForMode(mode))
 }

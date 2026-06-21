@@ -262,6 +262,7 @@ func (c voiceGUIConfig) SetWebSearch(bool) error                        { return
 func (c voiceGUIConfig) GetPermissions() config.Permissions             { return config.Permissions{} }
 func (c voiceGUIConfig) GetProjectContext() bool                        { return false }
 func (c voiceGUIConfig) GetRoutinesEnabled() bool                       { return true }
+func (c voiceGUIConfig) SetRoutinesEnabled(bool) error                  { return nil }
 func (c voiceGUIConfig) GetRoutineDefaults() config.RoutineDefaults     { return config.RoutineDefaults{} }
 func (c voiceGUIConfig) SetRoutineDefaults(config.RoutineDefaults) error {
 	return nil

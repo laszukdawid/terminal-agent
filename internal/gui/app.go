@@ -18,6 +18,7 @@ import (
 type App struct {
 	fyneApp         fyne.App
 	service         appservice.Service
+	routineService  appservice.RoutineService
 	cfg             config.Config
 	state           *state
 	popup           *popupWindow
@@ -51,14 +52,15 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		fyneApp = app.NewWithID(options.AppID)
 	}
 	gui := &App{
-		fyneApp:       fyneApp,
-		service:       service,
-		cfg:           cfg,
-		state:         &state{mode: guiModeAsk},
-		quit:          fyneApp.Quit,
-		stopIndicator: make(chan struct{}),
-		version:       options.Version,
-		voiceSchedule: fyne.Do,
+		fyneApp:        fyneApp,
+		service:        service,
+		routineService: appservice.NewRoutineService(cfg),
+		cfg:            cfg,
+		state:          &state{mode: guiModeAsk},
+		quit:           fyneApp.Quit,
+		stopIndicator:  make(chan struct{}),
+		version:        options.Version,
+		voiceSchedule:  fyne.Do,
 	}
 	if options.Voice.Schedule != nil {
 		gui.voiceSchedule = options.Voice.Schedule
@@ -217,6 +219,8 @@ func (g *App) wire() {
 	g.popup.onSelectAsk = func() { g.setMode(guiModeAsk) }
 	g.popup.onSelectTask = func() { g.setMode(guiModeTask) }
 	g.popup.onSelectHistory = func() { g.setMode(guiModeHistory) }
+	g.popup.onSelectRoutine = func() { g.setMode(guiModeRoutine) }
+	g.popup.onCreateRoutine = func() { g.showRoutineForm(nil) }
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -224,6 +228,9 @@ func (g *App) wire() {
 	g.popup.window.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
 		if key.Name == fyne.KeyEscape {
 			if g.popup.dismissHistoryDetail() {
+				return
+			}
+			if g.popup.dismissRoutineDetail() {
 				return
 			}
 			if g.popup.dismissSettingsIfUnchanged() {
@@ -284,19 +291,26 @@ func (g *App) render() {
 	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
 	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
 
-	if g.state.mode == guiModeHistory {
+	browse := isBrowseMode(g.state.mode)
+	if browse {
 		g.popup.inputGroup.Hide()
 		g.popup.responseSection.Hide()
-		g.popup.historySection.Show()
 	} else {
 		g.popup.inputGroup.Show()
-		g.popup.historySection.Hide()
+	}
+	g.popup.historySection.Hide()
+	g.popup.routineSection.Hide()
+	if g.state.mode == guiModeHistory {
+		g.popup.historySection.Show()
+	}
+	if g.state.mode == guiModeRoutine {
+		g.popup.routineSection.Show()
 	}
 
-	showAnswer := g.state.mode != guiModeHistory && (g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != "")
+	showAnswer := !browse && (g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != "")
 	if showAnswer {
 		g.popup.responseSection.Show()
-	} else if g.state.mode != guiModeHistory {
+	} else if !browse {
 		g.popup.responseSection.Hide()
 	}
 	if g.state.errorText != "" {
@@ -317,7 +331,7 @@ func (g *App) render() {
 			g.popup.setActionSubtitle("")
 		}
 	}
-	if g.state.mode == guiModeHistory {
+	if browse {
 		g.popup.actionButton.Disable()
 		g.popup.input.Disable()
 	} else {
@@ -370,7 +384,8 @@ func (g *App) openSettings() {
 			g.render()
 			return nil
 		},
-		OnClosed: g.FocusInput,
+		OnRoutineDefaults: g.showRoutineDefaultsForm,
+		OnClosed:          g.FocusInput,
 	})
 }
 
@@ -403,6 +418,9 @@ func (g *App) setMode(mode guiMode) {
 	g.popup.setMode(mode)
 	if mode == guiModeHistory {
 		g.loadHistory()
+	}
+	if mode == guiModeRoutine {
+		g.loadRoutines()
 	}
 	g.render()
 }
@@ -467,6 +485,9 @@ func (g *App) taskAutoApprove() bool {
 func inputHeadingForMode(mode guiMode) string {
 	if mode == guiModeHistory {
 		return sectionHistory
+	}
+	if mode == guiModeRoutine {
+		return sectionRoutine
 	}
 	if mode == guiModeTask {
 		return sectionTask

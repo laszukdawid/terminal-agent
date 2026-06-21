@@ -132,6 +132,22 @@ is the same JSONL history written under
 `~/.local/share/terminal-agent/sessions/`, so the GUI and CLI share one record
 of what you have run.
 
+## Routines
+
+The **Routine** tab manages [routines](commands/routine.md): scheduled, unattended
+agent runs. Each card shows a status dot (active / inactive / error), the schedule,
+model, last and next run times, and a preview of the prompt. Click a card to open a
+detail view with the full prompt, resolved settings, and the list of past run logs
+(open any to read its transcript or summary); from there you can **Run now**,
+**Enable/Disable**, **Edit**, or **Delete** the routine. Use **NEW** to create one.
+
+The create/edit form covers the prompt, cron schedule, provider/model, the time and
+token budgets, step limits, deny rules, an "Allow web search" toggle (external-facing
+tools are off by default), and the enabled flag. Defaults applied to routines that
+leave fields blank — and the global routines on/off switch — live under **Settings →
+Routine defaults…**. Automatic firing requires the [daemon](commands/daemon.md);
+"Run now" works regardless.
+
 ## Appearance
 
 The popup uses a dark, terminal-native theme with monospace type and green

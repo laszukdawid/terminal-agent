@@ -57,6 +57,7 @@ type Config interface {
 	GetPermissions() Permissions
 	GetProjectContext() bool
 	GetRoutinesEnabled() bool
+	SetRoutinesEnabled(bool) error
 	GetRoutineDefaults() RoutineDefaults
 	SetRoutineDefaults(RoutineDefaults) error
 }
@@ -577,6 +578,12 @@ func (config *config) GetRoutinesEnabled() bool {
 		return true
 	}
 	return *config.Routines.Enabled
+}
+
+func (config *config) SetRoutinesEnabled(enabled bool) error {
+	log.Debugw("Setting routines enabled", "enabled", enabled)
+	config.Routines.Enabled = &enabled
+	return SaveConfig(config)
 }
 
 // GetRoutineDefaults returns the configured routine defaults with the built-in
