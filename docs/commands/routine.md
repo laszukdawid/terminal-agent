@@ -37,6 +37,11 @@ agent routine create \
   --prompt "Summarize my git commits from yesterday"
 ```
 
+When you create a routine **with a schedule** and the [scheduler daemon](daemon.md) is
+not yet running, `create` offers to install and start it (in an interactive terminal),
+so scheduled routines actually fire. Decline it and you can set it up later with
+`agent daemon install`.
+
 The prompt may be supplied with `--prompt`, `--prompt-file <path>`, or as positional
 arguments. Key flags:
 

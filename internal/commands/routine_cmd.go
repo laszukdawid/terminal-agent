@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
+	"github.com/laszukdawid/terminal-agent/internal/daemon"
 	"github.com/laszukdawid/terminal-agent/internal/routines"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -91,6 +93,8 @@ func routineCreateCommand(cfg config.Config) *cobra.Command {
 			cmd.Printf("Created routine %q.\n", saved.ID)
 			if saved.Schedule == "" {
 				cmd.Println("No schedule set; run it with `agent routine run " + saved.ID + "`.")
+			} else {
+				offerDaemonInstall(cmd)
 			}
 			return nil
 		},
@@ -338,6 +342,50 @@ func PrintRoutineLaunchNotice(cmd *cobra.Command) {
 		return
 	}
 	fmt.Fprintln(cmd.ErrOrStderr(), notice)
+}
+
+// offerDaemonInstall nudges the user to set up the scheduler the first time they
+// create a scheduled routine. If a daemon is already running there is nothing to
+// do; otherwise it offers (interactively) to install and start it, or prints how
+// to do it manually when not attached to a terminal.
+func offerDaemonInstall(cmd *cobra.Command) {
+	if status, err := daemon.CurrentStatus(); err == nil && status.Running {
+		return // the scheduler is already running; the routine will fire
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		cmd.Println("The scheduler isn't running, so scheduled routines won't fire. Start it with `agent daemon install`.")
+		return
+	}
+	cmd.Print("The scheduler isn't running, so this scheduled routine won't fire yet. Install and start it now? [y/N]: ")
+	answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if !isAffirmative(answer) {
+		cmd.Println("Skipped. Run `agent daemon install` to enable scheduled runs (and `agent daemon uninstall` to remove it).")
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		cmd.Printf("Could not resolve the agent binary: %v. Run `agent daemon install` manually.\n", err)
+		return
+	}
+	manager, err := daemon.NewServiceManager(exe)
+	if err != nil {
+		cmd.Printf("Could not prepare the service manager: %v. Run `agent daemon install` manually.\n", err)
+		return
+	}
+	if err := manager.Install(); err != nil {
+		cmd.Printf("Install failed: %v. You can run `agent daemon install` manually.\n", err)
+		return
+	}
+	cmd.Println("Scheduler installed and started. Manage it with `agent daemon status | stop | uninstall`.")
+}
+
+func isAffirmative(answer string) bool {
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveRoutinePrompt(promptFlag, promptFile string, args []string) (string, error) {
