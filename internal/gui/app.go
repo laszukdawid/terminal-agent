@@ -43,6 +43,7 @@ type App struct {
 	// the list when something actually changed.
 	routineRefreshStop chan struct{}
 	lastRoutineMod     time.Time
+	lastDaemonRunning  bool
 }
 
 type AppOptions struct {

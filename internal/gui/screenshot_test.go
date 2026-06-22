@@ -83,7 +83,7 @@ func TestCaptureScreenshots(t *testing.T) {
 		AppID:   "terminal-agent-screenshot",
 		FyneApp: wrappedApp,
 	})
-	t.Cleanup(func() { g.fyneApp.Quit() })
+	t.Cleanup(g.Quit) // g.Quit (not fyneApp.Quit) also stops the routine refresh poller
 
 	win := g.popup.window
 	win.Resize(fyne.NewSize(900, 640))

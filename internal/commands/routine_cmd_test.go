@@ -1,10 +1,20 @@
 package commands
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestIsInteractiveInput(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetIn(strings.NewReader("y\n"))
+	// A buffered (non-*os.File) input is treated as non-interactive, so the prompt
+	// reads from the same stream it gates on.
+	assert.False(t, isInteractiveInput(cmd))
+}
 
 func TestIsAffirmative(t *testing.T) {
 	tests := []struct {

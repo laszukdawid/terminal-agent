@@ -253,6 +253,9 @@ func routineEnableCommand(cfg config.Config, enable bool) *cobra.Command {
 				state = "enabled"
 			}
 			cmd.Printf("Routine %q %s.\n", routine.ID, state)
+			if enable && strings.TrimSpace(routine.Schedule) != "" {
+				offerDaemonInstall(cmd)
+			}
 			return nil
 		},
 	}
@@ -352,7 +355,7 @@ func offerDaemonInstall(cmd *cobra.Command) {
 	if status, err := daemon.CurrentStatus(); err == nil && status.Running {
 		return // the scheduler is already running; the routine will fire
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if !isInteractiveInput(cmd) {
 		cmd.Println("The scheduler isn't running, so scheduled routines won't fire. Start it with `agent daemon install`.")
 		return
 	}
@@ -377,6 +380,17 @@ func offerDaemonInstall(cmd *cobra.Command) {
 		return
 	}
 	cmd.Println("Scheduler installed and started. Manage it with `agent daemon status | stop | uninstall`.")
+}
+
+// isInteractiveInput reports whether the command's input is an interactive
+// terminal. It checks the same stream the prompt reads (cmd.InOrStdin()), so an
+// overridden/piped input is correctly treated as non-interactive.
+func isInteractiveInput(cmd *cobra.Command) bool {
+	file, ok := cmd.InOrStdin().(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(int(file.Fd()))
 }
 
 func isAffirmative(answer string) bool {

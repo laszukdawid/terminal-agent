@@ -74,6 +74,8 @@ func (g *App) isRoutineRunning(id string) bool {
 
 func (g *App) loadRoutines() {
 	g.lastRoutineMod = latestRoutineMod()
+	daemonRunning := g.routineService.DaemonRunning()
+	g.lastDaemonRunning = daemonRunning
 	views, err := g.routineService.List(context.Background())
 	if err != nil {
 		g.popup.setRoutines(nil, "Routines unavailable: "+err.Error(), nil, "")
@@ -87,20 +89,22 @@ func (g *App) loadRoutines() {
 	}
 	// Warn when routines are scheduled but no scheduler is running to fire them.
 	notice := ""
-	if routinesHaveSchedule(views) && !g.routineService.DaemonRunning() {
+	if routinesHaveSchedule(views) && !daemonRunning {
 		notice = routineDaemonOffNotice
 	}
 	g.popup.setRoutines(views, "", g.showRoutineDetail, notice)
 }
 
 // maybeRefreshRoutines reloads the Routine list when it is the visible tab and
-// the routine files changed since the last load, so out-of-process runs appear
-// without re-navigating, without rebuilding the list when nothing changed.
+// something changed since the last load — either the routine files (a run was
+// recorded or a routine edited) or the daemon's running state (so the
+// scheduler-off banner appears/disappears promptly). It rebuilds only on change,
+// so an idle tab does not flicker.
 func (g *App) maybeRefreshRoutines() {
 	if !g.state.isVisible || g.state.mode != guiModeRoutine {
 		return
 	}
-	if latestRoutineMod().Equal(g.lastRoutineMod) {
+	if latestRoutineMod().Equal(g.lastRoutineMod) && g.routineService.DaemonRunning() == g.lastDaemonRunning {
 		return
 	}
 	g.loadRoutines()
