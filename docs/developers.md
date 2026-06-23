@@ -254,6 +254,10 @@ visual checks of GUI changes.
 
 ![Terminal Agent GUI Routine form](assets/screenshots/gui-routine-form.png)
 
+**Routine log** — a run summary rendered as markdown, with collapsed run metadata and highlighted output:
+
+![Terminal Agent GUI Routine log](assets/screenshots/gui-routine-log.png)
+
 ### Regenerating the screenshots
 
 ```sh

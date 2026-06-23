@@ -37,7 +37,9 @@ The popup GUI keeps quick prompts one shortcut away, with the same Ask and Task 
   - [Tool Command](commands/tool.md) - Use and manage tools
   - [Config Command](commands/config.md) - Configure agent settings
   - [History Command](commands/history.md) - Query interaction history
-- [Popup GUI](gui.md) - Desktop popup: Ask/Task modes, voice, settings, history
+  - [Routine Command](commands/routine.md) - Define and run scheduled, unattended routines
+  - [Daemon Command](commands/daemon.md) - Run and manage the routine scheduler
+- [Popup GUI](gui.md) - Desktop popup: Ask/Task/Routine modes, voice, settings, history
 - [Providers](providers.md) - Supported LLM providers
 - [Configuration](configuration.md) - Advanced configuration options
 - [Approval Logic](approval-logic.md) - How task tool calls are approved, prompted, or denied

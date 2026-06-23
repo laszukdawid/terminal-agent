@@ -157,6 +157,20 @@ func TestCaptureScreenshots(t *testing.T) {
 	// Create-routine form (also the edit form), showing what is configurable.
 	g.showRoutineForm(nil)
 	capture("gui-routine-form.png")
+
+	// Routine log viewer: a run summary rendered as markdown, with the run
+	// metadata collapsed into a two-column "Details" block and the output set
+	// apart in a highlighted box.
+	if refs, err := g.routineService.Logs(context.Background(), "daily-standup"); err == nil {
+		for _, ref := range refs {
+			if ref.IsResult {
+				g.openRoutineLog(ref)
+				capture("gui-routine-log.png")
+				g.popup.dismissRoutineDetail()
+				break
+			}
+		}
+	}
 }
 
 // seedScreenshotRoutines writes representative routines and run state into the
@@ -181,9 +195,13 @@ func seedScreenshotRoutines(t *testing.T) {
 	must(state.Record("daily-standup", routines.RunRecord{LastRunAt: lastRun, LastStatus: routines.OutcomeSuccess, LastDuration: "42s", NextRunAt: nextDaily}))
 	must(state.Record("nightly-deps", routines.RunRecord{LastRunAt: lastRun.Add(-7 * time.Hour), LastStatus: routines.OutcomeFailed, LastError: "provider error: rate limited", NextRunAt: lastRun.Add(17 * time.Hour)}))
 
-	// A result summary so the detail view's run-log list has an entry.
+	// A result summary so the detail view's run-log list has an entry and the log
+	// viewer has representative content (full run metadata plus a short output).
 	logDir := routines.LogDir("daily-standup")
 	must(os.MkdirAll(logDir, 0o755))
 	must(os.WriteFile(filepath.Join(logDir, "2026-06-07T09-00-00_success_a1b2c3.md"),
-		[]byte("# Routine: Daily standup\n\n- Status: success\n- Duration: 42s\n\n## Output\n\nPosted 4 commit highlights to the channel.\n"), 0o644))
+		[]byte("# Routine: Daily standup\n\n"+
+			"- ID: daily-standup\n- Schedule: weekdays at 09:00\n- Trigger: scheduled\n- Provider/Model: openai / gpt-4o-mini\n"+
+			"- Started: 2026-06-07T09:00:00Z\n- Ended: 2026-06-07T09:00:42Z\n- Duration: 42s\n- Status: success\n- Tokens (est.): 1840 / 1000000\n\n"+
+			"## Output\n\nHighlights from yesterday's commits:\n\n- Shipped the routines scheduler daemon\n- Fixed the detail overlay backdrop on resize\n- Densified the routine list cards\n"), 0o644))
 }
