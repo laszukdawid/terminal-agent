@@ -50,8 +50,11 @@ type Meta struct {
 	Command  string `json:"command,omitempty"`
 	// TaskTimeout records the resolved task-level timeout for task runs
 	// (e.g. "15m" or "unlimited"); empty for non-task runs.
-	TaskTimeout string    `json:"task_timeout,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	TaskTimeout string `json:"task_timeout,omitempty"`
+	// RoutineID records which routine produced the run for routine runs; empty
+	// for ad-hoc ask/chat/task runs.
+	RoutineID string    `json:"routine_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Record is a single line in a session log file.

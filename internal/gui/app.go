@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -18,6 +19,7 @@ import (
 type App struct {
 	fyneApp         fyne.App
 	service         appservice.Service
+	routineService  appservice.RoutineService
 	cfg             config.Config
 	state           *state
 	popup           *popupWindow
@@ -29,6 +31,19 @@ type App struct {
 	voiceController *voice.Controller
 	voiceSchedule   func(func())
 	themeVariant    fyne.ThemeVariant
+
+	// runningRoutines tracks routines launched via the GUI "Run now" so the list
+	// can show a live "running" status until the run finishes.
+	runningRoutines map[string]bool
+	runningMu       sync.Mutex
+
+	// routineRefreshStop stops the background poller that keeps the Routine list in
+	// sync with runs produced out-of-process (the daemon, the CLI). lastRoutineMod
+	// is the routine files' modtime at the last reload, so the poller only rebuilds
+	// the list when something actually changed.
+	routineRefreshStop chan struct{}
+	lastRoutineMod     time.Time
+	lastDaemonRunning  bool
 }
 
 type AppOptions struct {
@@ -51,14 +66,17 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 		fyneApp = app.NewWithID(options.AppID)
 	}
 	gui := &App{
-		fyneApp:       fyneApp,
-		service:       service,
-		cfg:           cfg,
-		state:         &state{mode: guiModeAsk},
-		quit:          fyneApp.Quit,
-		stopIndicator: make(chan struct{}),
-		version:       options.Version,
-		voiceSchedule: fyne.Do,
+		fyneApp:            fyneApp,
+		service:            service,
+		routineService:     appservice.NewRoutineService(cfg),
+		cfg:                cfg,
+		state:              &state{mode: guiModeAsk},
+		quit:               fyneApp.Quit,
+		stopIndicator:      make(chan struct{}),
+		version:            options.Version,
+		voiceSchedule:      fyne.Do,
+		runningRoutines:    map[string]bool{},
+		routineRefreshStop: make(chan struct{}),
 	}
 	if options.Voice.Schedule != nil {
 		gui.voiceSchedule = options.Voice.Schedule
@@ -73,7 +91,24 @@ func NewApp(service appservice.Service, cfg config.Config, options AppOptions) *
 	gui.wire()
 	gui.render()
 	gui.watchThemeVariant(options.DevMode)
+	go gui.refreshRoutinesLoop()
 	return gui
+}
+
+// refreshRoutinesLoop keeps the Routine list current with runs that happen
+// out-of-process (the scheduler daemon, the CLI) by polling the routine files'
+// modtime while the Routine tab is visible. It rebuilds the list only on change.
+func (g *App) refreshRoutinesLoop() {
+	ticker := time.NewTicker(routineRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-g.routineRefreshStop:
+			return
+		case <-ticker.C:
+			fyne.Do(g.maybeRefreshRoutines)
+		}
+	}
 }
 
 func (g *App) watchThemeVariant(devMode bool) {
@@ -95,6 +130,9 @@ func (g *App) applyThemeVariant(variant fyne.ThemeVariant, devMode bool) {
 	g.wire()
 	if g.state.mode == guiModeHistory {
 		g.loadHistory()
+	}
+	if g.state.mode == guiModeRoutine {
+		g.loadRoutines()
 	}
 	g.render()
 	if g.state.isVisible {
@@ -154,6 +192,13 @@ func (g *App) Quit() {
 	if g.state.cancelFunc != nil {
 		g.state.cancelFunc()
 		g.state.clearRunning()
+	}
+	if g.routineRefreshStop != nil {
+		select {
+		case <-g.routineRefreshStop:
+		default:
+			close(g.routineRefreshStop)
+		}
 	}
 	g.quit()
 }
@@ -217,6 +262,8 @@ func (g *App) wire() {
 	g.popup.onSelectAsk = func() { g.setMode(guiModeAsk) }
 	g.popup.onSelectTask = func() { g.setMode(guiModeTask) }
 	g.popup.onSelectHistory = func() { g.setMode(guiModeHistory) }
+	g.popup.onSelectRoutine = func() { g.setMode(guiModeRoutine) }
+	g.popup.onCreateRoutine = func() { g.showRoutineForm(nil) }
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -224,6 +271,9 @@ func (g *App) wire() {
 	g.popup.window.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
 		if key.Name == fyne.KeyEscape {
 			if g.popup.dismissHistoryDetail() {
+				return
+			}
+			if g.popup.dismissRoutineDetail() {
 				return
 			}
 			if g.popup.dismissSettingsIfUnchanged() {
@@ -284,19 +334,26 @@ func (g *App) render() {
 	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
 	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
 
-	if g.state.mode == guiModeHistory {
+	browse := isBrowseMode(g.state.mode)
+	if browse {
 		g.popup.inputGroup.Hide()
 		g.popup.responseSection.Hide()
-		g.popup.historySection.Show()
 	} else {
 		g.popup.inputGroup.Show()
-		g.popup.historySection.Hide()
+	}
+	g.popup.historySection.Hide()
+	g.popup.routineSection.Hide()
+	if g.state.mode == guiModeHistory {
+		g.popup.historySection.Show()
+	}
+	if g.state.mode == guiModeRoutine {
+		g.popup.routineSection.Show()
 	}
 
-	showAnswer := g.state.mode != guiModeHistory && (g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != "")
+	showAnswer := !browse && (g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != "")
 	if showAnswer {
 		g.popup.responseSection.Show()
-	} else if g.state.mode != guiModeHistory {
+	} else if !browse {
 		g.popup.responseSection.Hide()
 	}
 	if g.state.errorText != "" {
@@ -317,7 +374,7 @@ func (g *App) render() {
 			g.popup.setActionSubtitle("")
 		}
 	}
-	if g.state.mode == guiModeHistory {
+	if browse {
 		g.popup.actionButton.Disable()
 		g.popup.input.Disable()
 	} else {
@@ -370,7 +427,8 @@ func (g *App) openSettings() {
 			g.render()
 			return nil
 		},
-		OnClosed: g.FocusInput,
+		OnRoutineDefaults: g.showRoutineDefaultsForm,
+		OnClosed:          g.FocusInput,
 	})
 }
 
@@ -403,6 +461,9 @@ func (g *App) setMode(mode guiMode) {
 	g.popup.setMode(mode)
 	if mode == guiModeHistory {
 		g.loadHistory()
+	}
+	if mode == guiModeRoutine {
+		g.loadRoutines()
 	}
 	g.render()
 }
@@ -467,6 +528,9 @@ func (g *App) taskAutoApprove() bool {
 func inputHeadingForMode(mode guiMode) string {
 	if mode == guiModeHistory {
 		return sectionHistory
+	}
+	if mode == guiModeRoutine {
+		return sectionRoutine
 	}
 	if mode == guiModeTask {
 		return sectionTask

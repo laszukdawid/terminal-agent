@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
+
+	"github.com/laszukdawid/terminal-agent/internal/routines"
 )
 
 type screenshotApp struct {
@@ -67,11 +70,20 @@ func TestCaptureScreenshots(t *testing.T) {
 		},
 	}
 
+	// Redirect routine storage to a temp dir (away from the user's real routines)
+	// and seed representative entries so the Routine views render deterministic,
+	// illustrative content. This must run before NewApp, which binds the routine
+	// service to the (now redirected) store path.
+	routineDir := t.TempDir()
+	t.Setenv(routines.DefinitionsFileEnv, filepath.Join(routineDir, "routines.json"))
+	t.Setenv(routines.DataDirEnv, filepath.Join(routineDir, "data"))
+	seedScreenshotRoutines(t)
+
 	g := NewApp(&recordingService{}, voiceGUIConfig{}, AppOptions{
 		AppID:   "terminal-agent-screenshot",
 		FyneApp: wrappedApp,
 	})
-	t.Cleanup(func() { g.fyneApp.Quit() })
+	t.Cleanup(g.Quit) // g.Quit (not fyneApp.Quit) also stops the routine refresh poller
 
 	win := g.popup.window
 	win.Resize(fyne.NewSize(900, 640))
@@ -127,4 +139,69 @@ func TestCaptureScreenshots(t *testing.T) {
 	// Settings dialog, shown as a modal overlay over the main window.
 	g.openSettings()
 	capture("gui-settings.png")
+	if g.popup.settings != nil {
+		g.popup.settings.dialog.Hide()
+	}
+
+	// Routine list: scheduled routines with varied status (active/inactive/error).
+	g.setMode(guiModeRoutine)
+	capture("gui-routine.png")
+
+	// Routine detail: full prompt, resolved settings, run logs, and actions.
+	if view, err := g.routineService.Get(context.Background(), "daily-standup"); err == nil {
+		g.showRoutineDetail(view)
+		capture("gui-routine-detail.png")
+		g.popup.dismissRoutineDetail()
+	}
+
+	// Create-routine form (also the edit form), showing what is configurable.
+	g.showRoutineForm(nil)
+	capture("gui-routine-form.png")
+
+	// Routine log viewer: a run summary rendered as markdown, with the run
+	// metadata collapsed into a two-column "Details" block and the output set
+	// apart in a highlighted box.
+	if refs, err := g.routineService.Logs(context.Background(), "daily-standup"); err == nil {
+		for _, ref := range refs {
+			if ref.IsResult {
+				g.openRoutineLog(ref)
+				capture("gui-routine-log.png")
+				g.popup.dismissRoutineDetail()
+				break
+			}
+		}
+	}
+}
+
+// seedScreenshotRoutines writes representative routines and run state into the
+// redirected routine stores so the Routine screenshots have illustrative content.
+func seedScreenshotRoutines(t *testing.T) {
+	t.Helper()
+	store := routines.NewStore(routines.DefinitionsPath())
+	state := routines.NewStateStore(routines.StatePath())
+	must := func(err error) {
+		if err != nil {
+			t.Fatalf("seed routines: %v", err)
+		}
+	}
+	const model = "gpt-4o-mini"
+	lastRun := time.Date(2026, 6, 7, 9, 0, 0, 0, time.UTC)
+	nextDaily := time.Date(2026, 6, 8, 9, 0, 0, 0, time.UTC)
+
+	must(store.Upsert(routines.Routine{ID: "daily-standup", Name: "Daily standup", Prompt: "Summarize my git commits from yesterday and list the highlights.", Schedule: "0 9 * * 1-5", Model: model, Enabled: true}))
+	must(store.Upsert(routines.Routine{ID: "nightly-deps", Name: "Nightly dependency audit", Prompt: "Check for outdated Go modules and known security advisories; summarize findings.", Schedule: "0 2 * * *", Model: model, Enabled: true}))
+	must(store.Upsert(routines.Routine{ID: "weekly-digest", Name: "Weekly digest", Prompt: "Draft a weekly project digest from recent repository activity.", Schedule: "0 17 * * 5", Enabled: false}))
+
+	must(state.Record("daily-standup", routines.RunRecord{LastRunAt: lastRun, LastStatus: routines.OutcomeSuccess, LastDuration: "42s", NextRunAt: nextDaily}))
+	must(state.Record("nightly-deps", routines.RunRecord{LastRunAt: lastRun.Add(-7 * time.Hour), LastStatus: routines.OutcomeFailed, LastError: "provider error: rate limited", NextRunAt: lastRun.Add(17 * time.Hour)}))
+
+	// A result summary so the detail view's run-log list has an entry and the log
+	// viewer has representative content (full run metadata plus a short output).
+	logDir := routines.LogDir("daily-standup")
+	must(os.MkdirAll(logDir, 0o755))
+	must(os.WriteFile(filepath.Join(logDir, "2026-06-07T09-00-00_success_a1b2c3.md"),
+		[]byte("# Routine: Daily standup\n\n"+
+			"- ID: daily-standup\n- Schedule: weekdays at 09:00\n- Trigger: scheduled\n- Provider/Model: openai / gpt-4o-mini\n"+
+			"- Started: 2026-06-07T09:00:00Z\n- Ended: 2026-06-07T09:00:42Z\n- Duration: 42s\n- Status: success\n- Tokens (est.): 1840 / 1000000\n\n"+
+			"## Output\n\nHighlights from yesterday's commits:\n\n- Shipped the routines scheduler daemon\n- Fixed the detail overlay backdrop on resize\n- Densified the routine list cards\n"), 0o644))
 }

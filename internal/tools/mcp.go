@@ -63,6 +63,12 @@ func (t *MCPTool) Name() string {
 	return t.name
 }
 
+// ExternalFacing marks every MCP tool as reaching an outside server, so
+// unattended runs disable MCP tools unless they are explicitly enabled.
+func (t *MCPTool) ExternalFacing() bool {
+	return true
+}
+
 // Description returns the description of the MCP tool
 func (t *MCPTool) Description() string {
 	return t.description

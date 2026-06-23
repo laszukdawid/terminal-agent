@@ -43,9 +43,12 @@ var (
 		disabledText:  color.NRGBA{R: 0x5E, G: 0x66, B: 0x5E, A: 0xFF},
 		error:         color.NRGBA{R: 0xE0, G: 0x6D, B: 0x5D, A: 0xFF},
 		warning:       color.NRGBA{R: 0x7B, G: 0xAF, B: 0x72, A: 0xFF},
-		hover:         color.NRGBA{R: 0x18, G: 0x28, B: 0x1B, A: 0xFF},
-		selection:     color.NRGBA{R: 0x24, G: 0x54, B: 0x2A, A: 0x99},
-		shadow:        color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x66},
+		// Hover is a translucent tint, not an opaque fill: the button renderer
+		// alpha-blends it over the button color, so an opaque hover would replace a
+		// colored (importance) button's background and hide its on-color text.
+		hover:     color.NRGBA{R: 0x18, G: 0x28, B: 0x1B, A: 0x40},
+		selection: color.NRGBA{R: 0x24, G: 0x54, B: 0x2A, A: 0x99},
+		shadow:    color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x66},
 	}
 
 	brandLightPalette = brandPalette{
@@ -61,7 +64,7 @@ var (
 		disabledText:  color.NRGBA{R: 0x9B, G: 0xA8, B: 0x98, A: 0xFF},
 		error:         color.NRGBA{R: 0xB5, G: 0x48, B: 0x3D, A: 0xFF},
 		warning:       color.NRGBA{R: 0x8A, G: 0x6A, B: 0x22, A: 0xFF},
-		hover:         color.NRGBA{R: 0xDC, G: 0xEB, B: 0xD3, A: 0xFF},
+		hover:         color.NRGBA{R: 0xDC, G: 0xEB, B: 0xD3, A: 0x40},
 		selection:     color.NRGBA{R: 0xB9, G: 0xE4, B: 0xB2, A: 0x99},
 		shadow:        color.NRGBA{R: 0x22, G: 0x36, B: 0x22, A: 0x22},
 	}

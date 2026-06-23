@@ -23,11 +23,23 @@ type TaskRequest struct {
 	PromptOverride string
 	WorkingDir     string
 	Allow          []string
+	Deny           []string
 	AutoApprove    bool
 	Device         string
 	// Timeout bounds the whole task run. 0 means no task-level timeout (unlimited).
 	Timeout time.Duration
-	Config  config.Config
+	// TokenBudget caps estimated tokens for the run; 0 means unlimited.
+	TokenBudget int
+	// MaxTurns and MaxToolCalls bound the step budget; 0 uses the agent defaults.
+	MaxTurns     int
+	MaxToolCalls int
+	// EnabledTools selects which tools the run may use; nil exposes all available
+	// tools (subject to DisableExternalTools).
+	EnabledTools []string
+	// DisableExternalTools drops external-facing tools (web search, MCP) when
+	// EnabledTools is nil. Routines set this; interactive runs leave it false.
+	DisableExternalTools bool
+	Config               config.Config
 }
 
 // formatTaskTimeout renders a task timeout for the session log meta header.
@@ -45,6 +57,7 @@ type TaskResult struct {
 	RawOutput       string
 	RawOutputTool   string
 	DirectRawOutput bool
+	TokensUsed      int
 }
 
 func (s *service) TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event, error) {
@@ -166,21 +179,27 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 	agentInstance := runtime.NewAgent(PromptSet{Task: taskPrompt})
 	agentInstance.SetDevice(req.Device)
 	response, err := agentInstance.TaskWithOptionsResult(ctx, req.Message, internalagent.TaskOptions{
-		Allow:        req.Allow,
-		AutoApprove:  req.AutoApprove,
-		Interaction:  interaction,
-		OnStep:       onStep,
-		OnStatus:     onStatus,
-		OnProgress:   onProgress,
-		OnToolOutput: onToolOutput,
-		Timeout:      req.Timeout,
+		Allow:                req.Allow,
+		Deny:                 req.Deny,
+		AutoApprove:          req.AutoApprove,
+		Interaction:          interaction,
+		OnStep:               onStep,
+		OnStatus:             onStatus,
+		OnProgress:           onProgress,
+		OnToolOutput:         onToolOutput,
+		Timeout:              req.Timeout,
+		TokenBudget:          req.TokenBudget,
+		MaxTurns:             req.MaxTurns,
+		MaxToolCalls:         req.MaxToolCalls,
+		EnabledTools:         req.EnabledTools,
+		DisableExternalTools: req.DisableExternalTools,
 		Dirs: internalagent.TaskDirs{
 			RootDir:    taskRootDir,
 			CurrentDir: taskRootDir,
 		},
 	})
 	if err != nil {
-		return TaskResult{}, err
+		return TaskResult{TokensUsed: response.TokensUsed}, err
 	}
 
 	return TaskResult{
@@ -189,13 +208,15 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 		RawOutput:       response.RawOutput,
 		RawOutputTool:   response.RawOutputTool,
 		DirectRawOutput: response.DirectRawOutput,
+		TokensUsed:      response.TokensUsed,
 	}, nil
 }
 
+// taskStatusToRecord and the other converters leave Kind unset so the recorder
+// stamps the run's kind (task or routine) from its meta header.
 func taskStatusToRecord(status internalagent.TaskStatusEvent) sessionlog.Record {
 	return sessionlog.Record{
 		Type:      sessionlog.RecordProgress,
-		Kind:      string(RunKindTask),
 		Timestamp: status.Timestamp,
 		Status:    string(status.Phase),
 		Text:      status.Message,
@@ -207,7 +228,6 @@ func taskStatusToRecord(status internalagent.TaskStatusEvent) sessionlog.Record 
 func taskProgressToRecord(progress internalagent.TaskProgressEvent) sessionlog.Record {
 	return sessionlog.Record{
 		Type:      sessionlog.RecordProgress,
-		Kind:      string(RunKindTask),
 		Timestamp: progress.Timestamp,
 		Text:      progress.Message,
 		ToolName:  progress.ToolName,
@@ -230,7 +250,6 @@ type taskEventInteraction struct {
 
 func taskStepToRecord(step internalagent.TaskStep) sessionlog.Record {
 	rec := sessionlog.Record{
-		Kind:      string(RunKindTask),
 		Timestamp: step.Timestamp,
 		Iteration: step.Iteration,
 		Text:      step.Thought,

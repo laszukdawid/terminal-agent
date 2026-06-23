@@ -15,8 +15,10 @@ const (
 	iconPathChat = `<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`
 	// iconPathTask is a lightning "zap" glyph: the Task tab runs agentic,
 	// tool-executing work, so it reads as action rather than the chat bubble.
-	iconPathTask     = `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`
-	iconPathHistory  = `<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 3"/>`
+	iconPathTask    = `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`
+	iconPathHistory = `<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 3"/>`
+	// iconPathRoutine is a clock glyph: scheduled, recurring runs.
+	iconPathRoutine  = `<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>`
 	iconPathEnv      = `<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>`
 	iconPathTools    = `<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>`
 	iconPathTest     = `<path d="M10 2v6.5L4.7 18a3 3 0 0 0 2.6 4h9.4a3 3 0 0 0 2.6-4L14 8.5V2"/><path d="M8 2h8"/><path d="M7.5 14h9"/>`

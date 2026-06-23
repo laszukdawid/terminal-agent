@@ -26,8 +26,6 @@ const (
 	historyCardGap            = 6
 )
 
-var historyBackdropColor = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xB8}
-
 func (g *App) loadHistory() {
 	runs, err := sessionlog.Recent(appservice.SessionDir(), historyLimit)
 	if err != nil {
@@ -120,21 +118,15 @@ func (p *popupWindow) showHistoryDetail(run sessionlog.Summary) {
 	size := historyDetailPopupSize(p.window.Canvas().Size())
 	scroll := container.NewVScroll(content)
 	scroll.SetMinSize(fyne.NewSize(size.Width, max(120, size.Height-historyDetailFooterHeight)))
-	closeButton := widget.NewButton("Close", nil)
+	closeButton := widget.NewButton("Close", func() { p.dismissHistoryDetail() })
 	detail := borderedBox(container.NewBorder(nil, closeButton, nil, nil, scroll), currentBrandPalette().border)
-	canvasSize := p.window.Canvas().Size()
-	overlay := newHistoryDetailOverlay(detail, size, nil)
-	pop := widget.NewPopUp(overlay, p.window.Canvas())
-	overlay.onDismiss = func() {
-		p.dismissHistoryDetail()
-	}
-	closeButton.OnTapped = func() {
-		p.dismissHistoryDetail()
-	}
-	pop.Resize(canvasSize)
+	// Use a modal popup so its backdrop dims and tracks the whole canvas, including
+	// on window resize (see presentRoutineDetail for the non-modal sizing pitfall).
+	pop := widget.NewModalPopUp(detail, p.window.Canvas())
 	p.historyDetail = pop
 	p.window.Canvas().Unfocus()
-	pop.ShowAtPosition(fyne.NewPos(0, 0))
+	pop.Show()
+	pop.Resize(size)
 }
 
 func historyDetailSection(title, text string) fyne.CanvasObject {
@@ -188,18 +180,6 @@ func historyPreview(value, fallback string) (string, bool) {
 		return value, false
 	}
 	return string(runes[:maxPreviewRunes]) + "...", true
-}
-
-func centerPopupPosition(canvasSize, popupSize fyne.Size) fyne.Position {
-	x := (canvasSize.Width - popupSize.Width) / 2
-	y := (canvasSize.Height - popupSize.Height) / 2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	return fyne.NewPos(x, y)
 }
 
 func historyDetailPopupSize(canvasSize fyne.Size) fyne.Size {
@@ -295,68 +275,4 @@ func (p *popupWindow) dismissHistoryDetail() bool {
 	}
 	p.historyDetail.Hide()
 	return true
-}
-
-type historyDetailOverlay struct {
-	widget.BaseWidget
-	detail    fyne.CanvasObject
-	panelSize fyne.Size
-	panelPos  fyne.Position
-	bg        *canvas.Rectangle
-	onDismiss func()
-}
-
-func newHistoryDetailOverlay(detail fyne.CanvasObject, panelSize fyne.Size, onDismiss func()) *historyDetailOverlay {
-	overlay := &historyDetailOverlay{
-		detail:    detail,
-		panelSize: panelSize,
-		bg:        canvas.NewRectangle(historyBackdropColor),
-		onDismiss: onDismiss,
-	}
-	overlay.ExtendBaseWidget(overlay)
-	return overlay
-}
-
-func (o *historyDetailOverlay) Tapped(event *fyne.PointEvent) {
-	if event == nil || !pointInside(event.Position, o.panelPos, o.panelSize) {
-		if o.onDismiss != nil {
-			o.onDismiss()
-		}
-	}
-}
-
-func (o *historyDetailOverlay) CreateRenderer() fyne.WidgetRenderer {
-	return &historyDetailOverlayRenderer{overlay: o, objects: []fyne.CanvasObject{o.bg, o.detail}}
-}
-
-type historyDetailOverlayRenderer struct {
-	overlay *historyDetailOverlay
-	objects []fyne.CanvasObject
-}
-
-func (r *historyDetailOverlayRenderer) Layout(size fyne.Size) {
-	r.overlay.bg.Resize(size)
-	panelSize := r.overlay.panelSize.Min(size.Subtract(fyne.NewSize(historyDetailDialogMargin, historyDetailDialogMargin)))
-	panelSize = panelSize.Max(fyne.NewSize(260, 220))
-	r.overlay.panelSize = panelSize
-	r.overlay.panelPos = centerPopupPosition(size, panelSize)
-	r.overlay.detail.Move(r.overlay.panelPos)
-	r.overlay.detail.Resize(panelSize)
-}
-
-func (r *historyDetailOverlayRenderer) MinSize() fyne.Size { return fyne.NewSize(1, 1) }
-
-func (r *historyDetailOverlayRenderer) Objects() []fyne.CanvasObject { return r.objects }
-
-func (r *historyDetailOverlayRenderer) Refresh() {
-	r.overlay.bg.FillColor = historyBackdropColor
-	r.Layout(r.overlay.Size())
-	r.overlay.bg.Refresh()
-	r.overlay.detail.Refresh()
-}
-
-func (r *historyDetailOverlayRenderer) Destroy() {}
-
-func pointInside(point, pos fyne.Position, size fyne.Size) bool {
-	return point.X >= pos.X && point.Y >= pos.Y && point.X <= pos.X+size.Width && point.Y <= pos.Y+size.Height
 }

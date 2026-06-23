@@ -14,13 +14,14 @@ import (
 )
 
 type settingsDialogOptions struct {
-	InitialProvider  string
-	InitialModel     string
-	Version          string
-	EnvResult        EnvironmentLoadResult
-	ModelForProvider func(provider string) string
-	OnSave           func(provider, model string) error
-	OnClosed         func()
+	InitialProvider   string
+	InitialModel      string
+	Version           string
+	EnvResult         EnvironmentLoadResult
+	ModelForProvider  func(provider string) string
+	OnSave            func(provider, model string) error
+	OnRoutineDefaults func()
+	OnClosed          func()
 }
 
 func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
@@ -112,6 +113,15 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		contentObjects = append(contentObjects,
 			widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			environmentLabel,
+		)
+	}
+	if options.OnRoutineDefaults != nil {
+		routineButton := widget.NewButton("Routine defaults…", func() {
+			options.OnRoutineDefaults()
+		})
+		contentObjects = append(contentObjects,
+			widget.NewLabelWithStyle("Routines", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			container.NewHBox(routineButton),
 		)
 	}
 	contentObjects = append(contentObjects, errorLabel, footer)

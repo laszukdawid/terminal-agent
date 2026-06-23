@@ -79,7 +79,12 @@ func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, 
 		Device:     a.device,
 	}
 
-	return a.Connector.Query(ctx, &qParams)
+	response, err := a.Connector.Query(ctx, &qParams)
+	if err != nil {
+		return "", err
+	}
+	state.TokensUsed += estimateTokens(summary, response)
+	return response, nil
 }
 
 func renderTaskTemplate(tmpl *template.Template, data any) string {

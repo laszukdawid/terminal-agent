@@ -307,6 +307,44 @@ Supported first-pass behavior:
 - OpenAI STT uses the existing OpenAI auth resolution: `OPENAI_API_KEY`, GUI env loading, or stored OpenAI API key auth.
 - `OPENAI_BASE_URL` is respected for OpenAI-compatible endpoints.
 
+## Routines
+
+[Routines](commands/routine.md) are scheduled, unattended agent runs. The `routines` block
+sets the master toggle and the defaults applied to a routine when it does not specify its own
+values:
+
+```json
+{
+  "routines": {
+    "enabled": true,
+    "defaults": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "timeout": "15m",
+      "token_budget": 1000000,
+      "max_turns": 50,
+      "max_tool_calls": 50,
+      "working_dir": "/path/to/project"
+    }
+  }
+}
+```
+
+- `enabled` defaults to `true`. Setting it to `false` disables routines globally.
+- `timeout` is a Go duration string (`15m`, `2h`); `0` means unlimited. The built-in default is
+  **15m**.
+- `token_budget` caps the estimated total tokens per run; `0` means unlimited. The built-in
+  default is **1,000,000**. When the provider does not report usage, usage is estimated as
+  characters exchanged divided by five.
+- `max_turns` / `max_tool_calls` bound the per-run step budget; omit them to use the agent
+  defaults.
+- A routine's own fields always take precedence over these defaults, which take precedence over
+  the built-in values.
+
+Routine definitions are stored in `~/.config/terminal-agent/routines.json` and run results in
+`~/.local/share/terminal-agent/routines/`. See the [Routine Command](commands/routine.md) for
+the full workflow.
+
 ## Model Context Protocol (MCP)
 
 Terminal Agent supports the Model Context Protocol (MCP) for defining custom tools:

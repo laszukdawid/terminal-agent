@@ -117,9 +117,10 @@ func TestTaskProgressRecordsUseProgressType(t *testing.T) {
 				ToolInput: map[string]any{"name_pattern": "*.go"},
 				Timestamp: statusTime,
 			}),
+			// Kind is intentionally empty: the converters are kind-agnostic and the
+			// recorder stamps the run's kind (task or routine) from its meta header.
 			want: sessionlog.Record{
 				Type:      sessionlog.RecordProgress,
-				Kind:      string(RunKindTask),
 				Status:    string(agent.TaskStatusRunningTool),
 				Text:      "Running file_search...",
 				ToolName:  "file_search",
@@ -136,7 +137,6 @@ func TestTaskProgressRecordsUseProgressType(t *testing.T) {
 			}),
 			want: sessionlog.Record{
 				Type:      sessionlog.RecordProgress,
-				Kind:      string(RunKindTask),
 				Text:      "scanning",
 				ToolName:  "file_search",
 				Timestamp: progressTime,
