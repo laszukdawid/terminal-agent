@@ -144,12 +144,13 @@ detail view with the full prompt, resolved settings, and the list of past run lo
 (open any to read its transcript or summary); from there you can **Run now**,
 **Enable/Disable**, **Edit**, or **Delete** the routine. Use **NEW** to create one.
 
-The create/edit form covers the prompt, cron schedule, provider/model, the time and
-token budgets, step limits, deny rules, an "Allow web search" toggle (external-facing
-tools are off by default), and the enabled flag. Defaults applied to routines that
-leave fields blank — and the global routines on/off switch — live under **Settings →
-Routine defaults…**. Automatic firing requires the [daemon](commands/daemon.md);
-"Run now" works regardless.
+The create/edit form keeps the essentials up front — name, enabled, prompt, and cron
+schedule — and tucks the rest into a collapsible **Advanced** section that is closed by
+default: provider/model, the time and token budgets, step limits, deny rules, and an
+"Allow web search" toggle (external-facing tools are off by default). Defaults applied
+to routines that leave fields blank — and the global routines on/off switch — live
+under **Settings → Routine defaults…**. Automatic firing requires the
+[daemon](commands/daemon.md); "Run now" works regardless.
 
 The list refreshes itself while it is open, so runs produced by the daemon or the CLI
 appear without re-navigating. If any routine has a schedule but the daemon is not

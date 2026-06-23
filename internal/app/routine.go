@@ -54,6 +54,12 @@ type RoutineView struct {
 	Run       routines.RunRecord
 	HasRun    bool
 	Frequency string // human-readable schedule
+	// ResolvedProvider/ResolvedModel are the provider and model the routine would
+	// actually run with: its own values when set, otherwise the routine defaults
+	// and finally the global config. Surfacing them lets the UI show the concrete
+	// model instead of a bare "(default)" that hides what will execute.
+	ResolvedProvider string
+	ResolvedModel    string
 }
 
 // RoutineRunRequest asks the service to run a routine now.
@@ -115,12 +121,15 @@ func (s *routineService) List(ctx context.Context) ([]RoutineView, error) {
 	views := make([]RoutineView, 0, len(defs))
 	for _, r := range defs {
 		rec, has := states[r.ID]
+		eff := s.resolve(r)
 		views = append(views, RoutineView{
-			Routine:   r,
-			Status:    routines.DisplayStatus(r.Enabled, rec, has),
-			Run:       rec,
-			HasRun:    has,
-			Frequency: describeSchedule(r.Schedule),
+			Routine:          r,
+			Status:           routines.DisplayStatus(r.Enabled, rec, has),
+			Run:              rec,
+			HasRun:           has,
+			Frequency:        describeSchedule(r.Schedule),
+			ResolvedProvider: eff.Provider,
+			ResolvedModel:    eff.Model,
 		})
 	}
 	sort.Slice(views, func(i, j int) bool { return views[i].Routine.ID < views[j].Routine.ID })
@@ -136,12 +145,15 @@ func (s *routineService) Get(ctx context.Context, idOrName string) (RoutineView,
 	if err != nil {
 		return RoutineView{}, err
 	}
+	eff := s.resolve(r)
 	return RoutineView{
-		Routine:   r,
-		Status:    routines.DisplayStatus(r.Enabled, rec, has),
-		Run:       rec,
-		HasRun:    has,
-		Frequency: describeSchedule(r.Schedule),
+		Routine:          r,
+		Status:           routines.DisplayStatus(r.Enabled, rec, has),
+		Run:              rec,
+		HasRun:           has,
+		Frequency:        describeSchedule(r.Schedule),
+		ResolvedProvider: eff.Provider,
+		ResolvedModel:    eff.Model,
 	}, nil
 }
 
