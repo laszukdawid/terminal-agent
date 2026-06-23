@@ -20,17 +20,17 @@ The demo runs:
 - `agent task --auto-approve make a simple curl request to get weather for Vancouver BC`
 - `agent task --auto-approve write a script to calculate minutes left until christmas`
 
-### Popup GUI
+### Graphical UI
 
-The desktop popup brings the same Ask and Task modes to a window you summon with `Ctrl+Shift+Space`. Switch providers and models from settings, dictate prompts with voice, and browse run history without touching a config file. See the [Popup GUI guide](https://laszukdawid.github.io/terminal-agent/gui.html) for the full tour.
+The desktop window brings the same Ask and Task modes to a window you summon with `Ctrl+Shift+Space`. Switch providers and models from settings, dictate prompts with voice, and browse run history without touching a config file. See the [Graphical UI guide](https://laszukdawid.github.io/terminal-agent/gui.html) for the full tour.
 
 **Ask mode** streams a markdown answer into the response panel:
 
-<img src="./assets/gui-ask.gif" width="760" alt="Terminal Agent popup GUI answering a question in Ask mode" />
+<img src="./assets/gui-ask.gif" width="760" alt="Terminal Agent Graphical UI answering a question in Ask mode" />
 
 **Task mode** plans steps, runs tools, and shows the transcript plus final answer:
 
-<img src="./assets/gui-task.gif" width="760" alt="Terminal Agent popup GUI running a Task workflow" />
+<img src="./assets/gui-task.gif" width="760" alt="Terminal Agent Graphical UI running a Task workflow" />
 
 ## More examples
 
@@ -102,7 +102,7 @@ If you only want to compile the repo then execute `task build`.
 In case you want to both build and set it in your path then execute `task install` which will put binary into `~/.local/bin/agent`.
 To install the versioned Git pre-commit hook that runs the local test suite before each commit, execute `task install:pre-commit` or `go-task install:pre-commit`.
 
-If you want to test the popup GUI on Linux, install the desktop build dependencies first with `task deps:gui:ubuntu` or `task deps:gui:fedora`, then run it with `task run:gui`.
+If you want to test the Graphical UI on Linux, install the desktop build dependencies first with `task deps:gui:ubuntu` or `task deps:gui:fedora`, then run it with `task run:gui`.
 On macOS, Xcode Command Line Tools provide all required build dependencies (`task deps:gui:macos` verifies this).
 These tasks currently use distro-specific package names for the Fyne desktop stack.
 

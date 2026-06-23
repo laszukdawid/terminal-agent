@@ -275,7 +275,7 @@ The Settings dialog reports whether the GUI environment was loaded. Restart `age
 
 ### GUI Voice Input
 
-The popup GUI supports focused-window voice input. Press `F1` while the input is focused, or click `Listen`, to start recording. Press `F1` again or click `Stop` to finish recording. The transcript is inserted into the input and submitted through the normal Ask path by default.
+The Graphical UI supports focused-window voice input. Press `F1` while the input is focused, or click `Listen`, to start recording. Press `F1` again or click `Stop` to finish recording. The transcript is inserted into the input and submitted through the normal Ask path by default.
 
 Voice input is enabled by default, but recording starts only after an explicit toggle. Raw audio is kept in memory and is not written to disk. With the default OpenAI speech-to-text backend, recorded audio is sent to OpenAI for transcription. The resulting transcript is treated like typed input and is included in normal Ask/session logging.
 

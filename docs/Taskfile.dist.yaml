@@ -1,0 +1,44 @@
+version: "3"
+
+# Documentation tasks for the MkDocs site.
+#
+# The MkDocs config (mkdocs.yml) lives at the repository root, so these tasks
+# point MkDocs at ../mkdocs.yml and always run from this docs/ directory. Any of
+# these are equivalent (go-task auto-detects this Taskfile.dist.yaml):
+#
+#   cd docs && task serve        # or: task build
+#   task -d docs serve           # from the repo root, without cd
+#   task docs:serve              # via the root Taskfile's `docs` include
+#
+# A locally installed `mkdocs` is preferred; otherwise the pinned toolchain in
+# requirements.txt is used through `uvx`, which also supplies the Material theme
+# that a plain `uvx mkdocs` lacks.
+
+vars:
+  CONFIG: ../mkdocs.yml
+  MKDOCS:
+    sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with-requirements requirements.txt mkdocs"
+
+tasks:
+  default:
+    desc: List the available docs tasks
+    cmds:
+      - task --list --taskfile {{.TASKFILE}}
+    silent: true
+
+  serve:
+    desc: 'Serve the docs site locally with live reload (override host/port: task serve ADDR=0.0.0.0:9000)'
+    vars:
+      ADDR: '{{.ADDR | default "127.0.0.1:8000"}}'
+    cmds:
+      - echo "Serving docs at http://{{.ADDR}}/ (Ctrl+C to stop)"
+      - '{{.MKDOCS}} serve --config-file {{.CONFIG}} --dev-addr {{.ADDR}}'
+
+  build:
+    desc: 'Build the static docs site into the repo-root ./site (fail on warnings: STRICT=1; custom output: SITE_DIR=/abs/path)'
+    vars:
+      STRICT: '{{if .STRICT}}--strict{{end}}'
+      SITE_DIR: '{{if .SITE_DIR}}--site-dir {{.SITE_DIR}}{{end}}'
+    cmds:
+      - '{{.MKDOCS}} build --config-file {{.CONFIG}} {{.SITE_DIR}} {{.STRICT}}'
+      - echo "Docs site built"

@@ -46,7 +46,7 @@ If you prefer to build from source:
 
 This will place the `agent` binary in `~/.local/bin/agent`.
 
-If you want the popup GUI with user-scoped desktop integration on Ubuntu, run:
+If you want the Graphical UI with user-scoped desktop integration on Ubuntu, run:
 
 ```sh
 task integration:ubuntu
@@ -81,9 +81,9 @@ Inside the popup:
 - invalid providers and empty models are rejected before save
 - provider-specific credential/setup errors are shown in clearer language when a request fails
 
-![Terminal Agent popup GUI switching providers and answering prompts](assets/gui.gif)
+![Terminal Agent Graphical UI switching providers and answering prompts](assets/gui.gif)
 
-The popup is designed for fast back-and-forth work: ask a quick prompt, switch from Codex to Bedrock in settings, ask again with the new provider, then switch back when that is the right model for the job.
+The Graphical UI is designed for fast back-and-forth work: ask a quick prompt, switch from Codex to Bedrock in settings, ask again with the new provider, then switch back when that is the right model for the job.
 
 ## Configuration
 
@@ -112,7 +112,7 @@ export GEMINI_API_KEY=your_api_key_here
 # For Amazon Bedrock, configure your AWS credentials as usual
 ```
 
-If you use the popup GUI from a desktop launcher or global shortcut, `agent-gui` loads GUI credentials from `~/.config/terminal-agent/.gui.env`.
+If you use the Graphical UI from a desktop launcher or global shortcut, `agent-gui` loads GUI credentials from `~/.config/terminal-agent/.gui.env`.
 Use `.gui.env` when you want app-specific tokens that are separate from personal shell tokens:
 
 ```sh

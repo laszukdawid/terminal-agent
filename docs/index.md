@@ -16,17 +16,17 @@ The demo includes:
 - `agent task --auto-approve make a simple curl request to get weather for Vancouver BC`
 - `agent task --auto-approve write a script to calculate minutes left until christmas`
 
-### Popup GUI
+### Graphical UI
 
-The popup GUI keeps quick prompts one shortcut away, with the same Ask and Task modes as the CLI plus provider/model switching from the settings screen. See the [Popup GUI guide](gui.md) for the full feature tour.
+The Graphical UI keeps quick prompts one shortcut away, with the same Ask and Task modes as the CLI plus provider/model switching from the settings screen. See the [Graphical UI guide](gui.md) for the full feature tour.
 
 **Ask mode** streams a markdown answer back into the response panel:
 
-![Terminal Agent popup GUI answering a question in Ask mode](assets/gui-ask.gif)
+![Terminal Agent Graphical UI answering a question in Ask mode](assets/gui-ask.gif)
 
 **Task mode** plans steps, runs tools, and shows the transcript and final answer:
 
-![Terminal Agent popup GUI running a Task workflow](assets/gui-task.gif)
+![Terminal Agent Graphical UI running a Task workflow](assets/gui-task.gif)
 
 ## Contents
 
@@ -39,7 +39,14 @@ The popup GUI keeps quick prompts one shortcut away, with the same Ask and Task 
   - [History Command](commands/history.md) - Query interaction history
   - [Routine Command](commands/routine.md) - Define and run scheduled, unattended routines
   - [Daemon Command](commands/daemon.md) - Run and manage the routine scheduler
-- [Popup GUI](gui.md) - Desktop popup: Ask/Task/Routine modes, voice, settings, history
+- [Graphical UI](gui.md) - Desktop window: Ask/Task/Routine modes, voice, settings, history
+  - [Ask Mode](gui/ask.md) - Quick questions with a streamed markdown answer
+  - [Task Mode](gui/task.md) - Supervised agentic workflow with live tool output
+  - [History](gui/history.md) - Browse recent ask, chat, and task runs
+  - [Routines](gui/routines.md) - Manage scheduled, unattended agent runs
+  - [Settings](gui/settings.md) - Switch providers and models from the UI
+  - [Voice Input](gui/voice.md) - Dictate a prompt instead of typing
+  - [Launching & Shortcuts](gui/launching.md) - Global shortcut and keyboard controls
 - [Providers](providers.md) - Supported LLM providers
 - [Configuration](configuration.md) - Advanced configuration options
 - [Approval Logic](approval-logic.md) - How task tool calls are approved, prompted, or denied

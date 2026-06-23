@@ -1,6 +1,6 @@
 # Fedora Integration
 
-This guide covers the supported Fedora desktop integration path for the Terminal Agent popup GUI.
+This guide covers the supported Fedora desktop integration path for the Terminal Agent Graphical UI.
 
 ## Install the released GUI
 
@@ -29,7 +29,7 @@ Use the source-tree integration below when you want the repo script to build `ag
 
 ## Source-tree integration
 
-Running `task integration:fedora` installs the popup GUI for the current user and configures the desktop launcher path around `~/.local/bin/agent-gui`.
+Running `task integration:fedora` installs the Graphical UI for the current user and configures the desktop launcher path around `~/.local/bin/agent-gui`.
 
 The integration script performs these steps automatically:
 

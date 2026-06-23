@@ -1,5 +1,13 @@
 version: "3"
 
+includes:
+  # Documentation site tasks live in docs/Taskfile.dist.yaml so they sit next to
+  # the content they build. Exposed here under the `docs` namespace, so `task
+  # docs:build` / `task docs:serve` keep working from the repo root.
+  docs:
+    taskfile: docs/Taskfile.dist.yaml
+    dir: docs
+
 dotenv:
   - .env
 
@@ -109,32 +117,6 @@ tasks:
       # relative path would land inside internal/gui instead of the repo root.
       - GUI_SCREENSHOTS='{{.OUT}}' go test ./internal/gui/ -run TestCaptureScreenshots
       - echo "GUI screenshots written to {{.OUT}}"
-    silent: false
-
-  docs:serve:
-    desc: 'Serve the docs website locally with live reload (override host/port: task docs:serve ADDR=0.0.0.0:9000)'
-    vars:
-      ADDR: '{{.ADDR | default "127.0.0.1:8000"}}'
-      # Prefer a locally installed mkdocs; otherwise fall back to uvx with the
-      # pinned docs toolchain (docs/requirements.txt), which also supplies the
-      # material theme that plain `uvx mkdocs` lacks.
-      MKDOCS:
-        sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with-requirements docs/requirements.txt mkdocs"
-    cmds:
-      - echo "Serving docs at http://{{.ADDR}}/ (Ctrl+C to stop)"
-      - '{{.MKDOCS}} serve --dev-addr {{.ADDR}}'
-    silent: false
-
-  docs:build:
-    desc: 'Render the docs website into ./site (override dir: task docs:build SITE_DIR=/abs/path; fail on warnings: STRICT=1)'
-    vars:
-      SITE_DIR: '{{.SITE_DIR | default (printf "%s/site" .USER_WORKING_DIR)}}'
-      STRICT: '{{if .STRICT}}--strict{{end}}'
-      MKDOCS:
-        sh: command -v mkdocs >/dev/null 2>&1 && echo "mkdocs" || echo "uvx --with-requirements docs/requirements.txt mkdocs"
-    cmds:
-      - '{{.MKDOCS}} build --site-dir {{.SITE_DIR}} {{.STRICT}}'
-      - echo "Docs site rendered to {{.SITE_DIR}}"
     silent: false
 
   integration:fedora:

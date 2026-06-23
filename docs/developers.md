@@ -159,7 +159,7 @@ Documentation is written in Markdown and stored in the `docs/` directory. To upd
 
 The desktop popup (`cmd/agent-gui`) is a [Fyne](https://fyne.io/) application
 under `internal/gui/`. End-user behavior is documented in the
-[Popup GUI guide](gui.md); this section is for contributors working on the GUI
+[Graphical UI guide](gui.md); this section is for contributors working on the GUI
 itself.
 
 ### Shared service layer
@@ -223,7 +223,7 @@ and wire the `Ctrl+Shift+Space` shortcut; see the
 
 ## GUI Screenshots
 
-The popup GUI is rendered to PNG files without a display server or a live LLM
+The Graphical UI is rendered to PNG files without a display server or a live LLM
 provider, so the images below can be regenerated deterministically to reflect
 the current look. They double as documentation, PR illustrations, and quick
 visual checks of GUI changes.

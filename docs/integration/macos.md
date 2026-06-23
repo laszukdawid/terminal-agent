@@ -1,6 +1,6 @@
 # macOS Integration
 
-This guide covers the supported macOS desktop integration path for the Terminal Agent popup GUI.
+This guide covers the supported macOS desktop integration path for the Terminal Agent Graphical UI.
 
 ## Install the released GUI
 
@@ -27,7 +27,7 @@ Use the source-tree integration below only when you want the repo script to buil
 
 ## Source-tree integration
 
-Running `task integration:macos` installs the popup GUI as a native `.app` bundle in `~/Applications/` and creates a CLI symlink at `~/.local/bin/agent-gui`.
+Running `task integration:macos` installs the Graphical UI as a native `.app` bundle in `~/Applications/` and creates a CLI symlink at `~/.local/bin/agent-gui`.
 
 The integration script performs these steps automatically:
 

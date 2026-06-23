@@ -49,7 +49,15 @@ nav:
       - Plugin Command: commands/plugin.md
       - Config Command: commands/config.md
       - History Command: commands/history.md
-  - Popup GUI: gui.md
+  - Graphical UI:
+      - Overview: gui.md
+      - Ask Mode: gui/ask.md
+      - Task Mode: gui/task.md
+      - History: gui/history.md
+      - Routines: gui/routines.md
+      - Settings: gui/settings.md
+      - Voice Input: gui/voice.md
+      - Launching & Shortcuts: gui/launching.md
   - Tools: tools.md
   - Providers: providers.md
   - Configuration: configuration.md
