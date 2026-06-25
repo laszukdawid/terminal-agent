@@ -52,6 +52,9 @@ func (c factoryConfig) GetProjectContext() bool                        { return 
 func (c factoryConfig) GetRoutinesEnabled() bool                       { return true }
 func (c factoryConfig) SetRoutinesEnabled(bool) error                  { return nil }
 func (c factoryConfig) GetRoutineDefaults() config.RoutineDefaults     { return config.RoutineDefaults{} }
+func (c factoryConfig) GetConfiguredRoutineDefaults() config.RoutineDefaults {
+	return config.RoutineDefaults{}
+}
 func (c factoryConfig) SetRoutineDefaults(config.RoutineDefaults) error {
 	return nil
 }

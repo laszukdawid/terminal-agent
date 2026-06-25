@@ -59,6 +59,7 @@ type Config interface {
 	GetRoutinesEnabled() bool
 	SetRoutinesEnabled(bool) error
 	GetRoutineDefaults() RoutineDefaults
+	GetConfiguredRoutineDefaults() RoutineDefaults
 	SetRoutineDefaults(RoutineDefaults) error
 }
 
@@ -188,7 +189,7 @@ func NewDefaultConfig() *config {
 		Providers: map[string]string{
 			"anthropic": "claude-3-5-haiku-latest",
 			"bedrock":   DefaultBedrockModel,
-			"codex":     "gpt-4o-mini",
+			"codex":     "gpt-5-mini",
 			"google":    "gemini-3.1-flash-lite",
 			"llama":     "llama3.2",
 			"mimo":      "mimo-v2.5-pro",
@@ -601,6 +602,15 @@ func (config *config) GetRoutineDefaults() RoutineDefaults {
 		defaults.TokenBudget = &budget
 	}
 	return defaults
+}
+
+// GetConfiguredRoutineDefaults returns the routine defaults exactly as the user
+// configured them, without filling in the built-in product defaults. The settings
+// UI uses this so an unset field stays empty (and shows its default as a hint)
+// instead of looking like an explicit override; use GetRoutineDefaults for the
+// resolved values an actual run should apply.
+func (config *config) GetConfiguredRoutineDefaults() RoutineDefaults {
+	return config.Routines.Defaults
 }
 
 func (config *config) SetRoutineDefaults(defaults RoutineDefaults) error {

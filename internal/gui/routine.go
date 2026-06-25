@@ -21,7 +21,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
-	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/routines"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
@@ -46,13 +45,11 @@ const (
 	// scheduler daemon is not running, so the user knows why they will not fire.
 	routineDaemonOffNotice = "Scheduler is not running, so scheduled routines won't fire. Start it with `agent daemon install` (once) or `agent daemon start`."
 
-	// Preferred widths for the routine create/edit form and the routine defaults
-	// form. The scroll width is the inner field column; the dialog width is the
-	// overall popup. Both are capped to the window by routineDialogWidth.
-	routineFormScrollWidth     = 560
-	routineFormDialogWidth     = 600
-	routineDefaultsScrollWidth = 480
-	routineDefaultsDialogWidth = 520
+	// Preferred widths for the routine create/edit form. The scroll width is the
+	// inner field column; the dialog width is the overall popup. Both are capped to
+	// the window by routineDialogWidth.
+	routineFormScrollWidth = 560
+	routineFormDialogWidth = 600
 
 	// routineAdvancedSectionTitle labels the collapsible section that hides the
 	// rarely-changed routine fields (provider, model, budgets, deny rules, tools).
@@ -107,6 +104,7 @@ func (g *App) isRoutineRunning(id string) bool {
 
 func (g *App) loadRoutines() {
 	g.lastRoutineMod = latestRoutineMod()
+	g.popup.setRoutinesEnabledToggle(g.cfg.GetRoutinesEnabled())
 	daemonRunning := g.routineService.DaemonRunning()
 	g.lastDaemonRunning = daemonRunning
 	views, err := g.routineService.List(context.Background())
@@ -770,94 +768,16 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 	refit()
 }
 
-// showRoutineDefaultsForm edits the defaults applied to routines that do not set
-// their own values, plus the global routines on/off toggle. Reached from
-// Settings → "Routine defaults…".
-func (g *App) showRoutineDefaultsForm() {
-	win := g.popup.window
-	defaults := g.cfg.GetRoutineDefaults()
-	var dlg dialog.Dialog
-	var refit func() // re-hugs the dialog to its content; assigned once the layout exists
-
-	enabled := widget.NewCheck("Routines enabled", nil)
-	enabled.SetChecked(g.cfg.GetRoutinesEnabled())
-	provider := newSettingsTextEntry(defaults.Provider)
-	provider.SetPlaceHolder("(global provider)")
-	model := newSettingsTextEntry(defaults.Model)
-	model.SetPlaceHolder("(provider default)")
-	timeout := newSettingsTextEntry(defaults.Timeout)
-	timeout.SetPlaceHolder("15m")
-	tokenBudget := newSettingsTextEntry(intPtrText(defaults.TokenBudget))
-	tokenBudget.SetPlaceHolder("1000000")
-	maxTurns := newSettingsTextEntry(intPtrText(defaults.MaxTurns))
-	maxToolCalls := newSettingsTextEntry(intPtrText(defaults.MaxToolCalls))
-
-	errorLabel := newRoutineFormError()
-	// showError reveals the (otherwise hidden) error label and re-fits the dialog
-	// so a long message grows the popup instead of crowding the scrolled fields.
-	showError := func(msg string) {
-		setRoutineFormError(errorLabel, msg)
-		if refit != nil {
-			refit()
-		}
+// setRoutinesEnabled persists the global routines on/off flag toggled from the
+// Routines panel header and refreshes the list. An error is surfaced in a dialog
+// and the toggle is resynced so it reflects the value that is actually stored.
+func (g *App) setRoutinesEnabled(enabled bool) {
+	if err := g.cfg.SetRoutinesEnabled(enabled); err != nil {
+		dialog.ShowError(err, g.popup.window)
+		g.popup.setRoutinesEnabledToggle(g.cfg.GetRoutinesEnabled())
+		return
 	}
-
-	form := container.New(layout.NewFormLayout(),
-		formFieldLabel("Provider"), themedFormField(provider),
-		formFieldLabel("Model"), themedFormField(model),
-		formFieldLabel("Timeout"), themedFormField(timeout),
-		formFieldLabel("Token budget"), themedFormField(tokenBudget),
-		formFieldLabel("Max turns"), themedFormField(maxTurns),
-		formFieldLabel("Max tool calls"), themedFormField(maxToolCalls),
-	)
-
-	save := widget.NewButton("Save", func() {
-		updated := config.RoutineDefaults{
-			Provider: strings.TrimSpace(provider.Text),
-			Model:    strings.TrimSpace(model.Text),
-			Timeout:  strings.TrimSpace(timeout.Text),
-		}
-		for _, b := range []struct {
-			label string
-			text  string
-			dest  **int
-		}{
-			{"Token budget", tokenBudget.Text, &updated.TokenBudget},
-			{"Max turns", maxTurns.Text, &updated.MaxTurns},
-			{"Max tool calls", maxToolCalls.Text, &updated.MaxToolCalls},
-		} {
-			value, err := parseOptionalNonNegativeInt(b.text)
-			if err != nil {
-				showError(b.label + " " + err.Error() + ".")
-				return
-			}
-			*b.dest = value
-		}
-		if err := g.cfg.SetRoutinesEnabled(enabled.Checked); err != nil {
-			showError(err.Error())
-			return
-		}
-		if err := g.cfg.SetRoutineDefaults(updated); err != nil {
-			showError(err.Error())
-			return
-		}
-		dlg.Hide()
-	})
-	save.Importance = widget.HighImportance
-	cancel := widget.NewButton("Cancel", func() { dlg.Hide() })
-	footer := container.NewBorder(nil, nil, nil, container.NewHBox(cancel, save))
-
-	fields := container.NewVBox(enabled, form)
-	bottom := container.NewVBox(errorLabel, footer)
-	scroll := container.NewVScroll(fields)
-	dlg = dialog.NewCustomWithoutButtons("Routine defaults", container.NewBorder(nil, bottom, nil, nil, scroll), win)
-	refit = func() {
-		fitRoutineFormDialog(dlg, win, scroll, fields, bottom, routineDefaultsScrollWidth, routineDefaultsDialogWidth)
-	}
-	refit()
-	dlg.Show()
-	// See showRoutineForm: re-fit after layout so the footer hugs the fields.
-	refit()
+	g.loadRoutines()
 }
 
 func (p *popupWindow) presentRoutineDetail(content fyne.CanvasObject) {

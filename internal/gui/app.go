@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"github.com/laszukdawid/terminal-agent/internal/agent"
 	appservice "github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/voice"
@@ -264,6 +266,7 @@ func (g *App) wire() {
 	g.popup.onSelectHistory = func() { g.setMode(guiModeHistory) }
 	g.popup.onSelectRoutine = func() { g.setMode(guiModeRoutine) }
 	g.popup.onCreateRoutine = func() { g.showRoutineForm(nil) }
+	g.popup.onToggleRoutinesEnabled = g.setRoutinesEnabled
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -427,8 +430,17 @@ func (g *App) openSettings() {
 			g.render()
 			return nil
 		},
-		OnRoutineDefaults: g.showRoutineDefaultsForm,
-		OnClosed:          g.FocusInput,
+		InitialRoutineDefaults: g.cfg.GetConfiguredRoutineDefaults(),
+		RoutineDefaultHints: routineDefaultHints{
+			Timeout:      config.DefaultRoutineTimeout,
+			TokenBudget:  strconv.Itoa(config.DefaultRoutineTokenBudget),
+			MaxTurns:     strconv.Itoa(agent.MaxTurns),
+			MaxToolCalls: strconv.Itoa(agent.MaxToolCalls),
+		},
+		OnSaveRoutineDefaults: func(defaults config.RoutineDefaults) error {
+			return g.cfg.SetRoutineDefaults(defaults)
+		},
+		OnClosed: g.FocusInput,
 	})
 }
 

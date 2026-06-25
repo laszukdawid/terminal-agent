@@ -66,9 +66,10 @@ type popupWindow struct {
 	historySection  *fyne.Container
 	historyBody     *fyne.Container
 	historyDetail   *widget.PopUp
-	routineSection  *fyne.Container
-	routineBody     *fyne.Container
-	routineDetail   *widget.PopUp
+	routineSection       *fyne.Container
+	routineBody          *fyne.Container
+	routineEnabledToggle *widget.Check
+	routineDetail        *widget.PopUp
 	settings        *settingsDialog
 	outputField     *widget.RichText
 	transcriptBody  *fyne.Container
@@ -139,7 +140,10 @@ type popupWindow struct {
 	onSelectHistory func()
 	onSelectRoutine func()
 	onCreateRoutine func()
-	onTest          func()
+	// onToggleRoutinesEnabled persists the global routines on/off flag toggled from
+	// the Routines panel header.
+	onToggleRoutinesEnabled func(bool)
+	onTest                  func()
 	onInput         func(string)
 	onQuit          func()
 }
@@ -441,7 +445,16 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 			p.onCreateRoutine()
 		}
 	})
-	routineHeader := container.NewBorder(nil, nil, brandSectionLabel(sectionRoutine), newRoutineButton, nil)
+	// The global routines on/off toggle lives in this panel (not in Settings): it
+	// governs whether scheduled routines fire. Its checked state is synced from
+	// config in loadRoutines via setRoutinesEnabledToggle.
+	p.routineEnabledToggle = widget.NewCheck("Enabled", func(checked bool) {
+		if p.onToggleRoutinesEnabled != nil {
+			p.onToggleRoutinesEnabled(checked)
+		}
+	})
+	routineHeaderActions := container.NewHBox(p.routineEnabledToggle, newRoutineButton)
+	routineHeader := container.NewBorder(nil, nil, brandSectionLabel(sectionRoutine), routineHeaderActions, nil)
 	p.routineSection = container.NewBorder(
 		container.NewVBox(routineHeader),
 		nil,
@@ -461,6 +474,19 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	// Inset the whole workspace from the sidebar divider and window edges so the
 	// section headings and panels are not flush against the border.
 	return container.New(layout.NewCustomPaddedLayout(panelPadV, panelPadV, panelPadH, panelPadH), workspace)
+}
+
+// setRoutinesEnabledToggle reflects the stored routines on/off flag in the panel
+// header without firing the toggle's handler, so syncing from config does not
+// loop back into a save.
+func (p *popupWindow) setRoutinesEnabledToggle(enabled bool) {
+	if p.routineEnabledToggle == nil {
+		return
+	}
+	handler := p.routineEnabledToggle.OnChanged
+	p.routineEnabledToggle.OnChanged = nil
+	p.routineEnabledToggle.SetChecked(enabled)
+	p.routineEnabledToggle.OnChanged = handler
 }
 
 func (p *popupWindow) wireInteractions(app fyne.App) {

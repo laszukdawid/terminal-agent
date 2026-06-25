@@ -21,7 +21,7 @@ func TestSupportedProvidersIsAlphabeticalAndIncludesMiMo(t *testing.T) {
 
 func TestDefaultModelFor(t *testing.T) {
 	assert.Equal(t, string(DefaultOpenAIModel), DefaultModelFor(OpenaiProvider))
-	assert.Equal(t, string(DefaultOpenAIModel), DefaultModelFor(CodexProvider))
+	assert.Equal(t, DefaultCodexModel, DefaultModelFor(CodexProvider))
 	assert.Equal(t, DefaultMiMoModel, DefaultModelFor(MiMoProvider))
 	assert.Equal(t, DefaultMistralModel, DefaultModelFor(MistralProvider))
 	assert.Equal(t, string(GLM47Flash), DefaultModelFor(BedrockProvider))

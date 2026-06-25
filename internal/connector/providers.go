@@ -16,7 +16,7 @@ var providerRegistry = []ProviderInfo{
 	{Name: AnthropicProvider, DefaultModel: DefaultAnthropicModel},
 	// BedrockModelID and ChatModel are named string types, hence the conversions.
 	{Name: BedrockProvider, DefaultModel: string(GLM47Flash)},
-	{Name: CodexProvider, DefaultModel: string(DefaultOpenAIModel)},
+	{Name: CodexProvider, DefaultModel: DefaultCodexModel},
 	{Name: GoogleProvider, DefaultModel: Gemini31FlashLite},
 	{Name: LlamaProvider, DefaultModel: DefaultLlamaModel},
 	{Name: MiMoProvider, DefaultModel: DefaultMiMoModel},

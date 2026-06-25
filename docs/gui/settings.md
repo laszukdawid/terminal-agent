@@ -10,7 +10,11 @@ the new defaults to `~/.config/terminal-agent/config.json`, so the choice sticks
 across runs and matches what the CLI uses. The dialog footer shows the build
 version.
 
-Routine-related defaults and the global routines on/off switch live here too,
-under **Settings → Routine defaults…** (see [Routines](./routines.md)).
+Routine defaults are set inline in this dialog, in a **Routines** section: the
+provider, model, timeout, token budget, max turns, and max tool calls applied to
+routines that leave those fields blank. Each field shows its effective default as
+a hint and has an info icon that explains the setting on click. The global
+routines on/off switch is not here; it lives in the **Routine** tab (see
+[Routines](./routines.md)).
 
 See [Providers](../providers.md) for what each provider needs.

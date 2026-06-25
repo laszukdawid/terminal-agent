@@ -21,8 +21,9 @@ The create/edit form keeps the essentials up front (name, enabled, prompt, and c
 schedule) and tucks the rest into a collapsible **Advanced** section that is closed by
 default: provider/model, the time and token budgets, step limits, deny rules, and an
 "Allow web search" toggle (external-facing tools are off by default). Defaults for
-routines that leave fields blank, plus the global routines on/off switch, live under
-**Settings → Routine defaults…**. The per-routine working directory is set via the
+routines that leave fields blank are set inline in the **Routines** section of
+[Settings](./settings.md). The global routines on/off switch is the **Enabled**
+checkbox in this tab's header. The per-routine working directory is set via the
 [CLI](../commands/routine.md) (`--workdir`) or config, not the form. Automatic firing
 requires the [daemon](../commands/daemon.md); "Run now" works regardless.
 

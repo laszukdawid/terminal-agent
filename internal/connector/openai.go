@@ -19,7 +19,7 @@ const (
 	CodexProvider  = "codex"
 
 	DefaultOpenAIModel = openai.ChatModelGPT4oMini
-	DefaultCodexModel  = "gpt-5.5"
+	DefaultCodexModel  = "gpt-5-mini"
 )
 
 // https://openai.com/api/pricing/
@@ -136,7 +136,7 @@ func NewCodexConnector(modelID *string) *CodexConnector {
 	logger.Debug("NewCodexConnector")
 
 	if modelID == nil || *modelID == "" {
-		model := DefaultOpenAIModel
+		model := DefaultCodexModel
 		modelID = &model
 	}
 	resolvedAuth, err := auth.NewManager().ResolveCodexAuth()

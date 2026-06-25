@@ -159,7 +159,7 @@ agent auth logout codex
 **Configuration:**
 ```sh
 agent config set provider codex
-agent config set model gpt-4o-mini
+agent config set model gpt-5-mini
 ```
 
 Legacy OAuth credentials previously stored under `openai` are migrated to `codex` automatically on successful use.

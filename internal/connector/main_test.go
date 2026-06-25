@@ -27,6 +27,8 @@ func TestNewConnectorCreatesCodexConnector(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.IsType(t, &CodexConnector{}, conn)
+	// An empty model must fall back to the codex default, not the OpenAI default.
+	assert.Equal(t, DefaultCodexModel, conn.(*CodexConnector).modelID)
 }
 
 func TestNewConnectorCreatesMistralConnector(t *testing.T) {

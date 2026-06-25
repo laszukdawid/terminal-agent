@@ -47,15 +47,36 @@ func TestSettingsDialogChanged(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			provider := newProviderEntry(tt.provider, nil)
+			model := newSettingsTextEntry(tt.model)
 			s := &settingsDialog{
-				provider:         newProviderEntry(tt.provider, nil),
-				model:            newSettingsTextEntry(tt.model),
-				baselineProvider: tt.baselineProvider,
-				baselineModel:    tt.baselineModel,
+				fields: []trackedField{
+					{current: func() string { return provider.Text }, baseline: tt.baselineProvider},
+					{current: func() string { return model.Text }, baseline: tt.baselineModel},
+				},
 			}
 			assert.Equal(t, tt.want, s.changed())
 		})
 	}
+}
+
+// TestSettingsDialogChangedTracksRoutineFields confirms the Escape-to-close guard
+// also accounts for the inline routine default fields, so an edit there is not
+// silently discarded by a stray Escape.
+func TestSettingsDialogChangedTracksRoutineFields(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+
+	timeout := newSettingsTextEntry("15m")
+	s := &settingsDialog{
+		fields: []trackedField{
+			{current: func() string { return timeout.Text }, baseline: "15m"},
+		},
+	}
+	assert.False(t, s.changed(), "an unedited routine field is not a change")
+
+	timeout.SetText("30m")
+	assert.True(t, s.changed(), "an edited routine field must count as a change")
 }
 
 func TestSettingsTextEntryEscapeRouting(t *testing.T) {
@@ -115,12 +136,14 @@ func TestDismissSettingsIfUnchanged(t *testing.T) {
 
 	newOpenPanel := func(model string) (*popupWindow, *fakeDialog) {
 		fd := &fakeDialog{}
+		provider := newProviderEntry("openai", nil)
+		modelEntry := newSettingsTextEntry(model)
 		p := &popupWindow{settings: &settingsDialog{
-			dialog:           fd,
-			provider:         newProviderEntry("openai", nil),
-			model:            newSettingsTextEntry(model),
-			baselineProvider: "openai",
-			baselineModel:    "gpt-4o",
+			dialog: fd,
+			fields: []trackedField{
+				{current: func() string { return provider.Text }, baseline: "openai"},
+				{current: func() string { return modelEntry.Text }, baseline: "gpt-4o"},
+			},
 		}}
 		return p, fd
 	}

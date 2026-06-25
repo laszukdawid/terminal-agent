@@ -5,23 +5,50 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
 )
 
+// Info-icon messages explaining each routine default. They describe what the
+// setting controls, while the field's placeholder shows the value that applies
+// when the field is left blank.
+const (
+	routineProviderInfo     = "Provider used for routine runs that do not set their own. Leave blank to fall back to the global provider."
+	routineModelInfo        = "Model used for routine runs that do not set their own. Leave blank to fall back to the provider's default model."
+	routineTimeoutInfo      = "Wall-clock limit for a single routine run (e.g. 30s, 15m or 1h). 0 means no timeout."
+	routineTokenBudgetInfo  = "Maximum estimated tokens a routine run may use. 0 means unlimited."
+	routineMaxTurnsInfo     = "Maximum number of agent turns (model round-trips) allowed in a single routine run."
+	routineMaxToolCallsInfo = "Maximum number of tool calls allowed in a single routine run."
+)
+
+// routineDefaultHints carries the placeholder values shown for the routine
+// default fields whose fallback is a fixed product/agent default (rather than a
+// value derived from the chosen provider).
+type routineDefaultHints struct {
+	Timeout      string
+	TokenBudget  string
+	MaxTurns     string
+	MaxToolCalls string
+}
+
 type settingsDialogOptions struct {
-	InitialProvider   string
-	InitialModel      string
-	Version           string
-	EnvResult         EnvironmentLoadResult
-	ModelForProvider  func(provider string) string
-	OnSave            func(provider, model string) error
-	OnRoutineDefaults func()
-	OnClosed          func()
+	InitialProvider        string
+	InitialModel           string
+	Version                string
+	EnvResult              EnvironmentLoadResult
+	ModelForProvider       func(provider string) string
+	OnSave                 func(provider, model string) error
+	InitialRoutineDefaults config.RoutineDefaults
+	RoutineDefaultHints    routineDefaultHints
+	OnSaveRoutineDefaults  func(config.RoutineDefaults) error
+	OnClosed               func()
 }
 
 func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
@@ -46,6 +73,41 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	modelHint := newHint()
 	providerStatus := newProviderStatusIcon(win.Canvas())
 
+	// Routine default fields. A blank field means "use the default", and that
+	// default is shown as the field's placeholder so the user sees it without it
+	// becoming an explicit override saved back to config.
+	rd := options.InitialRoutineDefaults
+	routineProvider := newSettingsTextEntry(rd.Provider)
+	routineModel := newSettingsTextEntry(rd.Model)
+	routineTimeout := newSettingsTextEntry(rd.Timeout)
+	routineTimeout.SetPlaceHolder(defaultHintText(options.RoutineDefaultHints.Timeout))
+	routineTokenBudget := newSettingsTextEntry(intPtrText(rd.TokenBudget))
+	routineTokenBudget.SetPlaceHolder(defaultHintText(options.RoutineDefaultHints.TokenBudget))
+	routineMaxTurns := newSettingsTextEntry(intPtrText(rd.MaxTurns))
+	routineMaxTurns.SetPlaceHolder(defaultHintText(options.RoutineDefaultHints.MaxTurns))
+	routineMaxToolCalls := newSettingsTextEntry(intPtrText(rd.MaxToolCalls))
+	routineMaxToolCalls.SetPlaceHolder(defaultHintText(options.RoutineDefaultHints.MaxToolCalls))
+
+	// Declared up front so the hint closures below can read the live global
+	// provider value before the entry itself is constructed.
+	var providerInput *providerEntry
+
+	// updateRoutineModelHint keeps the routine Model placeholder showing the model a
+	// blank field would resolve to: the routine Provider override when set, else the
+	// global provider. This mirrors how a run resolves a routine's model.
+	updateRoutineModelHint := func() {
+		effective := strings.TrimSpace(routineProvider.Text)
+		if effective == "" && providerInput != nil {
+			effective = strings.TrimSpace(providerInput.Text)
+		}
+		model := ""
+		if options.ModelForProvider != nil && effective != "" {
+			model = strings.TrimSpace(options.ModelForProvider(effective))
+		}
+		routineModel.SetPlaceHolder(routineModelHint(model))
+	}
+	routineProvider.OnChanged = func(string) { updateRoutineModelHint() }
+
 	updateHints := func(provider string) {
 		provider = strings.TrimSpace(provider)
 		providerStatus.setStatus(providerReadinessStatusWithEnvironment(provider, currentEnvResult))
@@ -59,9 +121,14 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		} else {
 			modelHint.SetText("")
 		}
+		// The routine Provider default falls back to the global provider, so its
+		// placeholder tracks the live provider value edited above; the Model
+		// placeholder tracks whichever provider the routine would actually use.
+		routineProvider.SetPlaceHolder(routineProviderHint(provider))
+		updateRoutineModelHint()
 	}
 
-	providerInput := newProviderEntry(options.InitialProvider, updateHints)
+	providerInput = newProviderEntry(options.InitialProvider, updateHints)
 	providerInputField := container.NewThemeOverride(providerInput, promptEntryTheme{Theme: newBrandTheme()})
 	modelInputField := container.NewThemeOverride(modelEntry, promptEntryTheme{Theme: newBrandTheme()})
 
@@ -77,6 +144,19 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		modelLabel, modelInputField,
 		widget.NewLabel(""), modelHint,
 	)
+
+	// Routines section: the defaults applied to routines that do not set their own
+	// values, inline rather than behind a separate dialog. Each label carries an
+	// info icon explaining the setting.
+	routineForm := container.New(layout.NewFormLayout(),
+		settingsFieldLabel(win, "Provider", routineProviderInfo), themedFormField(routineProvider),
+		settingsFieldLabel(win, "Model", routineModelInfo), themedFormField(routineModel),
+		settingsFieldLabel(win, "Timeout", routineTimeoutInfo), themedFormField(routineTimeout),
+		settingsFieldLabel(win, "Token budget", routineTokenBudgetInfo), themedFormField(routineTokenBudget),
+		settingsFieldLabel(win, "Max turns", routineMaxTurnsInfo), themedFormField(routineMaxTurns),
+		settingsFieldLabel(win, "Max tool calls", routineMaxToolCallsInfo), themedFormField(routineMaxToolCalls),
+	)
+
 	environmentSummary := environmentSummaryText(currentEnvResult)
 	var dlg dialog.Dialog
 	saveButton := widget.NewButton("Save", func() {
@@ -94,9 +174,38 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 			errorLabel.SetText("Settings cannot be saved.")
 			return
 		}
+		// Collect the routine defaults first so a malformed numeric field is caught
+		// before anything is persisted, avoiding a partial save.
+		routineDefaults := config.RoutineDefaults{
+			Provider: strings.TrimSpace(routineProvider.Text),
+			Model:    strings.TrimSpace(routineModel.Text),
+			Timeout:  strings.TrimSpace(routineTimeout.Text),
+		}
+		for _, b := range []struct {
+			label string
+			text  string
+			dest  **int
+		}{
+			{"Token budget", routineTokenBudget.Text, &routineDefaults.TokenBudget},
+			{"Max turns", routineMaxTurns.Text, &routineDefaults.MaxTurns},
+			{"Max tool calls", routineMaxToolCalls.Text, &routineDefaults.MaxToolCalls},
+		} {
+			value, err := parseOptionalNonNegativeInt(b.text)
+			if err != nil {
+				errorLabel.SetText(b.label + " " + err.Error() + ".")
+				return
+			}
+			*b.dest = value
+		}
 		if err := options.OnSave(provider, model); err != nil {
 			errorLabel.SetText(err.Error())
 			return
+		}
+		if options.OnSaveRoutineDefaults != nil {
+			if err := options.OnSaveRoutineDefaults(routineDefaults); err != nil {
+				errorLabel.SetText(err.Error())
+				return
+			}
 		}
 		dlg.Hide()
 	})
@@ -111,20 +220,18 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 		environmentLabel := widget.NewLabel(environmentSummary)
 		environmentLabel.Wrapping = fyne.TextWrapWord
 		contentObjects = append(contentObjects,
-			widget.NewLabelWithStyle("Environment", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			brandSeparator(),
+			settingsSectionHeading("Environment"),
 			environmentLabel,
 		)
 	}
-	if options.OnRoutineDefaults != nil {
-		routineButton := widget.NewButton("Routine defaults…", func() {
-			options.OnRoutineDefaults()
-		})
-		contentObjects = append(contentObjects,
-			widget.NewLabelWithStyle("Routines", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			container.NewHBox(routineButton),
-		)
-	}
-	contentObjects = append(contentObjects, errorLabel, footer)
+	contentObjects = append(contentObjects,
+		brandSeparator(),
+		settingsSectionHeading("Routines"),
+		routineForm,
+		errorLabel,
+		footer,
+	)
 	content := container.NewVBox(contentObjects...)
 	updateHints(options.InitialProvider)
 
@@ -132,17 +239,33 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 
 	// Escape closes the panel only when nothing has been edited; pending edits
 	// must be resolved explicitly via Save or Cancel so they are never lost to a
-	// stray keypress. The baseline is captured after updateHints so a value
+	// stray keypress. Baselines are captured after updateHints so a value
 	// auto-populated while building the dialog does not count as an edit.
-	settings := &settingsDialog{
-		dialog:           dlg,
-		provider:         providerInput,
-		model:            modelEntry,
-		baselineProvider: providerInput.Text,
-		baselineModel:    modelEntry.Text,
+	track := func(get func() string) trackedField {
+		return trackedField{current: get, baseline: get()}
 	}
-	providerInput.onEscape = func() { p.dismissSettingsIfUnchanged() }
-	modelEntry.onEscape = func() { p.dismissSettingsIfUnchanged() }
+	settings := &settingsDialog{
+		dialog: dlg,
+		fields: []trackedField{
+			track(func() string { return providerInput.Text }),
+			track(func() string { return modelEntry.Text }),
+			track(func() string { return routineProvider.Text }),
+			track(func() string { return routineModel.Text }),
+			track(func() string { return routineTimeout.Text }),
+			track(func() string { return routineTokenBudget.Text }),
+			track(func() string { return routineMaxTurns.Text }),
+			track(func() string { return routineMaxToolCalls.Text }),
+		},
+	}
+	dismiss := func() { p.dismissSettingsIfUnchanged() }
+	providerInput.onEscape = dismiss
+	modelEntry.onEscape = dismiss
+	routineProvider.onEscape = dismiss
+	routineModel.onEscape = dismiss
+	routineTimeout.onEscape = dismiss
+	routineTokenBudget.onEscape = dismiss
+	routineMaxTurns.onEscape = dismiss
+	routineMaxToolCalls.onEscape = dismiss
 	p.settings = settings
 	dlg.SetOnClosed(func() {
 		p.settings = nil
@@ -154,27 +277,80 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	dlg.Show()
 }
 
-// settingsDialog tracks an open Settings panel so Escape can dismiss it only
-// when the user has not edited any field.
+// settingsFieldLabel builds a bold form-row label paired with a tappable info
+// icon that explains the setting on click. The icon is pinned to the right of the
+// label cell (which FormLayout stretches to the label column width), so every
+// icon sits the same short distance to the left of its input.
+func settingsFieldLabel(win fyne.Window, text, info string) fyne.CanvasObject {
+	return container.NewBorder(nil, nil, formFieldLabel(text), newInfoIcon(win.Canvas(), info))
+}
+
+// settingsSectionHeading renders a settings group title in the brand accent so it
+// reads as a divider between groups rather than another form-field label.
+func settingsSectionHeading(text string) fyne.CanvasObject {
+	palette := currentBrandPalette()
+	t := canvas.NewText(text, palette.accentGreen)
+	t.TextStyle = fyne.TextStyle{Bold: true}
+	t.TextSize = theme.TextSize() + 1
+	return t
+}
+
+// defaultHintText renders a field placeholder that names the default applied when
+// the field is left blank, e.g. "default: 15m". An empty value yields no hint.
+func defaultHintText(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return "default: " + value
+}
+
+// routineProviderHint is the placeholder for the routine default provider: it
+// names the global provider the run falls back to when the field is blank.
+func routineProviderHint(provider string) string {
+	if strings.TrimSpace(provider) == "" {
+		return "(global provider)"
+	}
+	return "default: " + provider
+}
+
+// routineModelHint is the placeholder for the routine default model: it names the
+// provider's default model the run falls back to when the field is blank.
+func routineModelHint(model string) string {
+	if strings.TrimSpace(model) == "" {
+		return "(provider default)"
+	}
+	return "default: " + model
+}
+
+// trackedField pairs a live text accessor with the value shown when the Settings
+// dialog opened, so the dialog can tell whether a field has unsaved edits.
+type trackedField struct {
+	current  func() string
+	baseline string
+}
+
+// settingsDialog tracks an open Settings panel so Escape can dismiss it only when
+// the user has not edited any field.
 type settingsDialog struct {
-	dialog           dialog.Dialog
-	provider         *providerEntry
-	model            *settingsTextEntry
-	baselineProvider string
-	baselineModel    string
+	dialog dialog.Dialog
+	fields []trackedField
 }
 
-// changed reports whether the provider or model differs from the values shown
-// when the dialog opened, ignoring surrounding whitespace.
+// changed reports whether any tracked field differs from the value shown when the
+// dialog opened, ignoring surrounding whitespace.
 func (s *settingsDialog) changed() bool {
-	return strings.TrimSpace(s.provider.Text) != strings.TrimSpace(s.baselineProvider) ||
-		strings.TrimSpace(s.model.Text) != strings.TrimSpace(s.baselineModel)
+	for _, f := range s.fields {
+		if strings.TrimSpace(f.current()) != strings.TrimSpace(f.baseline) {
+			return true
+		}
+	}
+	return false
 }
 
-// dismissSettingsIfUnchanged closes the Settings dialog on Escape when it is
-// open and has no unsaved edits. It returns true when a Settings dialog is open
-// so the caller treats Escape as handled; pending edits leave the dialog open
-// to be resolved via Save or Cancel.
+// dismissSettingsIfUnchanged closes the Settings dialog on Escape when it is open
+// and has no unsaved edits. It returns true when a Settings dialog is open so the
+// caller treats Escape as handled; pending edits leave the dialog open to be
+// resolved via Save or Cancel.
 func (p *popupWindow) dismissSettingsIfUnchanged() bool {
 	if p.settings == nil {
 		return false
