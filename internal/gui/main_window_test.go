@@ -30,6 +30,28 @@ func TestBuildOutputWrapsGeneralResponseText(t *testing.T) {
 	}
 }
 
+func TestBuildOutputReservesScrollbarGutterForWrappedResponseText(t *testing.T) {
+	test.NewApp()
+
+	p := &popupWindow{}
+	p.buildOutput()
+
+	content, ok := p.outputScroll.Content.(*fyne.Container)
+	if !ok {
+		t.Fatalf("outputScroll.Content type = %T, want *fyne.Container", p.outputScroll.Content)
+	}
+	if len(content.Objects) != 1 {
+		t.Fatalf("outputScroll.Content objects = %d, want 1", len(content.Objects))
+	}
+
+	stackWidth := content.Objects[0].MinSize().Width
+	got := content.MinSize().Width - stackWidth
+	want := theme.ScrollBarSize() + theme.InnerPadding()
+	if got != want {
+		t.Fatalf("output gutter width = %.0f, want %.0f", got, want)
+	}
+}
+
 func TestToolOutputScrollsHorizontallyInsteadOfWideningWindow(t *testing.T) {
 	test.NewApp()
 

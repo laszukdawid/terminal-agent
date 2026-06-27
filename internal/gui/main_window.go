@@ -217,7 +217,10 @@ func (p *popupWindow) buildOutput() {
 	p.errorBody.Hide()
 
 	outputStack := container.NewStack(p.outputBody, p.errorBody)
-	scroll := container.NewVScroll(outputStack)
+	// Reserve a gutter for the vertical scrollbar so wrapped prose never renders
+	// underneath it at the right edge of the response panel.
+	outputContent := container.New(layout.NewCustomPaddedLayout(0, 0, 0, theme.ScrollBarSize()+theme.InnerPadding()), outputStack)
+	scroll := container.NewVScroll(outputContent)
 	scroll.SetMinSize(fyne.NewSize(0, compactOutputHeight))
 	p.outputScroll = scroll
 
