@@ -34,3 +34,7 @@ func NewChangeDirectoryTool() tools.Tool {
 func NewMemorySearchTool(store taskmemory.Store, env taskmemory.Environment) tools.Tool {
 	return tasktools.NewMemorySearch(ToolNameMemorySearch, store, env)
 }
+
+func NewSkillTool(loader tasktools.SkillLoader) tools.Tool {
+	return tasktools.NewSkill(ToolNameSkill, loader)
+}

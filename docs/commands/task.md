@@ -22,6 +22,14 @@ If Terminal Agent cannot display live output but the process is still running, i
 
 When the selected provider does not expose dependable native tool calling, Terminal Agent can fall back to a structured JSON action protocol. The direct local `llama` provider uses this path today, so `task` works there as well, although providers with native tool APIs are generally more reliable for complex workflows.
 
+## Skills
+
+`agent task` can use filesystem-backed skills. Skills are reusable instruction files discovered from `.terminal-agent/skills/`, configured skill paths, and `~/.config/terminal-agent/skills/`.
+
+The task prompt includes a compact index of available skills. When a skill is relevant, the agent loads the full instructions with the read-only `skill` tool. Discovery refreshes each model turn, so a task that creates a new project-local skill can use it later in the same run.
+
+See [Skills](../skills.md) for the file format and `agent skill list/create/show` commands.
+
 ## Examples
 
 `agent task` is built for the moments where a normal chat answer is not enough: checking local state, calling a CLI, drafting a small script, or chaining a few shell steps while keeping you in control.

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	internalskills "github.com/laszukdawid/terminal-agent/internal/skills"
 	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	utils "github.com/laszukdawid/terminal-agent/internal/utils"
@@ -79,7 +80,7 @@ func TestBuildTaskToolsExternalFacingPolicy(t *testing.T) {
 	interaction := &fakeTaskInteraction{}
 
 	t.Run("routine default policy disables external-facing tools", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, nil, true, nil, taskmemory.Environment{})
+		got := agentInstance.buildTaskTools(interaction, nil, true, nil, taskmemory.Environment{}, nil)
 		assert.Contains(t, got, "local")
 		assert.NotContains(t, got, "ext")
 		// Task-only tools are always present.
@@ -88,22 +89,43 @@ func TestBuildTaskToolsExternalFacingPolicy(t *testing.T) {
 	})
 
 	t.Run("interactive task default keeps external-facing tools", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, nil, false, nil, taskmemory.Environment{})
+		got := agentInstance.buildTaskTools(interaction, nil, false, nil, taskmemory.Environment{}, nil)
 		assert.Contains(t, got, "local")
 		assert.Contains(t, got, "ext", "normal task runs must not lose external tools")
 	})
 
 	t.Run("explicit allow-list opts external tool back in", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, []string{"ext"}, true, nil, taskmemory.Environment{})
+		got := agentInstance.buildTaskTools(interaction, []string{"ext"}, true, nil, taskmemory.Environment{}, nil)
 		assert.Contains(t, got, "ext")
 		assert.NotContains(t, got, "local")
 	})
 
 	t.Run("explicit allow-list keeps only named local tool", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, []string{"local"}, true, nil, taskmemory.Environment{})
+		got := agentInstance.buildTaskTools(interaction, []string{"local"}, true, nil, taskmemory.Environment{}, nil)
 		assert.Contains(t, got, "local")
 		assert.NotContains(t, got, "ext")
 	})
+
+	t.Run("skill tool is included by default when loader is available", func(t *testing.T) {
+		got := agentInstance.buildTaskTools(interaction, nil, true, nil, taskmemory.Environment{}, fakeSkillLoader{})
+		assert.Contains(t, got, ToolNameSkill)
+	})
+
+	t.Run("explicit allow-list controls skill tool", func(t *testing.T) {
+		got := agentInstance.buildTaskTools(interaction, []string{"local"}, true, nil, taskmemory.Environment{}, fakeSkillLoader{})
+		assert.Contains(t, got, "local")
+		assert.NotContains(t, got, ToolNameSkill)
+
+		got = agentInstance.buildTaskTools(interaction, []string{ToolNameSkill}, true, nil, taskmemory.Environment{}, fakeSkillLoader{})
+		assert.Contains(t, got, ToolNameSkill)
+		assert.NotContains(t, got, "local")
+	})
+}
+
+type fakeSkillLoader struct{}
+
+func (fakeSkillLoader) LoadSkill(name string) (internalskills.Skill, error) {
+	return internalskills.Skill{Name: name, Description: "test", Content: "test"}, nil
 }
 
 func TestTaskOptionsDenyBlocksAutoApprovedTool(t *testing.T) {

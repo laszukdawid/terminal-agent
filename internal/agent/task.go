@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/laszukdawid/terminal-agent/internal/agent/tasktools"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	internalskills "github.com/laszukdawid/terminal-agent/internal/skills"
 	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	log "github.com/laszukdawid/terminal-agent/internal/utils"
@@ -21,6 +23,7 @@ const (
 	UserClarificationToolName = "user_clarification"
 	ToolNameChangeDirectory   = "change_directory"
 	ToolNameFinalAnswer       = "final_answer"
+	ToolNameSkill             = "skill"
 	// tokenEstimateCharsPerToken is the divisor for the fallback token estimate
 	// used when the provider does not report usage: characters exchanged ÷ 5.
 	tokenEstimateCharsPerToken = 5
@@ -146,6 +149,8 @@ type TaskState struct {
 	Dirs             TaskDirs
 	Steps            []TaskStep
 	RelevantMemories []taskmemory.Match
+	Skills           []internalskills.Skill
+	LoadedSkills     []internalskills.Skill
 }
 
 type taskExecutionState struct {
@@ -161,7 +166,12 @@ type taskExecutionState struct {
 	memoryStore       taskmemory.Store
 	memoryEnv         taskmemory.Environment
 	memoryLimit       int
+	config            config.Config
 	autoApprove       bool
+}
+
+func (r *taskExecutionState) LoadSkill(name string) (internalskills.Skill, error) {
+	return internalskills.Load(r.state.Dirs.RootDir, r.config, name)
 }
 
 func (r *taskExecutionState) appendStep(step TaskStep) {
@@ -309,7 +319,7 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		confirmations.appendPatterns(options.Deny, ruleDeny, confirmations.maxPriority+2)
 	}
 
-	return &taskExecutionState{
+	run := &taskExecutionState{
 		state: &TaskState{
 			OriginalQuery: query,
 			MaxIterations: maxToolCalls,
@@ -319,7 +329,6 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 			Dirs:          taskDirs,
 			Steps:         make([]TaskStep, 0, maxTurns),
 		},
-		tools:             a.buildTaskTools(interaction, options.EnabledTools, options.DisableExternalTools, options.MemoryStore, options.MemoryEnv),
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
 		onStep:            options.OnStep,
@@ -330,8 +339,11 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 		memoryStore:       options.MemoryStore,
 		memoryEnv:         options.MemoryEnv,
 		memoryLimit:       options.MemoryLimit,
+		config:            a.config,
 		autoApprove:       options.AutoApprove,
-	}, nil
+	}
+	run.tools = a.buildTaskTools(interaction, options.EnabledTools, options.DisableExternalTools, options.MemoryStore, options.MemoryEnv, run)
+	return run, nil
 }
 
 func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState) (TaskRunResult, bool, error) {
@@ -369,6 +381,7 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 
 func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) (connector.LlmResponseWithTools, error) {
 	run.refreshRelevantMemories(ctx)
+	run.refreshSkills()
 	promptWithState := buildTaskPrompt(run.state)
 	qParams := connector.QueryParams{
 		UserPrompt: &promptWithState,
@@ -693,10 +706,31 @@ func (r *taskExecutionState) finalAnswerResult(answer string) TaskRunResult {
 // external-facing tool is included (explicit opt-in). The task-only tools
 // (user_clarification, final_answer, change_directory) are always appended.
 // memory_search is appended when task memory is available.
-func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []string, disableExternal bool, memoryStore taskmemory.Store, memoryEnv taskmemory.Environment) map[string]tools.Tool {
+// The skill tool is appended when a skill loader is available.
+func (r *taskExecutionState) refreshSkills() {
+	skills, err := internalskills.Discover(r.state.Dirs.RootDir, r.config)
+	if err != nil {
+		log.Warnw("failed to discover skills", "error", err)
+		r.state.Skills = nil
+		return
+	}
+	r.state.Skills = skills
+	r.state.LoadedSkills = internalskills.Triggered(skills, r.state.OriginalQuery)
+}
+
+func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []string, disableExternal bool, memoryStore taskmemory.Store, memoryEnv taskmemory.Environment, skillLoader tasktools.SkillLoader) map[string]tools.Tool {
 	taskTools := make(map[string]tools.Tool, len(a.Tools))
-	if enabledTools == nil {
+	baseTools := a.Tools
+	if skillLoader != nil {
+		baseTools = make(map[string]tools.Tool, len(a.Tools)+1)
 		for name, tool := range a.Tools {
+			baseTools[name] = tool
+		}
+		skillTool := NewSkillTool(skillLoader)
+		baseTools[skillTool.Name()] = skillTool
+	}
+	if enabledTools == nil {
+		for name, tool := range baseTools {
 			if disableExternal && tools.IsExternalFacing(tool) {
 				continue
 			}
@@ -707,7 +741,7 @@ func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []strin
 		for _, name := range enabledTools {
 			allowed[name] = struct{}{}
 		}
-		for name, tool := range a.Tools {
+		for name, tool := range baseTools {
 			if _, ok := allowed[name]; ok {
 				taskTools[name] = tool
 			}
@@ -737,6 +771,10 @@ func (a *Agent) nextTaskResponse(ctx context.Context, params *connector.QueryPar
 		if err != nil {
 			return connector.LlmResponseWithTools{}, err
 		}
+		// Some native tool providers answer with a clarification question instead of
+		// issuing the clarification tool call. Retry through the structured fallback
+		// so the task interaction path remains consistent, while still allowing plain
+		// final-answer prose to complete normally.
 		if !response.ToolUse && strings.Contains(strings.TrimSpace(response.Response), "?") {
 			return a.queryTaskActionFallback(ctx, params, taskTools)
 		}

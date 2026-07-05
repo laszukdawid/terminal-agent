@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	internalskills "github.com/laszukdawid/terminal-agent/internal/skills"
 	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 )
 
@@ -17,14 +18,19 @@ Current phase: {{.Phase}}
 Turn: {{.Iterations}} of {{.MaxTurns}}
 Tool calls: {{.ToolCalls}} of {{.MaxToolCalls}}
 Task root directory: {{.RootDir}}
-Current working directory: {{.CurrentDir}}{{.RelevantMemories}}{{.History}}
+Current working directory: {{.CurrentDir}}
+{{.RelevantMemories}}
+{{.AvailableSkillsSection}}
+{{.LoadedSkillsSection}}
+{{.HistorySection}}
 
 Decide internally whether another tool call is needed. If the task is complete, provide only the final answer requested by the user; do not mention that the task is complete unless the user asked about completion status.`
 
 const taskFinalSummaryTemplateText = `I've been working on this task: {{.OriginalQuery}}
 
 Task root directory: {{.RootDir}}
-Current working directory: {{.CurrentDir}}{{.History}}
+Current working directory: {{.CurrentDir}}
+{{.HistorySection}}
 
 I've reached the task budget limit. Based on the above, provide a comprehensive final answer.`
 
@@ -34,46 +40,50 @@ var (
 )
 
 type taskPromptTemplateData struct {
-	OriginalQuery    string
-	Phase            TaskPhase
-	Iterations       int
-	MaxTurns         int
-	ToolCalls        int
-	MaxToolCalls     int
-	RootDir          string
-	CurrentDir       string
-	RelevantMemories string
-	History          string
+	OriginalQuery          string
+	Phase                  TaskPhase
+	Iterations             int
+	MaxTurns               int
+	ToolCalls              int
+	MaxToolCalls           int
+	RootDir                string
+	CurrentDir             string
+	RelevantMemories       string
+	AvailableSkillsSection string
+	LoadedSkillsSection    string
+	HistorySection         string
 }
 
 type taskFinalSummaryTemplateData struct {
-	OriginalQuery string
-	RootDir       string
-	CurrentDir    string
-	History       string
+	OriginalQuery  string
+	RootDir        string
+	CurrentDir     string
+	HistorySection string
 }
 
 func buildTaskPrompt(state *TaskState) string {
 	return strings.TrimSpace(renderTaskTemplate(taskPromptTemplate, taskPromptTemplateData{
-		OriginalQuery:    state.OriginalQuery,
-		Phase:            state.Phase,
-		Iterations:       state.Iterations,
-		MaxTurns:         state.MaxTurns,
-		ToolCalls:        state.ToolCalls,
-		MaxToolCalls:     state.MaxIterations,
-		RootDir:          state.Dirs.RootDir,
-		CurrentDir:       state.Dirs.CurrentDir,
-		RelevantMemories: formatTaskPromptMemories(state.RelevantMemories),
-		History:          formatTaskPromptHistory(renderTaskHistoryForPrompt(state.Steps)),
+		OriginalQuery:          state.OriginalQuery,
+		Phase:                  state.Phase,
+		Iterations:             state.Iterations,
+		MaxTurns:               state.MaxTurns,
+		ToolCalls:              state.ToolCalls,
+		MaxToolCalls:           state.MaxIterations,
+		RootDir:                state.Dirs.RootDir,
+		CurrentDir:             state.Dirs.CurrentDir,
+		RelevantMemories:       formatTaskPromptMemories(state.RelevantMemories),
+		AvailableSkillsSection: formatTaskPromptSkills(state.Skills),
+		LoadedSkillsSection:    formatTaskPromptLoadedSkills(state.LoadedSkills),
+		HistorySection:         formatTaskPromptHistory(renderTaskHistoryForPrompt(state.Steps)),
 	}))
 }
 
 func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, error) {
 	summary := renderTaskTemplate(taskFinalSummaryTemplate, taskFinalSummaryTemplateData{
-		OriginalQuery: state.OriginalQuery,
-		RootDir:       state.Dirs.RootDir,
-		CurrentDir:    state.Dirs.CurrentDir,
-		History:       formatTaskPromptHistory(renderTaskHistoryForSummary(state.Steps)),
+		OriginalQuery:  state.OriginalQuery,
+		RootDir:        state.Dirs.RootDir,
+		CurrentDir:     state.Dirs.CurrentDir,
+		HistorySection: formatTaskPromptHistory(renderTaskHistoryForSummary(state.Steps)),
 	})
 	qParams := connector.QueryParams{
 		UserPrompt: StringPtr(summary),
@@ -102,14 +112,28 @@ func formatTaskPromptHistory(history string) string {
 	if history == "" {
 		return ""
 	}
-	return "\n\nOrdered step history:\n" + history
+	return strings.TrimSpace("Ordered step history:\n" + history)
+}
+
+func formatTaskPromptSkills(skills []internalskills.Skill) string {
+	if len(skills) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(internalskills.FormatIndex(skills))
+}
+
+func formatTaskPromptLoadedSkills(skills []internalskills.Skill) string {
+	if len(skills) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(internalskills.FormatLoaded(skills))
 }
 
 func formatTaskPromptMemories(matches []taskmemory.Match) string {
 	if len(matches) == 0 {
 		return ""
 	}
-	return "\n\nRelevant prior task memories (advisory; reuse only when applicable):\n" + taskmemory.FormatMatches(matches)
+	return strings.TrimSpace("Relevant prior task memories (advisory; reuse only when applicable):\n" + taskmemory.FormatMatches(matches))
 }
 
 func StringPtr(s string) *string {
