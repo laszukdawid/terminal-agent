@@ -255,6 +255,8 @@ func (c voiceGUIConfig) SetWorkingDir(string) error                     { return
 func (c voiceGUIConfig) GetMaxTokens() int                              { return 0 }
 func (c voiceGUIConfig) GetTaskTimeout() time.Duration                  { return 0 }
 func (c voiceGUIConfig) GetTaskLiveOutputLimit() int                    { return 0 }
+func (c voiceGUIConfig) GetTaskMemory() bool                            { return true }
+func (c voiceGUIConfig) SetTaskMemory(bool) error                       { return nil }
 func (c voiceGUIConfig) GetMemory() bool                                { return false }
 func (c voiceGUIConfig) SetMemory(bool) error                           { return nil }
 func (c voiceGUIConfig) GetWebSearch() bool                             { return true }

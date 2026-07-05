@@ -50,6 +50,8 @@ type Config interface {
 	GetMaxTokens() int
 	GetTaskTimeout() time.Duration
 	GetTaskLiveOutputLimit() int
+	GetTaskMemory() bool
+	SetTaskMemory(bool) error
 	GetMemory() bool
 	SetMemory(bool) error
 	GetWebSearch() bool
@@ -93,6 +95,7 @@ type config struct {
 	MaxTokens           int               `json:"max_tokens"`
 	TaskTimeout         string            `json:"task_timeout,omitempty"`
 	TaskLiveOutputLimit *int              `json:"task_live_output_limit,omitempty"`
+	TaskMemory          *bool             `json:"task_memory,omitempty"`
 	Memory              bool              `json:"memory"`
 	WebSearch           *bool             `json:"web_search,omitempty"`
 	ProjectContext      *bool             `json:"project_context,omitempty"`
@@ -525,6 +528,22 @@ func (config *config) GetTaskLiveOutputLimit() int {
 		return DefaultTaskLiveOutputLimit
 	}
 	return *config.TaskLiveOutputLimit
+}
+
+// GetTaskMemory reports whether task runs should index and retrieve local task
+// memories. It defaults to true because task memory is local-only and
+// rebuildable from local session logs.
+func (config *config) GetTaskMemory() bool {
+	if config.TaskMemory == nil {
+		return true
+	}
+	return *config.TaskMemory
+}
+
+func (config *config) SetTaskMemory(enabled bool) error {
+	log.Debugw("Setting task memory", "enabled", enabled)
+	config.TaskMemory = &enabled
+	return SaveConfig(config)
 }
 
 func (config *config) SetWorkingDir(path string) error {

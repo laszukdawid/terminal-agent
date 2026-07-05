@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ import (
 	internalagent "github.com/laszukdawid/terminal-agent/internal/agent"
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	log "github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
@@ -85,8 +87,26 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 		return
 	}
 
+	memoryStore, memoryIndexer, memoryEnv := openTaskMemory(req, taskRootEnv(req.WorkingDir), recorder.RunID())
+	defer func() {
+		if memoryIndexer != nil {
+			memoryIndexer.Close(time.Second)
+		}
+		if memoryStore != nil {
+			_ = memoryStore.Close()
+		}
+	}()
+	if memoryIndexer != nil {
+		memoryIndexer.Add(taskmemory.RequestRecord(recorder.RunID(), req.Message, memoryEnv))
+	}
+
 	onStep := func(step internalagent.TaskStep) {
 		recorder.Write(taskStepToRecord(step))
+		if memoryIndexer != nil {
+			if rec, ok := taskmemory.StepRecord(recorder.RunID(), req.Message, taskStepToMemoryStep(step), memoryEnv); ok {
+				memoryIndexer.Add(rec)
+			}
+		}
 	}
 	onStatus := func(status internalagent.TaskStatusEvent) {
 		recorder.Write(taskStatusToRecord(status))
@@ -105,6 +125,9 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 		event.Text = progress.Message
 		event.ToolName = progress.ToolName
 		_ = emitEvent(ctx, events, event)
+	}
+	onMemory := func(memory internalagent.TaskMemoryEvent) {
+		recorder.Write(taskMemoryToRecord(memory))
 	}
 	onToolOutput := func(output internalagent.TaskToolOutputEvent) error {
 		if output.Err != nil {
@@ -126,7 +149,7 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 		return emitEvent(ctx, events, event)
 	}
 
-	result, err := executeTask(ctx, req, interaction, onStep, onStatus, onProgress, onToolOutput)
+	result, err := executeTask(ctx, req, interaction, onStep, onStatus, onProgress, onToolOutput, onMemory, memoryStore, memoryEnv)
 	if err != nil {
 		onStatus(internalagent.TaskStatusEvent{Phase: internalagent.TaskStatusFailed, Message: "Task failed.", Timestamp: time.Now().UTC()})
 		failed := newEvent(RunKindTask, EventFailed)
@@ -143,10 +166,13 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	completed.RawOutputTool = result.RawOutputTool
 	completed.DirectRawOutput = result.DirectRawOutput
 	recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Kind: string(RunKindTask), Text: result.Response, ToolName: result.RawOutputTool})
+	if memoryIndexer != nil {
+		memoryIndexer.Add(taskmemory.CompletionRecord(recorder.RunID(), req.Message, result.Response, result.RawOutputTool, result.RawOutput, memoryEnv))
+	}
 	_ = emitEvent(ctx, events, completed)
 }
 
-func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep), onStatus func(internalagent.TaskStatusEvent), onProgress func(internalagent.TaskProgressEvent), onToolOutput func(internalagent.TaskToolOutputEvent) error) (TaskResult, error) {
+func executeTask(ctx context.Context, req TaskRequest, interaction internalagent.TaskInteraction, onStep func(internalagent.TaskStep), onStatus func(internalagent.TaskStatusEvent), onProgress func(internalagent.TaskProgressEvent), onToolOutput func(internalagent.TaskToolOutputEvent) error, onMemory func(internalagent.TaskMemoryEvent), memoryStore taskmemory.Store, memoryEnv taskmemory.Environment) (TaskResult, error) {
 	if strings.TrimSpace(req.Message) == "" {
 		return TaskResult{}, internalagent.ErrEmptyQuery
 	}
@@ -187,12 +213,16 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 		OnStatus:             onStatus,
 		OnProgress:           onProgress,
 		OnToolOutput:         onToolOutput,
+		OnMemory:             onMemory,
 		Timeout:              req.Timeout,
 		TokenBudget:          req.TokenBudget,
 		MaxTurns:             req.MaxTurns,
 		MaxToolCalls:         req.MaxToolCalls,
 		EnabledTools:         req.EnabledTools,
 		DisableExternalTools: req.DisableExternalTools,
+		MemoryStore:          memoryStore,
+		MemoryEnv:            memoryEnv,
+		MemoryLimit:          5,
 		Dirs: internalagent.TaskDirs{
 			RootDir:    taskRootDir,
 			CurrentDir: taskRootDir,
@@ -214,6 +244,42 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 
 // taskStatusToRecord and the other converters leave Kind unset so the recorder
 // stamps the run's kind (task or routine) from its meta header.
+
+func openTaskMemory(req TaskRequest, env taskmemory.Environment, runID string) (taskmemory.Store, *taskmemory.AsyncIndexer, taskmemory.Environment) {
+	if req.Config != nil && !req.Config.GetTaskMemory() {
+		return nil, nil, env
+	}
+	store, err := taskmemory.Open(TaskMemoryPath())
+	if err != nil {
+		log.Warnw("failed to open task memory database", "run_id", runID, "error", err)
+		return nil, nil, env
+	}
+	return store, taskmemory.NewAsyncIndexer(store, env), env
+}
+
+func taskRootEnv(workingDir string) taskmemory.Environment {
+	cwd := strings.TrimSpace(workingDir)
+	if cwd == "" {
+		if wd, err := os.Getwd(); err == nil {
+			cwd = wd
+		}
+	}
+	return taskmemory.Environment{OS: runtime.GOOS, Arch: runtime.GOARCH, Shell: filepath.Base(os.Getenv("SHELL")), CWD: cwd}
+}
+
+func taskStepToMemoryStep(step internalagent.TaskStep) taskmemory.TaskStep {
+	return taskmemory.TaskStep{
+		Iteration:   step.Iteration,
+		Status:      string(step.Status),
+		Thought:     step.Thought,
+		ToolName:    step.ToolName,
+		ToolInput:   step.ToolInput,
+		ToolOutput:  step.ToolOutput,
+		Error:       step.Error,
+		FinalAnswer: step.FinalAnswer,
+	}
+}
+
 func taskStatusToRecord(status internalagent.TaskStatusEvent) sessionlog.Record {
 	return sessionlog.Record{
 		Type:      sessionlog.RecordProgress,
@@ -232,6 +298,30 @@ func taskProgressToRecord(progress internalagent.TaskProgressEvent) sessionlog.R
 		Text:      progress.Message,
 		ToolName:  progress.ToolName,
 	}
+}
+
+func taskMemoryToRecord(memory internalagent.TaskMemoryEvent) sessionlog.Record {
+	text := fmt.Sprintf("Task memory retrieval: %d matches", len(memory.Matches))
+	if memory.Err != nil {
+		text = "Task memory retrieval failed"
+	}
+	return sessionlog.Record{
+		Type:       sessionlog.RecordProgress,
+		Timestamp:  memory.Timestamp,
+		Status:     "task_memory_retrieval",
+		Text:       text,
+		ToolName:   internalagent.ToolNameMemorySearch,
+		ToolInput:  map[string]any{"query": memory.Query, "limit": len(memory.Matches)},
+		ToolResult: taskmemory.FormatMatches(memory.Matches),
+		Error:      memoryError(memory.Err),
+	}
+}
+
+func memoryError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func formatToolOutputWarning(processID int, err error) string {

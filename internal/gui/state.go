@@ -17,12 +17,13 @@ const (
 	guiModeTask    guiMode = "task"
 	guiModeHistory guiMode = "history"
 	guiModeRoutine guiMode = "routine"
+	guiModeMemory  guiMode = "memory"
 )
 
 // isBrowseMode reports whether a mode is a non-input list view (History,
 // Routine) rather than an input-driven flow (Ask, Task).
 func isBrowseMode(mode guiMode) bool {
-	return mode == guiModeHistory || mode == guiModeRoutine
+	return mode == guiModeHistory || mode == guiModeRoutine || mode == guiModeMemory
 }
 
 // taskToolFenceMarker is the copy/export fence marker used when serializing

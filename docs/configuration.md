@@ -75,6 +75,31 @@ agent config get all
 agent config get provider
 ```
 
+### Task Memory
+
+Task memory is enabled by default with the `task_memory` key. It stores a local SQLite search index of task requests, successful tool calls, tool outputs, and final answers at `~/.local/share/terminal-agent/task_memory.db`.
+
+Disable or re-enable it with:
+
+```sh
+agent config set task-memory false
+agent config set task-memory true
+```
+
+Equivalent JSON:
+
+```json
+{
+  "task_memory": true
+}
+```
+
+When enabled, `agent task` searches the index before every model iteration with a one second timeout and injects up to five compact matching memories. Index writes are asynchronous and best-effort, so task execution continues if indexing fails.
+
+Search prefers actionable records. Prior successful tool calls (`tool_success`) rank above final-answer-only completions (`task_completion`), and both rank above prompt-only entries (`task_request`). This means remembered commands are surfaced before weaker evidence when a similar task is asked again. Previous outputs are historical; for dynamic current-state tasks, the reusable memory is the tool input, not the old output.
+
+The index uses SQLite FTS5 when available and falls back to local lexical scoring when FTS5 is unavailable. Run `agent memory task stats` to see whether FTS is active for your local build.
+
 ## Permissions
 
 Terminal Agent supports tool execution permissions via the `permissions` key in configuration files and the `--allow` CLI flag. Permissions are evaluated using the same action expression format used by confirmations, for example:

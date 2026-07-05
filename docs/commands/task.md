@@ -143,3 +143,37 @@ agent task --log "Create a backup of all .json files"
 ```
 
 You can query your history with the `history` command.
+
+## Task Memory
+
+Task memory is enabled by default. Every task run contributes compact local memory records to `~/.local/share/terminal-agent/task_memory.db`, and later task iterations search those records before asking the model what to do next.
+
+Automatic retrieval has a one second budget and returns up to five memories. The retrieved memories are advisory: the model may reuse, adapt, or ignore them depending on the current request and environment.
+
+Memory records are ranked by usefulness:
+
+1. `tool_success` records are preferred because they include the previous tool name, structured input, and historical output. These are the records that preserve commands such as `unix {"command":"date '+%I:%M %p %Z'"}`.
+2. `task_completion` records are useful for final-answer patterns, but may not include the command that produced the answer.
+3. `task_request` records are the weakest signal. They prove a similar prompt happened, but may not include an actionable command yet.
+
+For current-state requests such as time, date, files, processes, git status, or command output, previous outputs are stale examples. The reusable part is the remembered tool input, so the agent should run the remembered command again instead of copying the old output.
+
+The index uses SQLite FTS5 when available and falls back to lexical scoring when FTS5 is unavailable. Check the active search mode with:
+
+```sh
+agent memory task stats
+```
+
+Search memories manually with:
+
+```sh
+agent memory task search "what time is it"
+```
+
+Automatic retrieval is recorded in the per-run JSONL session log. Look for `task_memory_retrieval` records:
+
+```sh
+grep -R '"status":"task_memory_retrieval"' ~/.local/share/terminal-agent/sessions
+```
+
+Those records include the retrieval query, match count, and compact matched memories. If a remembered command was retrieved, it appears in the matched memory's `Input:` line.

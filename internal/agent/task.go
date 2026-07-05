@@ -8,6 +8,7 @@ import (
 
 	"github.com/laszukdawid/terminal-agent/internal/config"
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	log "github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
@@ -35,6 +36,10 @@ type TaskOptions struct {
 	OnStatus     func(TaskStatusEvent)
 	OnProgress   func(TaskProgressEvent)
 	OnToolOutput func(TaskToolOutputEvent) error
+	OnMemory     func(TaskMemoryEvent)
+	MemoryStore  taskmemory.Store
+	MemoryEnv    taskmemory.Environment
+	MemoryLimit  int
 	// Timeout bounds the whole task run. A value of 0 means no task-level
 	// timeout (unlimited). Caller context cancellation always takes precedence.
 	Timeout time.Duration
@@ -87,6 +92,13 @@ type TaskProgressEvent struct {
 	Timestamp time.Time
 }
 
+type TaskMemoryEvent struct {
+	Query     string
+	Matches   []taskmemory.Match
+	Err       error
+	Timestamp time.Time
+}
+
 type TaskRunResult struct {
 	Response        string
 	RawOutput       string
@@ -128,11 +140,12 @@ type TaskState struct {
 	// TokenBudget caps the estimated tokens for the run; 0 means unlimited.
 	// TokensUsed accumulates the running estimate (or provider-reported usage
 	// when available) across model calls.
-	TokenBudget int
-	TokensUsed  int
-	Phase       TaskPhase
-	Dirs        TaskDirs
-	Steps       []TaskStep
+	TokenBudget      int
+	TokensUsed       int
+	Phase            TaskPhase
+	Dirs             TaskDirs
+	Steps            []TaskStep
+	RelevantMemories []taskmemory.Match
 }
 
 type taskExecutionState struct {
@@ -144,6 +157,10 @@ type taskExecutionState struct {
 	onStatus          func(TaskStatusEvent)
 	onProgress        func(TaskProgressEvent)
 	onToolOutput      func(TaskToolOutputEvent) error
+	onMemory          func(TaskMemoryEvent)
+	memoryStore       taskmemory.Store
+	memoryEnv         taskmemory.Environment
+	memoryLimit       int
 	autoApprove       bool
 }
 
@@ -302,13 +319,17 @@ func (a *Agent) newTaskExecutionState(query string, options TaskOptions) (*taskE
 			Dirs:          taskDirs,
 			Steps:         make([]TaskStep, 0, maxTurns),
 		},
-		tools:             a.buildTaskTools(interaction, options.EnabledTools, options.DisableExternalTools),
+		tools:             a.buildTaskTools(interaction, options.EnabledTools, options.DisableExternalTools, options.MemoryStore, options.MemoryEnv),
 		confirmations:     confirmations,
 		successfulOutputs: make([]taskToolOutput, 0, 1),
 		onStep:            options.OnStep,
 		onStatus:          options.OnStatus,
 		onProgress:        options.OnProgress,
 		onToolOutput:      options.OnToolOutput,
+		onMemory:          options.OnMemory,
+		memoryStore:       options.MemoryStore,
+		memoryEnv:         options.MemoryEnv,
+		memoryLimit:       options.MemoryLimit,
 		autoApprove:       options.AutoApprove,
 	}, nil
 }
@@ -347,6 +368,7 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 }
 
 func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) (connector.LlmResponseWithTools, error) {
+	run.refreshRelevantMemories(ctx)
 	promptWithState := buildTaskPrompt(run.state)
 	qParams := connector.QueryParams{
 		UserPrompt: &promptWithState,
@@ -384,6 +406,36 @@ func estimateTokens(parts ...string) int {
 		total += len(part)
 	}
 	return total / tokenEstimateCharsPerToken
+}
+
+func (r *taskExecutionState) refreshRelevantMemories(ctx context.Context) {
+	if r.memoryStore == nil {
+		r.state.RelevantMemories = nil
+		return
+	}
+	limit := r.memoryLimit
+	if limit <= 0 {
+		limit = 5
+	}
+	query := taskmemory.QueryFromTaskState(r.state.OriginalQuery, taskStepToMemoryStep(taskLatestStep(r.state.Steps)), r.memoryEnv)
+	query.Limit = limit
+	memCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	matches, err := r.memoryStore.Search(memCtx, query)
+	r.emitMemory(query.Text, matches, err)
+	if err != nil {
+		log.Warnw("failed to retrieve task memories", "error", err)
+		r.state.RelevantMemories = nil
+		return
+	}
+	r.state.RelevantMemories = matches
+}
+
+func (r *taskExecutionState) emitMemory(query string, matches []taskmemory.Match, err error) {
+	if r.onMemory == nil {
+		return
+	}
+	r.onMemory(TaskMemoryEvent{Query: query, Matches: matches, Err: err, Timestamp: time.Now().UTC()})
 }
 
 func (a *Agent) handleTaskToolResponse(ctx context.Context, logger *zap.SugaredLogger, run *taskExecutionState, response connector.LlmResponseWithTools) (TaskRunResult, bool, error) {
@@ -640,7 +692,8 @@ func (r *taskExecutionState) finalAnswerResult(answer string) TaskRunResult {
 // enabledTools is an explicit allow-list of tool names, and a named
 // external-facing tool is included (explicit opt-in). The task-only tools
 // (user_clarification, final_answer, change_directory) are always appended.
-func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []string, disableExternal bool) map[string]tools.Tool {
+// memory_search is appended when task memory is available.
+func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []string, disableExternal bool, memoryStore taskmemory.Store, memoryEnv taskmemory.Environment) map[string]tools.Tool {
 	taskTools := make(map[string]tools.Tool, len(a.Tools))
 	if enabledTools == nil {
 		for name, tool := range a.Tools {
@@ -670,12 +723,24 @@ func (a *Agent) buildTaskTools(interaction TaskInteraction, enabledTools []strin
 	changeDirectoryTool := NewChangeDirectoryTool()
 	taskTools[changeDirectoryTool.Name()] = changeDirectoryTool
 
+	if memoryStore != nil {
+		memorySearchTool := NewMemorySearchTool(memoryStore, memoryEnv)
+		taskTools[memorySearchTool.Name()] = memorySearchTool
+	}
+
 	return taskTools
 }
 
 func (a *Agent) nextTaskResponse(ctx context.Context, params *connector.QueryParams, taskTools map[string]tools.Tool) (connector.LlmResponseWithTools, error) {
 	if toolConnector, ok := a.Connector.(connector.ToolCallingConnector); ok && toolConnector.SupportsNativeToolCalling() {
-		return toolConnector.QueryWithTool(ctx, params, taskTools)
+		response, err := toolConnector.QueryWithTool(ctx, params, taskTools)
+		if err != nil {
+			return connector.LlmResponseWithTools{}, err
+		}
+		if !response.ToolUse && strings.Contains(strings.TrimSpace(response.Response), "?") {
+			return a.queryTaskActionFallback(ctx, params, taskTools)
+		}
+		return response, nil
 	}
 	return a.queryTaskActionFallback(ctx, params, taskTools)
 }

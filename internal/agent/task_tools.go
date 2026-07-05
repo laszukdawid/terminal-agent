@@ -4,8 +4,11 @@ import (
 	"fmt"
 
 	"github.com/laszukdawid/terminal-agent/internal/agent/tasktools"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 )
+
+const ToolNameMemorySearch = "memory_search"
 
 func NewAskUserTool(interaction TaskInteraction) tools.Tool {
 	return tasktools.NewAskUser(UserClarificationToolName, func(question string) (string, error) {
@@ -26,4 +29,8 @@ func NewFinalAnswerTool() tools.Tool {
 
 func NewChangeDirectoryTool() tools.Tool {
 	return tasktools.NewChangeDirectory(ToolNameChangeDirectory)
+}
+
+func NewMemorySearchTool(store taskmemory.Store, env taskmemory.Environment) tools.Tool {
+	return tasktools.NewMemorySearch(ToolNameMemorySearch, store, env)
 }

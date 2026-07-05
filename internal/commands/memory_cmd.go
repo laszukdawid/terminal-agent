@@ -1,11 +1,14 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/memory"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	"github.com/spf13/cobra"
 )
 
@@ -26,8 +29,93 @@ func NewMemoryCommand() *cobra.Command {
 
 	cmd.AddCommand(memoryAddCommand(mClient))
 	cmd.AddCommand(memoryListCommand(mClient))
+	cmd.AddCommand(taskMemoryCommand())
 
 	return cmd
+}
+
+func taskMemoryCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "task",
+		Short: "Search and manage indexed task memories",
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
+		},
+	}
+	cmd.AddCommand(taskMemorySearchCommand())
+	cmd.AddCommand(taskMemoryStatsCommand())
+	cmd.AddCommand(taskMemoryClearCommand())
+	return cmd
+}
+
+func openTaskMemoryStore() (*taskmemory.SQLiteStore, error) {
+	return taskmemory.Open(app.TaskMemoryPath())
+}
+
+func taskMemorySearchCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "search [query]",
+		Short: "Search indexed task memories",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := openTaskMemoryStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second)
+			defer cancel()
+			env := taskmemory.CurrentEnvironment("")
+			matches, err := store.Search(ctx, taskmemory.Query{Text: strings.Join(args, " "), OS: env.OS, Arch: env.Arch, Shell: env.Shell, Limit: 10})
+			if err != nil {
+				return err
+			}
+			cmd.Println(taskmemory.FormatMatches(matches))
+			return nil
+		},
+	}
+	return cmd
+}
+
+func taskMemoryStatsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stats",
+		Short: "Show task memory index statistics",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := openTaskMemoryStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			stats, err := store.Stats(cmd.Context())
+			if err != nil {
+				return err
+			}
+			cmd.Printf("Records: %d\n", stats.Records)
+			cmd.Printf("FTS enabled: %t\n", stats.FTSEnabled)
+			cmd.Printf("Path: %s\n", app.TaskMemoryPath())
+			return nil
+		},
+	}
+}
+
+func taskMemoryClearCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clear",
+		Short: "Clear the task memory index",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := openTaskMemoryStore()
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			if err := store.Clear(cmd.Context()); err != nil {
+				return err
+			}
+			cmd.Println("Task memory index cleared.")
+			return nil
+		},
+	}
 }
 
 func memoryAddCommand(mClient memory.Memory) *cobra.Command {

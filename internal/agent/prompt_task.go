@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 )
 
 const taskPromptTemplateText = `Original task: {{.OriginalQuery}}
@@ -16,7 +17,7 @@ Current phase: {{.Phase}}
 Turn: {{.Iterations}} of {{.MaxTurns}}
 Tool calls: {{.ToolCalls}} of {{.MaxToolCalls}}
 Task root directory: {{.RootDir}}
-Current working directory: {{.CurrentDir}}{{.History}}
+Current working directory: {{.CurrentDir}}{{.RelevantMemories}}{{.History}}
 
 Decide internally whether another tool call is needed. If the task is complete, provide only the final answer requested by the user; do not mention that the task is complete unless the user asked about completion status.`
 
@@ -33,15 +34,16 @@ var (
 )
 
 type taskPromptTemplateData struct {
-	OriginalQuery string
-	Phase         TaskPhase
-	Iterations    int
-	MaxTurns      int
-	ToolCalls     int
-	MaxToolCalls  int
-	RootDir       string
-	CurrentDir    string
-	History       string
+	OriginalQuery    string
+	Phase            TaskPhase
+	Iterations       int
+	MaxTurns         int
+	ToolCalls        int
+	MaxToolCalls     int
+	RootDir          string
+	CurrentDir       string
+	RelevantMemories string
+	History          string
 }
 
 type taskFinalSummaryTemplateData struct {
@@ -53,15 +55,16 @@ type taskFinalSummaryTemplateData struct {
 
 func buildTaskPrompt(state *TaskState) string {
 	return strings.TrimSpace(renderTaskTemplate(taskPromptTemplate, taskPromptTemplateData{
-		OriginalQuery: state.OriginalQuery,
-		Phase:         state.Phase,
-		Iterations:    state.Iterations,
-		MaxTurns:      state.MaxTurns,
-		ToolCalls:     state.ToolCalls,
-		MaxToolCalls:  state.MaxIterations,
-		RootDir:       state.Dirs.RootDir,
-		CurrentDir:    state.Dirs.CurrentDir,
-		History:       formatTaskPromptHistory(renderTaskHistoryForPrompt(state.Steps)),
+		OriginalQuery:    state.OriginalQuery,
+		Phase:            state.Phase,
+		Iterations:       state.Iterations,
+		MaxTurns:         state.MaxTurns,
+		ToolCalls:        state.ToolCalls,
+		MaxToolCalls:     state.MaxIterations,
+		RootDir:          state.Dirs.RootDir,
+		CurrentDir:       state.Dirs.CurrentDir,
+		RelevantMemories: formatTaskPromptMemories(state.RelevantMemories),
+		History:          formatTaskPromptHistory(renderTaskHistoryForPrompt(state.Steps)),
 	}))
 }
 
@@ -100,6 +103,13 @@ func formatTaskPromptHistory(history string) string {
 		return ""
 	}
 	return "\n\nOrdered step history:\n" + history
+}
+
+func formatTaskPromptMemories(matches []taskmemory.Match) string {
+	if len(matches) == 0 {
+		return ""
+	}
+	return "\n\nRelevant prior task memories (advisory; reuse only when applicable):\n" + taskmemory.FormatMatches(matches)
 }
 
 func StringPtr(s string) *string {
