@@ -10,6 +10,7 @@ Terminal Agent provides several commands to help you interact with the terminal 
 | `task` | Execute a task using LLM-generated commands |
 | `routine` | Define and run scheduled, unattended agent routines |
 | `daemon` | Run and manage the routine scheduler daemon |
+| `skill` | List, create, and show reusable task skills |
 | `tool` | Manage and execute specific tools |
 | `plugin` | Install and manage plugins |
 | `config` | Configure Terminal Agent settings |
@@ -74,6 +75,7 @@ For detailed information about each command, see:
 - [Task Command](./commands/task.md)
 - [Routine Command](./commands/routine.md)
 - [Daemon Command](./commands/daemon.md)
+- [Skills](./skills.md)
 - [Tool Command](./commands/tool.md)
 - [Plugin Command](./commands/plugin.md)
 - [Config Command](./commands/config.md)

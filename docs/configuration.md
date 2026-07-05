@@ -100,6 +100,23 @@ Search prefers actionable records. Prior successful tool calls (`tool_success`) 
 
 The index uses SQLite FTS5 when available and falls back to local lexical scoring when FTS5 is unavailable. Run `agent memory task stats` to see whether FTS is active for your local build.
 
+## Skills
+
+Skills are enabled by default and are discovered from project-local, configured, and global directories. Project-local skills live under `.terminal-agent/skills/`; global skills live under `~/.config/terminal-agent/skills/`.
+
+Optional configuration:
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "paths": ["~/shared-terminal-agent-skills"]
+  }
+}
+```
+
+See [Skills](skills.md) for the file format and `agent skill` commands.
+
 ## Permissions
 
 Terminal Agent supports tool execution permissions via the `permissions` key in configuration files and the `--allow` CLI flag. Permissions are evaluated using the same action expression format used by confirmations, for example:

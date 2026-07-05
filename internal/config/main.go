@@ -64,6 +64,11 @@ type Config interface {
 	SetRoutineDefaults(RoutineDefaults) error
 }
 
+type SkillsConfigProvider interface {
+	GetSkillsEnabled() bool
+	GetSkillPaths() []string
+}
+
 const (
 	DefaultTaskLiveOutputLimit          = 6
 	DefaultGUIVoiceEnabled              = true
@@ -96,11 +101,17 @@ type config struct {
 	TaskTimeout         string            `json:"task_timeout,omitempty"`
 	TaskLiveOutputLimit *int              `json:"task_live_output_limit,omitempty"`
 	TaskMemory          *bool             `json:"task_memory,omitempty"`
+	Skills              SkillsConfig      `json:"skills,omitempty"`
 	Memory              bool              `json:"memory"`
 	WebSearch           *bool             `json:"web_search,omitempty"`
 	ProjectContext      *bool             `json:"project_context,omitempty"`
 	Permissions         Permissions       `json:"permissions,omitempty"`
 	Routines            RoutinesConfig    `json:"routines,omitempty"`
+}
+
+type SkillsConfig struct {
+	Enabled *bool    `json:"enabled,omitempty"`
+	Paths   []string `json:"paths,omitempty"`
 }
 
 // RoutinesConfig holds the master toggle and default settings applied to
@@ -476,6 +487,28 @@ func (config *config) SetDevice(device string) error {
 	log.Debugw("Setting device", "device", normalized)
 	config.Device = normalized
 	return SaveConfig(config)
+}
+
+func (config *config) GetSkillsEnabled() bool {
+	if config.Skills.Enabled == nil {
+		return true
+	}
+	return *config.Skills.Enabled
+}
+
+func (config *config) GetSkillPaths() []string {
+	if len(config.Skills.Paths) == 0 {
+		return nil
+	}
+	paths := make([]string, 0, len(config.Skills.Paths))
+	for _, path := range config.Skills.Paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		paths = append(paths, expandHome(trimmed))
+	}
+	return paths
 }
 
 func (config *config) GetMcpFilePath() string {

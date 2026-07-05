@@ -60,6 +60,7 @@ nav:
       - Voice Input: gui/voice.md
       - Launching & Shortcuts: gui/launching.md
   - Tools: tools.md
+  - Skills: skills.md
   - Providers: providers.md
   - Configuration: configuration.md
   - Approval Logic: approval-logic.md
