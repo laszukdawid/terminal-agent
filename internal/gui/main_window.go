@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/laszukdawid/terminal-agent/internal/gui/mascot"
 	"github.com/laszukdawid/terminal-agent/internal/voice"
 )
 
@@ -95,36 +96,17 @@ type popupWindow struct {
 	copyButton   *widget.Button
 	exportButton *widget.Button
 
-	mascotImage  *canvas.Image
-	robotIdle    fyne.Resource
-	mascotStroke color.Color
-	dataLane     *dataLane
-	host         *hostNode
-	mascotAnim   *fyne.Animation
+	// mascot is the animated sidebar robot (drag, jelly squish, act routine); it is
+	// self-contained in internal/gui/mascot.
+	mascot *mascot.Mascot
 
-	// Mascot performance scheduler: a routine of distinct acts played one after
-	// another off a wall clock (see mascot_animation.go). mascotActive tracks
-	// whether a request is in flight; mascotRunning whether the ticker is live.
-	mascotActs      []mascotAct
-	mascotActIndex  int
-	mascotActStart  time.Time
-	mascotLaneStart time.Time
-	mascotActive    bool
-	mascotRunning   bool
-	mascotLastName  string
-
-	// mascotFrameCache memoizes rendered frames by pose name. Because the act
-	// timeline is quantized to a fixed frame grid (mascotFPS), the set of distinct
-	// poses is finite and recurs across loops, so this map (and Fyne's name-keyed
-	// raster cache underneath it) converge to a bounded working set rather than
-	// growing without bound on long-running requests.
-	mascotFrameCache map[string]fyne.Resource
-
-	// Click reactions: tapping the mascot plays a random one-shot act that takes
-	// priority over the routine. mascotOneShot, when set, is the act in flight;
-	// mascotLastReaction avoids picking the same reaction twice in a row.
-	mascotOneShot      *mascotAct
-	mascotLastReaction int
+	// The agent-to-host data signal on the RESPONSE heading (see signal.go): a
+	// separate element from the mascot, on its own request-scoped ticker.
+	dataLane      *dataLane
+	host          *hostNode
+	signalAnim    *fyne.Animation
+	signalStart   time.Time
+	signalRunning bool
 
 	cwdLabel *marqueeLabel
 
@@ -160,14 +142,17 @@ func newPopupWindow(app fyne.App, devMode bool) *popupWindow {
 }
 
 func (p *popupWindow) rebuildContent(app fyne.App, devMode bool) {
-	if p.mascotAnim != nil {
-		p.mascotAnim.Stop()
-		p.mascotAnim = nil
+	// Tear down the old animated widgets before rebuilding; buildSidebar/buildSignalRow
+	// create fresh ones. A fresh mascot from New starts clean.
+	if p.mascot != nil {
+		p.mascot.Stop()
+		p.mascot = nil
 	}
-	p.mascotRunning = false
-	p.mascotActive = false
-	p.mascotActIndex = 0
-	p.mascotOneShot = nil
+	if p.signalAnim != nil {
+		p.signalAnim.Stop()
+		p.signalAnim = nil
+	}
+	p.signalRunning = false
 	p.dismissHistoryDetail()
 	p.dismissRoutineDetail()
 
@@ -316,15 +301,17 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 	), palette.border)
 
 	// The mascot lives in the sidebar's open space, performing its routine where
-	// it adds personality without crowding the response area.
-	content := container.NewVBox(
-		p.buildWordmark(),
-		brandSeparator(),
-		nav,
-		layout.NewSpacer(),
-		container.NewCenter(p.buildMascot()),
-		layout.NewSpacer(),
+	// it adds personality without crowding the response area. Its stage fills the
+	// whole gap between the nav and the status card so it has room to be grabbed
+	// and flung around (see internal/gui/mascot); the nav sits at the top and the
+	// listen/status card at the bottom.
+	p.mascot = mascot.New(palette.accentGreen)
+	content := container.NewBorder(
+		container.NewVBox(p.buildWordmark(), brandSeparator(), nav),
 		listenPanel,
+		nil,
+		nil,
+		p.mascot.Object(),
 	)
 
 	bg := canvas.NewRectangle(palette.panel)

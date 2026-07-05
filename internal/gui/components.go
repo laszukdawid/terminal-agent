@@ -139,38 +139,6 @@ func newCommandButton(label, iconPath string, onTap func()) *widget.Button {
 	return btn
 }
 
-// tappableBox wraps a content object so it reacts to clicks, invoking onTap and
-// showing a pointer cursor on hover. It is used to make the otherwise-inert
-// mascot image clickable without giving it any button chrome.
-type tappableBox struct {
-	widget.BaseWidget
-	content fyne.CanvasObject
-	onTap   func()
-}
-
-func newTappableBox(content fyne.CanvasObject, onTap func()) *tappableBox {
-	b := &tappableBox{content: content, onTap: onTap}
-	b.ExtendBaseWidget(b)
-	return b
-}
-
-func (b *tappableBox) Tapped(*fyne.PointEvent) {
-	if b.onTap != nil {
-		b.onTap()
-	}
-}
-
-func (b *tappableBox) Cursor() desktop.Cursor {
-	if b.onTap != nil {
-		return desktop.PointerCursor
-	}
-	return desktop.DefaultCursor
-}
-
-func (b *tappableBox) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(b.content)
-}
-
 // brandActionDivider is the muted "|" separator shown between COPY and EXPORT.
 func brandActionDivider() fyne.CanvasObject {
 	palette := currentBrandPalette()
