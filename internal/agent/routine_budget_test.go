@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/laszukdawid/terminal-agent/internal/connector"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	utils "github.com/laszukdawid/terminal-agent/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -78,7 +79,7 @@ func TestBuildTaskToolsExternalFacingPolicy(t *testing.T) {
 	interaction := &fakeTaskInteraction{}
 
 	t.Run("routine default policy disables external-facing tools", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, nil, true)
+		got := agentInstance.buildTaskTools(interaction, nil, true, nil, taskmemory.Environment{})
 		assert.Contains(t, got, "local")
 		assert.NotContains(t, got, "ext")
 		// Task-only tools are always present.
@@ -87,19 +88,19 @@ func TestBuildTaskToolsExternalFacingPolicy(t *testing.T) {
 	})
 
 	t.Run("interactive task default keeps external-facing tools", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, nil, false)
+		got := agentInstance.buildTaskTools(interaction, nil, false, nil, taskmemory.Environment{})
 		assert.Contains(t, got, "local")
 		assert.Contains(t, got, "ext", "normal task runs must not lose external tools")
 	})
 
 	t.Run("explicit allow-list opts external tool back in", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, []string{"ext"}, true)
+		got := agentInstance.buildTaskTools(interaction, []string{"ext"}, true, nil, taskmemory.Environment{})
 		assert.Contains(t, got, "ext")
 		assert.NotContains(t, got, "local")
 	})
 
 	t.Run("explicit allow-list keeps only named local tool", func(t *testing.T) {
-		got := agentInstance.buildTaskTools(interaction, []string{"local"}, true)
+		got := agentInstance.buildTaskTools(interaction, []string{"local"}, true, nil, taskmemory.Environment{})
 		assert.Contains(t, got, "local")
 		assert.NotContains(t, got, "ext")
 	})

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 )
 
 type TaskStepStatus string
@@ -38,6 +40,26 @@ func (s *TaskState) appendStep(step TaskStep) {
 		step.Timestamp = time.Now().UTC()
 	}
 	s.Steps = append(s.Steps, step)
+}
+
+func taskLatestStep(steps []TaskStep) TaskStep {
+	if len(steps) == 0 {
+		return TaskStep{}
+	}
+	return steps[len(steps)-1]
+}
+
+func taskStepToMemoryStep(step TaskStep) taskmemory.TaskStep {
+	return taskmemory.TaskStep{
+		Iteration:   step.Iteration,
+		Status:      string(step.Status),
+		Thought:     step.Thought,
+		ToolName:    step.ToolName,
+		ToolInput:   step.ToolInput,
+		ToolOutput:  step.ToolOutput,
+		Error:       step.Error,
+		FinalAnswer: step.FinalAnswer,
+	}
 }
 
 type taskHistoryRenderOptions struct {

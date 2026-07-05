@@ -7,11 +7,12 @@ import (
 )
 
 var (
-	memoryDir  = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
-	memoryFile = "memory.jsonl"
-	logDir     = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
-	logFile    = "query_log.jsonl"
-	sessionDir = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent", "sessions")
+	memoryDir      = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
+	memoryFile     = "memory.jsonl"
+	logDir         = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent")
+	logFile        = "query_log.jsonl"
+	sessionDir     = filepath.Join(os.Getenv("HOME"), ".local", "share", "terminal-agent", "sessions")
+	taskMemoryFile = "task_memory.db"
 )
 
 func MemoryPath() string {
@@ -20,6 +21,10 @@ func MemoryPath() string {
 
 func LogPath() string {
 	return filepath.Join(logDir, logFile)
+}
+
+func TaskMemoryPath() string {
+	return filepath.Join(memoryDir, taskMemoryFile)
 }
 
 // SessionDirEnv overrides the directory where per-run execution logs are written.

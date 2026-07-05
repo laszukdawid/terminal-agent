@@ -43,6 +43,8 @@ func (c factoryConfig) SetWorkingDir(string) error                     { return 
 func (c factoryConfig) GetMaxTokens() int                              { return 0 }
 func (c factoryConfig) GetTaskTimeout() time.Duration                  { return 0 }
 func (c factoryConfig) GetTaskLiveOutputLimit() int                    { return 0 }
+func (c factoryConfig) GetTaskMemory() bool                            { return true }
+func (c factoryConfig) SetTaskMemory(bool) error                       { return nil }
 func (c factoryConfig) GetMemory() bool                                { return false }
 func (c factoryConfig) SetMemory(bool) error                           { return nil }
 func (c factoryConfig) GetWebSearch() bool                             { return true }

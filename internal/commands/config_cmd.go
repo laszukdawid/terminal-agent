@@ -18,6 +18,7 @@ const (
 	cmdMcpPath    = "mcp-path"
 	cmdWorkingDir = "working-dir"
 	cmdMemory     = "memory"
+	cmdTaskMemory = "task-memory"
 	cmdDevice     = "device"
 )
 
@@ -61,6 +62,8 @@ func ConfigGetCommand(config config.Config) *cobra.Command {
 				fmt.Println(config.GetWorkingDir())
 			case cmdMemory:
 				fmt.Println(config.GetMemory())
+			case cmdTaskMemory:
+				fmt.Println(config.GetTaskMemory())
 			case cmdDevice:
 				fmt.Println(config.GetDevice())
 			default:
@@ -79,13 +82,14 @@ func ConfigSetCommand(config config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set the configuration",
-		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir, memory, device.
+		Long: `Set the configuration. Needs two values: key and value. Currently supported keys: provider, model, mcp-path, working-dir, memory, task-memory, device.
 
 For example:
   terminal-agent config set provider bedrock
   terminal-agent config set mcp-path /path/to/mcp.json
   terminal-agent config set working-dir /path/to/workdir
   terminal-agent config set memory true
+  terminal-agent config set task-memory false
   terminal-agent config set device cpu`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 2 {
@@ -138,6 +142,19 @@ For example:
 					_ = cmd.Help()
 					return
 				}
+			case cmdTaskMemory:
+				if value == "true" {
+					config.SetTaskMemory(true)
+					fmt.Println("Task memory set to: true")
+				} else if value == "false" {
+					config.SetTaskMemory(false)
+					fmt.Println("Task memory set to: false")
+				} else {
+					cmd.PrintErrln("Invalid value for task-memory. Use 'true' or 'false'.")
+					cmd.SilenceUsage = true
+					_ = cmd.Help()
+					return
+				}
 			case cmdDevice:
 				if err := config.SetDevice(value); err != nil {
 					cmd.SilenceUsage = true
@@ -167,6 +184,7 @@ func ConfigShowAllCommand(config config.Config) *cobra.Command {
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
 			fmt.Println("Memory:", cmdMemory, "=", config.GetMemory())
+			fmt.Println("Task memory:", cmdTaskMemory, "=", config.GetTaskMemory())
 		},
 	}
 
@@ -185,6 +203,7 @@ func ConfigGetAll(config config.Config) *cobra.Command {
 			fmt.Println("MCP file path:", cmdMcpPath, "=", config.GetMcpFilePath())
 			fmt.Println("Working directory:", cmdWorkingDir, "=", config.GetWorkingDir())
 			fmt.Println("Memory:", cmdMemory, "=", config.GetMemory())
+			fmt.Println("Task memory:", cmdTaskMemory, "=", config.GetTaskMemory())
 		},
 	}
 

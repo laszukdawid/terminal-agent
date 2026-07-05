@@ -32,6 +32,7 @@ const (
 	sectionTask         = "TASK THE TERMINAL AGENT TO DO"
 	sectionHistory      = "HISTORY"
 	sectionRoutine      = "ROUTINES"
+	sectionMemory       = "TASK MEMORY"
 	sectionResp         = "RESPONSE"
 	sectionErr          = "ERROR"
 	sendButtonText      = "SEND  ›"
@@ -59,11 +60,13 @@ type popupWindow struct {
 	navTask         *navRow
 	navHistory      *navRow
 	navRoutine      *navRow
+	navMemory       *navRow
 	inputGroup      fyne.CanvasObject
 	responseHeading *canvas.Text
 	signalRow       *fyne.Container
 	responseSection *fyne.Container
 	historySection  *fyne.Container
+	memorySection   *fyne.Container
 	historyBody     *fyne.Container
 	historyDetail   *widget.PopUp
 	routineSection  *fyne.Container
@@ -139,6 +142,7 @@ type popupWindow struct {
 	onSelectHistory func()
 	onSelectRoutine func()
 	onCreateRoutine func()
+	onSelectMemory  func()
 	onTest          func()
 	onInput         func(string)
 	onQuit          func()
@@ -275,7 +279,12 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 			p.onSelectRoutine()
 		}
 	})
-	nav := container.NewVBox(p.navAsk, p.navTask, p.navHistory, p.navRoutine)
+	p.navMemory = newNavRow(sectionMemory, iconPathTools, false, func() {
+		if p.onSelectMemory != nil {
+			p.onSelectMemory()
+		}
+	})
+	nav := container.NewVBox(p.navAsk, p.navTask, p.navHistory, p.navRoutine, p.navMemory)
 	// ENV and TOOLS are not wired up yet, so they are only shown in dev mode
 	// where we can build them out without exposing dead nav entries.
 	if devMode {
@@ -453,7 +462,14 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	)
 	p.routineSection.Hide()
 
-	mainContent := container.NewStack(p.responseSection, p.historySection, p.routineSection)
+	p.memorySection = container.NewBorder(
+		container.NewVBox(brandSectionLabel(sectionMemory)),
+		nil,
+		nil, nil,
+		borderedBox(container.NewCenter(widget.NewLabel("Task memory browsing is being built. Use `agent memory task search` for now.")), palette.border),
+	)
+	p.memorySection.Hide()
+	mainContent := container.NewStack(p.responseSection, p.historySection, p.routineSection, p.memorySection)
 
 	workspace := container.NewBorder(
 		p.inputGroup,
@@ -579,6 +595,9 @@ func (p *popupWindow) setMode(mode guiMode) {
 	}
 	if p.navRoutine != nil {
 		p.navRoutine.setActive(mode == guiModeRoutine)
+	}
+	if p.navMemory != nil {
+		p.navMemory.setActive(mode == guiModeMemory)
 	}
 	p.setInputHeading(inputHeadingForMode(mode))
 }

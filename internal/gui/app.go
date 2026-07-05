@@ -264,6 +264,7 @@ func (g *App) wire() {
 	g.popup.onSelectHistory = func() { g.setMode(guiModeHistory) }
 	g.popup.onSelectRoutine = func() { g.setMode(guiModeRoutine) }
 	g.popup.onCreateRoutine = func() { g.showRoutineForm(nil) }
+	g.popup.onSelectMemory = func() { g.setMode(guiModeMemory) }
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -343,11 +344,15 @@ func (g *App) render() {
 	}
 	g.popup.historySection.Hide()
 	g.popup.routineSection.Hide()
+	g.popup.memorySection.Hide()
 	if g.state.mode == guiModeHistory {
 		g.popup.historySection.Show()
 	}
 	if g.state.mode == guiModeRoutine {
 		g.popup.routineSection.Show()
+	}
+	if g.state.mode == guiModeMemory {
+		g.popup.memorySection.Show()
 	}
 
 	showAnswer := !browse && (g.state.hasResponseContent() || g.state.isRunning || g.state.errorText != "")
@@ -531,6 +536,9 @@ func inputHeadingForMode(mode guiMode) string {
 	}
 	if mode == guiModeRoutine {
 		return sectionRoutine
+	}
+	if mode == guiModeMemory {
+		return sectionMemory
 	}
 	if mode == guiModeTask {
 		return sectionTask

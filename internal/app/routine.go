@@ -15,6 +15,7 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/daemon"
 	"github.com/laszukdawid/terminal-agent/internal/routines"
 	"github.com/laszukdawid/terminal-agent/internal/sessionlog"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 )
 
 // maxResultSummaries bounds how many run artifacts are retained per routine.
@@ -289,12 +290,33 @@ func (s *routineService) Run(ctx context.Context, req RoutineRunRequest) (Routin
 		Config:               s.cfg,
 	}
 
-	onStep := func(step internalagent.TaskStep) { recorder.Write(taskStepToRecord(step)) }
+	memoryStore, memoryIndexer, memoryEnv := openTaskMemory(taskReq, taskRootEnv(eff.WorkingDir), recorder.RunID())
+	defer func() {
+		if memoryIndexer != nil {
+			memoryIndexer.Close(time.Second)
+		}
+		if memoryStore != nil {
+			_ = memoryStore.Close()
+		}
+	}()
+	if memoryIndexer != nil {
+		memoryIndexer.Add(taskmemory.RequestRecord(recorder.RunID(), r.Prompt, memoryEnv))
+	}
+
+	onStep := func(step internalagent.TaskStep) {
+		recorder.Write(taskStepToRecord(step))
+		if memoryIndexer != nil {
+			if rec, ok := taskmemory.StepRecord(recorder.RunID(), r.Prompt, taskStepToMemoryStep(step), memoryEnv); ok {
+				memoryIndexer.Add(rec)
+			}
+		}
+	}
 	onStatus := func(status internalagent.TaskStatusEvent) { recorder.Write(taskStatusToRecord(status)) }
 	onProgress := func(progress internalagent.TaskProgressEvent) { recorder.Write(taskProgressToRecord(progress)) }
+	onMemory := func(memory internalagent.TaskMemoryEvent) { recorder.Write(taskMemoryToRecord(memory)) }
 
 	start := time.Now().UTC()
-	taskResult, runErr := executeTask(ctx, taskReq, internalagent.UnattendedInteraction{}, onStep, onStatus, onProgress, nil)
+	taskResult, runErr := executeTask(ctx, taskReq, internalagent.UnattendedInteraction{}, onStep, onStatus, onProgress, nil, onMemory, memoryStore, memoryEnv)
 	duration := time.Since(start)
 	outcome := classifyOutcome(runErr)
 
@@ -302,6 +324,9 @@ func (s *routineService) Run(ctx context.Context, req RoutineRunRequest) (Routin
 		recorder.Write(sessionlog.Record{Type: sessionlog.RecordFailed, Error: runErr.Error()})
 	} else {
 		recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Text: taskResult.Response})
+		if memoryIndexer != nil {
+			memoryIndexer.Add(taskmemory.CompletionRecord(recorder.RunID(), r.Prompt, taskResult.Response, taskResult.RawOutputTool, taskResult.RawOutput, memoryEnv))
+		}
 	}
 
 	result := RoutineRunResult{
