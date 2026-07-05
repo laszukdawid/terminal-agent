@@ -662,20 +662,20 @@ func (g *App) showRoutineForm(existing *routines.Routine) {
 	// Show only the essentials by default; everything else lives in a collapsed
 	// "Advanced" section so the common case (name + prompt + schedule) stays simple.
 	basicForm := container.New(layout.NewFormLayout(),
-		formFieldLabel("Name"), themedFormField(name),
+		formFieldLabel("Name"), withNativeCursor(name),
 		formFieldLabel("Enabled"), enabled,
-		formFieldLabel("Prompt"), themedFormField(prompt),
-		formFieldLabel("Cron"), themedFormField(cron),
+		formFieldLabel("Prompt"), withNativeCursor(prompt),
+		formFieldLabel("Cron"), withNativeCursor(cron),
 		widget.NewLabel(""), cronHint,
 	)
 	advancedForm := container.New(layout.NewFormLayout(),
-		formFieldLabel("Provider"), themedFormField(provider),
-		formFieldLabel("Model"), themedFormField(model),
-		formFieldLabel("Timeout"), themedFormField(timeout),
-		formFieldLabel("Token budget"), themedFormField(tokenBudget),
-		formFieldLabel("Max turns"), themedFormField(maxTurns),
-		formFieldLabel("Max tool calls"), themedFormField(maxToolCalls),
-		formFieldLabel("Deny rules"), themedFormField(deny),
+		formFieldLabel("Provider"), withNativeCursor(provider),
+		formFieldLabel("Model"), withNativeCursor(model),
+		formFieldLabel("Timeout"), withNativeCursor(timeout),
+		formFieldLabel("Token budget"), withNativeCursor(tokenBudget),
+		formFieldLabel("Max turns"), withNativeCursor(maxTurns),
+		formFieldLabel("Max tool calls"), withNativeCursor(maxToolCalls),
+		formFieldLabel("Deny rules"), withNativeCursor(deny),
 	)
 	advanced, expandAdvanced := newRoutineCollapsible(
 		routineAdvancedSectionTitle,
@@ -803,12 +803,12 @@ func (g *App) showRoutineDefaultsForm() {
 	}
 
 	form := container.New(layout.NewFormLayout(),
-		formFieldLabel("Provider"), themedFormField(provider),
-		formFieldLabel("Model"), themedFormField(model),
-		formFieldLabel("Timeout"), themedFormField(timeout),
-		formFieldLabel("Token budget"), themedFormField(tokenBudget),
-		formFieldLabel("Max turns"), themedFormField(maxTurns),
-		formFieldLabel("Max tool calls"), themedFormField(maxToolCalls),
+		formFieldLabel("Provider"), withNativeCursor(provider),
+		formFieldLabel("Model"), withNativeCursor(model),
+		formFieldLabel("Timeout"), withNativeCursor(timeout),
+		formFieldLabel("Token budget"), withNativeCursor(tokenBudget),
+		formFieldLabel("Max turns"), withNativeCursor(maxTurns),
+		formFieldLabel("Max tool calls"), withNativeCursor(maxToolCalls),
 	)
 
 	save := widget.NewButton("Save", func() {
@@ -887,13 +887,6 @@ func (p *popupWindow) dismissRoutineDetail() bool {
 }
 
 // --- helpers ---
-
-// themedFormField wraps a form input so it picks up the prompt entry theme, which
-// restores the native text cursor that the brand theme otherwise hides by zeroing
-// the input border.
-func themedFormField(o fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewThemeOverride(o, promptEntryTheme{Theme: newBrandTheme()})
-}
 
 func formFieldLabel(text string) fyne.CanvasObject {
 	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})

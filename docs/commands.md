@@ -28,7 +28,7 @@ Task memory is used by `agent task` in two ways:
 
 Task indexing is asynchronous and best-effort. Task execution does not fail if memory indexing fails or is delayed.
 
-Task memory stores several record types. The most useful records are `tool_success` entries because they include the previous tool name, structured tool input, and output. `task_completion` entries capture the final answer, and `task_request` entries capture that a similar task was asked even when no command has been learned yet.
+Task memory stores several record types. The most useful records are `tool_success` entries because they include the previous tool name, structured tool input, and output. `task_completion` entries capture the final answer, and `task_request` entries capture that a similar task was asked even when no command has been learned yet. A completed run indexes exactly one `task_completion` record — the final answer step is folded into it, including the model's closing thought, rather than indexed separately.
 
 Search ranks actionable memories first. For example, if a previous task for `what time is it` learned `unix {"command":"date '+%I:%M %p %Z'"}`, that `tool_success` memory is preferred over a bare `task_request` or final-answer-only `task_completion`. This makes the command visible to the model and to session-log validation. Previous outputs in retrieved memories are historical; for current-state requests such as time, date, files, processes, or git state, the agent should reuse the remembered tool input and run it again rather than copying the old output.
 
@@ -44,7 +44,7 @@ agent config set task-memory false
 agent config set task-memory true
 ```
 
-The session logs under `~/.local/share/terminal-agent/sessions/` remain the authoritative task history. The SQLite task memory database is a searchable index derived from task activity and can be cleared or rebuilt in future tooling.
+The session logs under `~/.local/share/terminal-agent/sessions/` remain the authoritative task history. The SQLite task memory database is a searchable index derived from task activity; clearing it only resets what future tasks can recall. The [Graphical UI's Task Memory tab](gui/memory.md) browses, searches, and clears the same index.
 
 To confirm a task used automatic memory retrieval, inspect the newest task session log and look for records with `"status":"task_memory_retrieval"`. These records include the retrieval query, match count, and compact matched memories, including tool inputs for actionable matches. Explicit `memory_search` tool calls also appear as normal tool-call/tool-result records.
 

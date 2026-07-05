@@ -110,6 +110,13 @@ type TaskRunResult struct {
 	// TokensUsed is the run's estimated (or provider-reported) total token usage,
 	// populated for both successful and failed runs.
 	TokensUsed int
+	// CompletionThought and CompletionSourceSeq carry the final answer step's
+	// provenance for task memory indexing: since that step is no longer indexed
+	// on its own, the run-level completion record absorbs its thought and step
+	// number. Completion paths without a final answer step (direct raw output,
+	// max-turns summary fallback) leave them empty.
+	CompletionThought   string
+	CompletionSourceSeq int
 }
 
 type TaskPhase string
@@ -694,8 +701,18 @@ func (r *taskExecutionState) handleDirectoryChange(response connector.LlmRespons
 	r.recordSuccess(response, changeMessage)
 }
 
+// finalAnswerResult builds the run result for a final_answer completion and
+// attaches the closing step's thought and iteration as completion provenance
+// for task memory.
 func (r *taskExecutionState) finalAnswerResult(answer string) TaskRunResult {
-	return TaskRunResult{Response: answer}
+	result := TaskRunResult{Response: answer}
+	if steps := r.state.Steps; len(steps) > 0 {
+		if last := steps[len(steps)-1]; last.Status == TaskStepStatusFinalAnswer {
+			result.CompletionThought = last.Thought
+			result.CompletionSourceSeq = last.Iteration
+		}
+	}
+	return result
 }
 
 // buildTaskTools assembles the tools available for a run. enabledTools selects

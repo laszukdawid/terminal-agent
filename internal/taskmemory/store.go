@@ -35,6 +35,7 @@ var tokenPattern = regexp.MustCompile(`[\pL\pN_./~$-]+`)
 type Store interface {
 	Add(context.Context, Record) error
 	Search(context.Context, Query) ([]Match, error)
+	Recent(context.Context, int) ([]Record, error)
 	Stats(context.Context) (Stats, error)
 	Clear(context.Context) error
 	Close() error
@@ -289,6 +290,29 @@ func (s *SQLiteStore) searchLexical(ctx context.Context, q Query) ([]Match, erro
 		matches = append(matches, Match{Record: rec, Score: scoreRecord(rec, q, float64(overlap))})
 	}
 	return topMatches(matches, q.Limit), rows.Err()
+}
+
+// Recent returns the newest records for browsing, most recent first. It is the
+// no-query counterpart to Search, used by list views such as the GUI memory tab.
+func (s *SQLiteStore) Recent(ctx context.Context, limit int) ([]Record, error) {
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, source_run_id, source_seq, source_kind, os, arch, shell, cwd,
+		tool_name, tool_input_json, final_output, searchable_text, created_at FROM task_memories ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []Record
+	for rows.Next() {
+		rec, err := scanRecord(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, rec)
+	}
+	return records, rows.Err()
 }
 
 type recordScanner interface{ Scan(dest ...any) error }

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -119,6 +120,15 @@ func (t promptEntryTheme) Size(name fyne.ThemeSizeName) float32 {
 		return promptNativeCursorWidth
 	}
 	return t.Theme.Size(name)
+}
+
+// withNativeCursor wraps a text input so it regains a visible text cursor. The
+// brand theme zeroes SizeNameInputBorder so entries blend into their panel, but
+// Fyne's Entry renderer also uses that size as the blinking cursor's width, so
+// an unwrapped entry focuses with an invisible cursor. Every text input placed
+// in a layout must go through this helper; see the F.A.Q. in docs/developers.md.
+func withNativeCursor(o fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewThemeOverride(o, promptEntryTheme{Theme: newBrandTheme()})
 }
 
 func brandPaletteForVariant(variant fyne.ThemeVariant) brandPalette {

@@ -134,6 +134,9 @@ func (g *App) applyThemeVariant(variant fyne.ThemeVariant, devMode bool) {
 	if g.state.mode == guiModeRoutine {
 		g.loadRoutines()
 	}
+	if g.state.mode == guiModeMemory {
+		g.loadTaskMemories()
+	}
 	g.render()
 	// rebuildContent tore down the old mascot and signal animations and built fresh,
 	// idle widgets. If a request is still in flight, restart the working visuals on
@@ -271,6 +274,8 @@ func (g *App) wire() {
 	g.popup.onSelectRoutine = func() { g.setMode(guiModeRoutine) }
 	g.popup.onCreateRoutine = func() { g.showRoutineForm(nil) }
 	g.popup.onSelectMemory = func() { g.setMode(guiModeMemory) }
+	g.popup.onMemorySearch = g.loadTaskMemories
+	g.popup.onMemoryClear = g.confirmClearTaskMemories
 	g.popup.onTest = g.openTestMenu
 	g.popup.onVoiceToggle = g.toggleVoice
 	g.popup.input.voiceTriggerKey = fyne.KeyName(g.cfg.GetGUIVoiceTriggerKey())
@@ -281,6 +286,9 @@ func (g *App) wire() {
 				return
 			}
 			if g.popup.dismissRoutineDetail() {
+				return
+			}
+			if g.popup.dismissMemoryDetail() {
 				return
 			}
 			if g.popup.dismissSettingsIfUnchanged() {
@@ -475,6 +483,9 @@ func (g *App) setMode(mode guiMode) {
 	}
 	if mode == guiModeRoutine {
 		g.loadRoutines()
+	}
+	if mode == guiModeMemory {
+		g.loadTaskMemories()
 	}
 	g.render()
 }

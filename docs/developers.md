@@ -372,3 +372,79 @@ The project uses GitHub Actions for continuous integration. When you submit a pu
 4. Check code formatting
 
 Ensure that all CI checks pass before your pull request can be merged.
+
+## F.A.Q.
+
+### My new GUI input field shows no text cursor when focused
+
+**Issue:** A newly added text input in `internal/gui` (a `widget.Entry` or a
+widget extending it) accepts focus and typing, but no blinking text cursor is
+visible in the field.
+
+**Reason:** The brand theme deliberately returns `0` for
+`theme.SizeNameInputBorder` (see `brandTheme.Size` in `internal/gui/theme.go`)
+so entries draw no border box of their own and blend into the surrounding
+panel. Fyne's `Entry` renderer, however, reuses that same theme size as the
+width of the text cursor (`r.cursor.Resize(fyne.NewSize(inputBorder,
+lineHeight))` in the toolkit's `widget/entry.go`). With the input border
+zeroed, the cursor is rendered zero pixels wide: it exists and blinks, but is
+invisible.
+
+**Solution:** Wrap every text input in `withNativeCursor(...)` (defined next to
+the theme in `internal/gui/theme.go`) when placing it in a layout. The helper
+applies a `container.NewThemeOverride` with `promptEntryTheme`, which restores
+`SizeNameInputBorder` to `promptNativeCursorWidth` for that widget subtree
+only, so the cursor becomes visible while the rest of the UI keeps its
+borderless look. The prompt input, the Settings provider/model fields, the
+Routine form fields, and the Task Memory search field all go through this
+helper; a plain `widget.NewEntry()` added straight into a container will
+reproduce the bug.
+
+### The window grows wider when switching to a GUI tab
+
+**Issue:** Opening a browse tab (History, Task Memory) resizes the whole window
+wider than it originally was.
+
+**Reason:** `canvas.Text` cannot wrap or truncate, so it reports the full
+rendered string width as its minimum size. A vertical-only scroll
+(`container.NewVScroll`) adopts its content's minimum width, so a single long
+card line — for example a meta line combining a provider, a long model name,
+and a working directory — raises the minimum width of the entire tab. When the
+tab becomes visible, the window driver grows the window to satisfy that new
+minimum.
+
+**Solution:** Never place a raw `canvas.Text` holding variable-length content
+into the main window's layout. Use `newElidedText(...)` (in
+`internal/gui/components.go`) instead: it keeps the `canvas.Text` brand look
+but reports a one-glyph minimum width and elides the drawn string with `…` to
+whatever width the layout actually provides. The History and Task Memory card
+titles, meta lines, empty states, and the memory stats line all use it. Raw
+`canvas.Text` remains fine for fixed, known-short strings such as section
+headings and glyphs; `widget.Label` with `Wrapping` set is also safe, since
+wrapped labels only demand a few pixels of minimum width.
+
+### Why does one task run create several task-memory records?
+
+**Issue:** Inspecting the task memory database (or `agent memory task search`)
+shows what look like duplicates: a single `agent task` run produced a
+`task_request` record, one record per tool step, and a `task_completion`.
+
+**Reason:** The multiplicity is deliberate. Task retrieval ranks record kinds
+differently (`kindBoost` in `internal/taskmemory/store.go` boosts actionable
+`tool_success` records over completions and bare requests), so one run is
+indexed at several granularities: "this was asked" (`task_request`), "this
+command worked or failed" (`tool_success` / `tool_failure`), and "this was the
+answer" (`task_completion`). The GUI's Task Memory tab merges them into one
+card per run when browsing; search results stay per-record because a match is
+a specific record and its rank.
+
+**Solution:** Do not "deduplicate" the per-kind records — they are the
+retrieval design. The one true duplicate the design used to have (the final
+answer step being indexed as a second `task_completion` next to the run-level
+one) was removed: `StepRecord` skips `final_answer` steps, and the run-level
+`CompletionRecord` absorbs their thought and step number via
+`CompletionProvenance` (both in `internal/taskmemory/indexer.go`; the agent
+supplies the provenance through `TaskRunResult`). Keep that invariant — a
+completed run indexes exactly one `task_completion` — and note it is a forward
+fix: databases written before the change keep their historical duplicates
+until `agent memory task clear`.

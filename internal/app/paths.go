@@ -23,7 +23,14 @@ func LogPath() string {
 	return filepath.Join(logDir, logFile)
 }
 
+// TaskMemoryPathEnv overrides the task memory SQLite database path. Primarily
+// used by tests to avoid reading or writing the real user database.
+const TaskMemoryPathEnv = "TERMINAL_AGENT_TASK_MEMORY_PATH"
+
 func TaskMemoryPath() string {
+	if override := strings.TrimSpace(os.Getenv(TaskMemoryPathEnv)); override != "" {
+		return override
+	}
 	return filepath.Join(memoryDir, taskMemoryFile)
 }
 

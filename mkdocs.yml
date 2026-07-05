@@ -56,6 +56,7 @@ nav:
       - Task Mode: gui/task.md
       - History: gui/history.md
       - Routines: gui/routines.md
+      - Task Memory: gui/memory.md
       - Settings: gui/settings.md
       - Voice Input: gui/voice.md
       - Launching & Shortcuts: gui/launching.md

@@ -325,7 +325,8 @@ func (s *routineService) Run(ctx context.Context, req RoutineRunRequest) (Routin
 	} else {
 		recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Text: taskResult.Response})
 		if memoryIndexer != nil {
-			memoryIndexer.Add(taskmemory.CompletionRecord(recorder.RunID(), r.Prompt, taskResult.Response, taskResult.RawOutputTool, taskResult.RawOutput, memoryEnv))
+			memoryIndexer.Add(taskmemory.CompletionRecord(recorder.RunID(), r.Prompt, taskResult.Response, taskResult.RawOutputTool, taskResult.RawOutput,
+				taskmemory.CompletionProvenance{Thought: taskResult.CompletionThought, SourceSeq: taskResult.CompletionSourceSeq}, memoryEnv))
 		}
 	}
 

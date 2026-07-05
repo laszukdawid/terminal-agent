@@ -8,7 +8,8 @@ the CLI, so anything you configure for `agent` also applies here.
 
 The window has two working modes that mirror the CLI commands: **Ask** for quick
 answers and **Task** for supervised, tool-using workflows. A left sidebar switches
-between those modes plus the **History**, **Routine**, and **Settings** screens.
+between those modes plus the **History**, **Routine**, **Task Memory**, and
+**Settings** screens.
 
 ## Screens and features
 
@@ -20,6 +21,7 @@ For detailed information about each screen and feature, see:
 | [Task Mode](./gui/task.md) | Supervised agentic workflow with live tool output |
 | [History](./gui/history.md) | Browse recent `ask`, `chat`, and `task` runs |
 | [Routines](./gui/routines.md) | Manage scheduled, unattended agent runs |
+| [Task Memory](./gui/memory.md) | Browse and search what past tasks learned |
 | [Settings](./gui/settings.md) | Switch providers and models without editing a config file |
 | [Voice Input](./gui/voice.md) | Dictate a prompt instead of typing |
 | [Launching & Shortcuts](./gui/launching.md) | Install the global shortcut and use the keyboard controls |

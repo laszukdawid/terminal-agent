@@ -24,6 +24,10 @@ const (
 	historyDetailFooterHeight = 88
 	historyCornerSize         = 24
 	historyCardGap            = 6
+	// historyPreviewMaxRunes/MaxLines bound how much of a request or response a
+	// card preview shows; the full text stays available in the detail popup.
+	historyPreviewMaxRunes = 280
+	historyPreviewMaxLines = 8
 )
 
 func (g *App) loadHistory() {
@@ -59,8 +63,8 @@ func (p *popupWindow) setHistory(runs []sessionlog.Summary, errorText string) {
 
 func historyEmptyState() fyne.CanvasObject {
 	palette := currentBrandPalette()
-	label := canvas.NewText("No Ask or Task executions recorded yet.", palette.secondaryText)
-	label.TextSize = theme.TextSize()
+	label := newElidedText("No Ask or Task executions recorded yet.", palette.secondaryText)
+	label.SetTextSize(theme.TextSize())
 	return container.NewPadded(label)
 }
 
@@ -70,28 +74,30 @@ func newHistoryCard(run sessionlog.Summary, onTap func()) fyne.CanvasObject {
 
 func historyCardContent(run sessionlog.Summary) fyne.CanvasObject {
 	palette := currentBrandPalette()
-	title := canvas.NewText(historyTitle(run), palette.primaryText)
-	title.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
-	title.TextSize = theme.TextSize() - 1
+	title := newElidedText(historyTitle(run), palette.primaryText)
+	title.SetTextStyle(fyne.TextStyle{Bold: true, Monospace: true})
+	title.SetTextSize(theme.TextSize() - 1)
 
-	meta := canvas.NewText(historyMeta(run), palette.secondaryText)
-	meta.TextSize = theme.TextSize() - 2
+	meta := newElidedText(historyMeta(run), palette.secondaryText)
+	meta.SetTextSize(theme.TextSize() - 2)
 
 	fallbackPrompt := run.Command
 	if fallbackPrompt == "" {
 		fallbackPrompt = "No request recorded."
 	}
 	promptText, promptTruncated := historyPreview(run.Request, fallbackPrompt)
-	prompt := widget.NewLabel(promptText)
-	prompt.Wrapping = fyne.TextWrapWord
+	prompt := historyQueryLine(promptText)
 
 	responseText := run.Response
 	if run.Error != "" {
 		responseText = "Error: " + run.Error
 	}
-	responseText, responseTruncated := historyPreview(responseText, "No response recorded.")
-	response := widget.NewLabel(responseText)
+	if strings.TrimSpace(responseText) == "" {
+		responseText = "No response recorded."
+	}
+	response := widget.NewRichText()
 	response.Wrapping = fyne.TextWrapWord
+	responseTruncated := renderResponseMarkdownPreview(response, responseText, historyPreviewMaxRunes, historyPreviewMaxLines)
 
 	body := container.NewVBox(title, meta, brandSeparator(), prompt, response)
 	card := borderedBox(body, palette.border)
@@ -112,7 +118,7 @@ func (p *popupWindow) showHistoryDetail(run sessionlog.Summary) {
 		widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true, Monospace: true}),
 		widget.NewLabel(meta),
 		brandSeparator(),
-		historyDetailSection("Prompt", promptText),
+		historyDetailQuerySection("Prompt", promptText),
 		historyDetailSection("Response", responseText),
 	)
 	size := historyDetailPopupSize(p.window.Canvas().Size())
@@ -127,6 +133,23 @@ func (p *popupWindow) showHistoryDetail(run sessionlog.Summary) {
 	p.window.Canvas().Unfocus()
 	pop.Show()
 	pop.Resize(size)
+}
+
+// historyQueryLine renders the user's query behind the terminal input marker,
+// mirroring the main prompt field, so a card visibly separates what was asked
+// (">", bold) from what was answered (rendered markdown with "$" markers).
+func historyQueryLine(text string) *widget.RichText {
+	return markedTextLine(inputPrompt, text, fyne.TextStyle{Bold: true})
+}
+
+// historyDetailQuerySection is the detail-popup counterpart of historyQueryLine:
+// the full query under its heading, marked as input rather than rendered as a
+// response.
+func historyDetailQuerySection(title, text string) fyne.CanvasObject {
+	return container.NewVBox(
+		widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		historyQueryLine(text),
+	)
 }
 
 func historyDetailSection(title, text string) fyne.CanvasObject {
@@ -174,12 +197,15 @@ func historyPreview(value, fallback string) (string, bool) {
 	if value == "" {
 		return fallback, false
 	}
-	const maxPreviewRunes = 280
 	runes := []rune(value)
-	if len(runes) <= maxPreviewRunes {
+	if len(runes) <= historyPreviewMaxRunes {
 		return value, false
 	}
-	return string(runes[:maxPreviewRunes]) + "...", true
+	keep := completeWord(runes, historyPreviewMaxRunes)
+	if keep == len(runes) {
+		return value, false
+	}
+	return strings.TrimRight(string(runes[:keep]), " ") + previewEllipsis, true
 }
 
 func historyDetailPopupSize(canvasSize fyne.Size) fyne.Size {

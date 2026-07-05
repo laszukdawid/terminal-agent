@@ -2,8 +2,10 @@ package taskmemory
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,4 +84,52 @@ func TestSearchPrefersActionableToolSuccess(t *testing.T) {
 	assert.Equal(t, KindToolSuccess, matches[0].Record.Kind)
 	assert.Equal(t, "unix", matches[0].Record.ToolName)
 	assert.Equal(t, "date '+%I:%M %p %Z'", matches[0].Record.ToolInput["command"])
+}
+
+func TestRecentReturnsNewestFirst(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "task_memory.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	base := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	for i := 0; i < 3; i++ {
+		require.NoError(t, store.Add(ctx, Record{
+			Kind:           KindToolSuccess,
+			OS:             "linux",
+			ToolName:       "unix",
+			ToolInput:      map[string]any{"command": fmt.Sprintf("echo %d", i)},
+			SearchableText: fmt.Sprintf("Kind: tool_success\nTool: unix\nInput: echo %d", i),
+			CreatedAt:      base.Add(time.Duration(i) * time.Minute),
+		}))
+	}
+
+	tests := []struct {
+		name         string
+		limit        int
+		wantLen      int
+		wantFirstCmd string
+	}{
+		{name: "newest first within limit", limit: 2, wantLen: 2, wantFirstCmd: "echo 2"},
+		{name: "limit larger than records", limit: 10, wantLen: 3, wantFirstCmd: "echo 2"},
+		{name: "non-positive limit falls back to default", limit: 0, wantLen: 3, wantFirstCmd: "echo 2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			records, err := store.Recent(ctx, tc.limit)
+			require.NoError(t, err)
+			require.Len(t, records, tc.wantLen)
+			assert.Equal(t, tc.wantFirstCmd, records[0].ToolInput["command"])
+		})
+	}
+}
+
+func TestRecentOnEmptyStore(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "task_memory.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	records, err := store.Recent(context.Background(), 5)
+	require.NoError(t, err)
+	assert.Empty(t, records)
 }

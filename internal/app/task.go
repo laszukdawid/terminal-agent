@@ -60,6 +60,10 @@ type TaskResult struct {
 	RawOutputTool   string
 	DirectRawOutput bool
 	TokensUsed      int
+	// CompletionThought and CompletionSourceSeq mirror the agent's completion
+	// provenance (see internalagent.TaskRunResult) for task memory indexing.
+	CompletionThought   string
+	CompletionSourceSeq int
 }
 
 func (s *service) TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event, error) {
@@ -167,7 +171,8 @@ func (s *service) runTaskEvents(ctx context.Context, req TaskRequest, interactio
 	completed.DirectRawOutput = result.DirectRawOutput
 	recorder.Write(sessionlog.Record{Type: sessionlog.RecordCompleted, Kind: string(RunKindTask), Text: result.Response, ToolName: result.RawOutputTool})
 	if memoryIndexer != nil {
-		memoryIndexer.Add(taskmemory.CompletionRecord(recorder.RunID(), req.Message, result.Response, result.RawOutputTool, result.RawOutput, memoryEnv))
+		memoryIndexer.Add(taskmemory.CompletionRecord(recorder.RunID(), req.Message, result.Response, result.RawOutputTool, result.RawOutput,
+			taskmemory.CompletionProvenance{Thought: result.CompletionThought, SourceSeq: result.CompletionSourceSeq}, memoryEnv))
 	}
 	_ = emitEvent(ctx, events, completed)
 }
@@ -233,12 +238,14 @@ func executeTask(ctx context.Context, req TaskRequest, interaction internalagent
 	}
 
 	return TaskResult{
-		Request:         req.Message,
-		Response:        response.DisplayText(),
-		RawOutput:       response.RawOutput,
-		RawOutputTool:   response.RawOutputTool,
-		DirectRawOutput: response.DirectRawOutput,
-		TokensUsed:      response.TokensUsed,
+		Request:             req.Message,
+		Response:            response.DisplayText(),
+		RawOutput:           response.RawOutput,
+		RawOutputTool:       response.RawOutputTool,
+		DirectRawOutput:     response.DirectRawOutput,
+		TokensUsed:          response.TokensUsed,
+		CompletionThought:   response.CompletionThought,
+		CompletionSourceSeq: response.CompletionSourceSeq,
 	}, nil
 }
 

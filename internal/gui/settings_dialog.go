@@ -62,8 +62,8 @@ func (p *popupWindow) showSettingsDialog(options settingsDialogOptions) {
 	}
 
 	providerInput := newProviderEntry(options.InitialProvider, updateHints)
-	providerInputField := container.NewThemeOverride(providerInput, promptEntryTheme{Theme: newBrandTheme()})
-	modelInputField := container.NewThemeOverride(modelEntry, promptEntryTheme{Theme: newBrandTheme()})
+	providerInputField := withNativeCursor(providerInput)
+	modelInputField := withNativeCursor(modelEntry)
 
 	providerLabel := widget.NewLabelWithStyle("Provider", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	providerLabelBox := container.NewHBox(providerLabel, providerStatus)

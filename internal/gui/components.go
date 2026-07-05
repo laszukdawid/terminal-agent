@@ -139,6 +139,52 @@ func newCommandButton(label, iconPath string, onTap func()) *widget.Button {
 	return btn
 }
 
+// tappableBox wraps a content object so it reacts to clicks, invoking onTap and
+// showing a pointer cursor on hover. It is used to make the otherwise-inert
+// mascot image clickable without giving it any button chrome.
+type tappableBox struct {
+	widget.BaseWidget
+	content fyne.CanvasObject
+	onTap   func()
+}
+
+func newTappableBox(content fyne.CanvasObject, onTap func()) *tappableBox {
+	b := &tappableBox{content: content, onTap: onTap}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *tappableBox) Tapped(*fyne.PointEvent) {
+	if b.onTap != nil {
+		b.onTap()
+	}
+}
+
+func (b *tappableBox) Cursor() desktop.Cursor {
+	if b.onTap != nil {
+		return desktop.PointerCursor
+	}
+	return desktop.DefaultCursor
+}
+
+func (b *tappableBox) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(b.content)
+}
+
+// markedTextLine renders a marker glyph in the brand accent followed by text,
+// as one wrapping rich-text line. It is the shared shape of the history query
+// line ("> what was asked") and the memory command line ("$ what ran").
+func markedTextLine(marker, text string, textStyle fyne.TextStyle) *widget.RichText {
+	m := &widget.TextSegment{Style: widget.RichTextStyleInline, Text: marker + " "}
+	m.Style.ColorName = theme.ColorNamePrimary
+	m.Style.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	body := &widget.TextSegment{Style: widget.RichTextStyleInline, Text: text}
+	body.Style.TextStyle = textStyle
+	rt := widget.NewRichText(m, body)
+	rt.Wrapping = fyne.TextWrapWord
+	return rt
+}
+
 // brandActionDivider is the muted "|" separator shown between COPY and EXPORT.
 func brandActionDivider() fyne.CanvasObject {
 	palette := currentBrandPalette()
@@ -723,3 +769,102 @@ func (r *hostNodeRenderer) MinSize() fyne.Size {
 func (r *hostNodeRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.node.image} }
 
 func (r *hostNodeRenderer) Refresh() { canvas.Refresh(r.node) }
+
+// elidedTextEllipsis marks text cut to fit its line, matching truncateRunes.
+const elidedTextEllipsis = "…"
+
+// elidedText is a single-line text in the canvas.Text brand style that never
+// demands its full string width from the layout. It reports a one-glyph
+// minimum width and, when laid out narrower than the full string, draws a
+// prefix elided with "…". Card tabs use it for title, meta, and stats lines so
+// a long model name or working directory cannot force the popup window wider
+// (canvas.Text reports the full rendered width as its minimum, and that
+// minimum propagates through vertical scrolls to the window; see the F.A.Q.
+// in docs/developers.md).
+type elidedText struct {
+	widget.BaseWidget
+	text *canvas.Text
+	full string
+}
+
+func newElidedText(text string, col color.Color) *elidedText {
+	e := &elidedText{text: canvas.NewText(text, col), full: text}
+	e.ExtendBaseWidget(e)
+	return e
+}
+
+func (e *elidedText) SetTextSize(size float32) {
+	e.text.TextSize = size
+	e.Refresh()
+}
+
+func (e *elidedText) SetTextStyle(style fyne.TextStyle) {
+	e.text.TextStyle = style
+	e.Refresh()
+}
+
+func (e *elidedText) SetText(text string) {
+	if e.full == text {
+		return
+	}
+	e.full = text
+	e.Refresh()
+}
+
+// Text returns the full string, regardless of how much of it is drawn.
+func (e *elidedText) Text() string { return e.full }
+
+func (e *elidedText) effectiveTextSize() float32 {
+	if e.text.TextSize > 0 {
+		return e.text.TextSize
+	}
+	return theme.TextSize()
+}
+
+func (e *elidedText) CreateRenderer() fyne.WidgetRenderer {
+	return &elidedTextRenderer{e: e}
+}
+
+type elidedTextRenderer struct {
+	e *elidedText
+}
+
+func (r *elidedTextRenderer) Destroy() {}
+
+func (r *elidedTextRenderer) Layout(size fyne.Size) {
+	e := r.e
+	e.text.Text = elideToWidth(e.full, size.Width, e.effectiveTextSize(), e.text.TextStyle)
+	e.text.Resize(size)
+	e.text.Refresh()
+}
+
+func (r *elidedTextRenderer) MinSize() fyne.Size {
+	e := r.e
+	return fyne.MeasureText(elidedTextEllipsis, e.effectiveTextSize(), e.text.TextStyle)
+}
+
+func (r *elidedTextRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.e.text} }
+
+func (r *elidedTextRenderer) Refresh() {
+	r.Layout(r.e.Size())
+	canvas.Refresh(r.e.text)
+}
+
+// elideToWidth returns the longest prefix of full that fits width when drawn
+// with the given size and style, elided with "…" whenever anything is cut.
+func elideToWidth(full string, width float32, size float32, style fyne.TextStyle) string {
+	if fyne.MeasureText(full, size, style).Width <= width {
+		return full
+	}
+	runes := []rune(full)
+	lo, hi := 0, len(runes)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fyne.MeasureText(string(runes[:mid])+elidedTextEllipsis, size, style).Width <= width {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return string(runes[:lo]) + elidedTextEllipsis
+}

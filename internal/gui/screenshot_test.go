@@ -12,7 +12,9 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 
+	appservice "github.com/laszukdawid/terminal-agent/internal/app"
 	"github.com/laszukdawid/terminal-agent/internal/routines"
+	"github.com/laszukdawid/terminal-agent/internal/taskmemory"
 )
 
 type screenshotApp struct {
@@ -78,6 +80,10 @@ func TestCaptureScreenshots(t *testing.T) {
 	t.Setenv(routines.DefinitionsFileEnv, filepath.Join(routineDir, "routines.json"))
 	t.Setenv(routines.DataDirEnv, filepath.Join(routineDir, "data"))
 	seedScreenshotRoutines(t)
+
+	// Redirect task memory the same way and seed representative records so the
+	// Task Memory views render deterministic, illustrative content.
+	seedScreenshotTaskMemories(t)
 
 	g := NewApp(&recordingService{}, voiceGUIConfig{}, AppOptions{
 		AppID:   "terminal-agent-screenshot",
@@ -157,6 +163,11 @@ func TestCaptureScreenshots(t *testing.T) {
 	// Create-routine form (also the edit form), showing what is configurable.
 	g.showRoutineForm(nil)
 	capture("gui-routine-form.png")
+	// The form is a local dialog with no handle on g; pop it off the overlay
+	// stack so it does not linger over the captures that follow.
+	for win.Canvas().Overlays().Top() != nil {
+		win.Canvas().Overlays().Remove(win.Canvas().Overlays().Top())
+	}
 
 	// Routine log viewer: a run summary rendered as markdown, with the run
 	// metadata collapsed into a two-column "Details" block and the output set
@@ -169,6 +180,79 @@ func TestCaptureScreenshots(t *testing.T) {
 				g.popup.dismissRoutineDetail()
 				break
 			}
+		}
+	}
+
+	// Task memory list: recent indexed records with the search row and stats line.
+	g.setMode(guiModeMemory)
+	capture("gui-memory.png")
+
+	// Task memory detail: a whole run with its request, steps, and answer.
+	if records, _, err := fetchTaskMemories(""); err == nil && len(records) > 0 {
+		if groups := groupMemoryRecords(records); len(groups) > 0 {
+			g.popup.showMemoryRunDetail(groups[0])
+			capture("gui-memory-detail.png")
+			g.popup.dismissMemoryDetail()
+		}
+	}
+}
+
+// seedScreenshotTaskMemories redirects the task memory database to a temp path
+// and indexes representative records for the Task Memory screenshots.
+func seedScreenshotTaskMemories(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "task_memory.db")
+	t.Setenv(appservice.TaskMemoryPathEnv, path)
+	store, err := taskmemory.Open(path)
+	if err != nil {
+		t.Fatalf("seed task memories: %v", err)
+	}
+	defer store.Close()
+
+	base := time.Date(2026, 6, 7, 9, 0, 0, 0, time.UTC)
+	records := []taskmemory.Record{
+		{
+			Kind:           taskmemory.KindToolSuccess,
+			OS:             "darwin",
+			Arch:           "arm64",
+			Shell:          "zsh",
+			CWD:            "/Users/demo/projects/terminal-agent",
+			ToolName:       "unix",
+			ToolInput:      map[string]any{"command": "git log --oneline -5"},
+			FinalOutput:    "447a7cf feat: skills support\n25bbb3f chore: disable snapcraft",
+			SearchableText: "Kind: tool_success\nUser request: show my recent commits\nTool: unix\nInput: {\"command\":\"git log --oneline -5\"}\nOutput: 447a7cf feat: skills support",
+			SourceRunID:    "task-a1b2c3",
+			SourceSeq:      2,
+			CreatedAt:      base,
+		},
+		{
+			Kind:           taskmemory.KindTaskCompletion,
+			OS:             "darwin",
+			Arch:           "arm64",
+			Shell:          "zsh",
+			CWD:            "/Users/demo/projects/terminal-agent",
+			FinalOutput:    "You have 5 recent commits; the newest adds skills support.",
+			SearchableText: "Kind: task_completion\nUser request: show my recent commits\nFinal answer: You have 5 recent commits; the newest adds skills support.",
+			SourceRunID:    "task-a1b2c3",
+			CreatedAt:      base.Add(time.Minute),
+		},
+		{
+			Kind:           taskmemory.KindToolFailure,
+			OS:             "darwin",
+			Arch:           "arm64",
+			Shell:          "zsh",
+			CWD:            "/Users/demo",
+			ToolName:       "unix",
+			ToolInput:      map[string]any{"command": "docker ps"},
+			SearchableText: "Kind: tool_failure\nUser request: list running containers\nTool: unix\nInput: {\"command\":\"docker ps\"}\nError: Cannot connect to the Docker daemon",
+			SourceRunID:    "task-d4e5f6",
+			SourceSeq:      1,
+			CreatedAt:      base.Add(-2 * time.Hour),
+		},
+	}
+	for _, rec := range records {
+		if err := store.Add(context.Background(), rec); err != nil {
+			t.Fatalf("seed task memories: %v", err)
 		}
 	}
 }

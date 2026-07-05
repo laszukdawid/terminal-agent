@@ -97,16 +97,16 @@ func RequestRecord(runID string, request string, env Environment) Record {
 
 func StepRecord(runID string, request string, step TaskStep, env Environment) (Record, bool) {
 	status := strings.TrimSpace(step.Status)
-	if status == "" || status == "thought" || status == "declined" {
+	// A final_answer step is the run's completion, and CompletionRecord is the
+	// single task_completion record per run; indexing the step too would store
+	// the same answer twice and let near-duplicates crowd the retrieval slots.
+	if status == "" || status == "thought" || status == "declined" || status == "final_answer" {
 		return Record{}, false
 	}
 	kind := KindToolFailure
 	output := step.ToolOutput
 	if status == "succeeded" {
 		kind = KindToolSuccess
-	} else if status == "final_answer" {
-		kind = KindTaskCompletion
-		output = step.FinalAnswer
 	}
 	if strings.TrimSpace(step.ToolName) == "" && strings.TrimSpace(output) == "" && strings.TrimSpace(step.Error) == "" {
 		return Record{}, false
@@ -137,26 +137,47 @@ func StepRecord(runID string, request string, step TaskStep, env Environment) (R
 	}, true
 }
 
-func CompletionRecord(runID string, request string, response string, rawTool string, rawOutput string, env Environment) Record {
+// CompletionProvenance ties a run's completion record to the final answer
+// step it replaces (StepRecord does not index final_answer steps): the model's
+// closing thought and the step number. Completions without a final answer step
+// — direct raw output and the max-turns summary fallback — pass the zero value.
+type CompletionProvenance struct {
+	Thought   string
+	SourceSeq int
+}
+
+// CompletionRecord is the single task_completion record a completed run
+// indexes. Its searchable text skips parts that would index the same words
+// twice within the record: a thought that only restates the answer, and raw
+// output identical to the response (the direct-output path).
+func CompletionRecord(runID string, request string, response string, rawTool string, rawOutput string, prov CompletionProvenance, env Environment) Record {
+	parts := []string{
+		"Kind: task_completion",
+		"User request: " + request,
+	}
+	if thought := strings.TrimSpace(prov.Thought); thought != "" && thought != strings.TrimSpace(response) {
+		parts = append(parts, "Thought: "+prov.Thought)
+	}
+	parts = append(parts, "Final answer: "+response)
+	if raw := strings.TrimSpace(rawOutput); raw != "" && raw != strings.TrimSpace(response) {
+		parts = append(parts, "Raw output: "+rawOutput)
+	}
+	if rawTool != "" {
+		parts = append(parts, "Tool: "+rawTool)
+	}
+	parts = append(parts, "OS: "+env.OS, "CWD: "+env.CWD)
 	return Record{
-		Kind:        KindTaskCompletion,
-		SourceRunID: runID,
-		SourceKind:  "task",
-		OS:          env.OS,
-		Arch:        env.Arch,
-		Shell:       env.Shell,
-		CWD:         env.CWD,
-		ToolName:    rawTool,
-		FinalOutput: firstNonEmpty(response, rawOutput),
-		SearchableText: BuildSearchableText(
-			"Kind: task_completion",
-			"User request: "+request,
-			"Final answer: "+response,
-			"Raw output: "+rawOutput,
-			"Tool: "+rawTool,
-			"OS: "+env.OS,
-			"CWD: "+env.CWD,
-		),
+		Kind:           KindTaskCompletion,
+		SourceRunID:    runID,
+		SourceSeq:      prov.SourceSeq,
+		SourceKind:     "task",
+		OS:             env.OS,
+		Arch:           env.Arch,
+		Shell:          env.Shell,
+		CWD:            env.CWD,
+		ToolName:       rawTool,
+		FinalOutput:    firstNonEmpty(response, rawOutput),
+		SearchableText: BuildSearchableText(parts...),
 	}
 }
 

@@ -68,6 +68,10 @@ type popupWindow struct {
 	responseSection *fyne.Container
 	historySection  *fyne.Container
 	memorySection   *fyne.Container
+	memoryBody      *fyne.Container
+	memorySearch    *widget.Entry
+	memoryStats     *elidedText
+	memoryDetail    *widget.PopUp
 	historyBody     *fyne.Container
 	historyDetail   *widget.PopUp
 	routineSection  *fyne.Container
@@ -125,6 +129,8 @@ type popupWindow struct {
 	onSelectRoutine func()
 	onCreateRoutine func()
 	onSelectMemory  func()
+	onMemorySearch  func()
+	onMemoryClear   func()
 	onTest          func()
 	onInput         func(string)
 	onQuit          func()
@@ -155,6 +161,7 @@ func (p *popupWindow) rebuildContent(app fyne.App, devMode bool) {
 	p.signalRunning = false
 	p.dismissHistoryDetail()
 	p.dismissRoutineDetail()
+	p.dismissMemoryDetail()
 
 	p.buildInput(app)
 	p.buildOutput()
@@ -264,7 +271,7 @@ func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {
 			p.onSelectRoutine()
 		}
 	})
-	p.navMemory = newNavRow(sectionMemory, iconPathTools, false, func() {
+	p.navMemory = newNavRow(sectionMemory, iconPathMemory, false, func() {
 		if p.onSelectMemory != nil {
 			p.onSelectMemory()
 		}
@@ -382,7 +389,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	p.actionSubtitle.TextStyle = fyne.TextStyle{Monospace: true}
 	p.actionSubtitle.TextSize = theme.TextSize() - 4
 	p.actionSubtitle.Hide()
-	inputWithNativeCursor := container.NewThemeOverride(p.input, promptEntryTheme{Theme: newBrandTheme()})
+	inputWithNativeCursor := withNativeCursor(p.input)
 	actionControl := container.NewVBox(p.actionButton, p.actionSubtitle)
 
 	inputRow := container.NewBorder(
@@ -449,12 +456,7 @@ func (p *popupWindow) buildWorkspace() fyne.CanvasObject {
 	)
 	p.routineSection.Hide()
 
-	p.memorySection = container.NewBorder(
-		container.NewVBox(brandSectionLabel(sectionMemory)),
-		nil,
-		nil, nil,
-		borderedBox(container.NewCenter(widget.NewLabel("Task memory browsing is being built. Use `agent memory task search` for now.")), palette.border),
-	)
+	p.memorySection = p.buildMemorySection()
 	p.memorySection.Hide()
 	mainContent := container.NewStack(p.responseSection, p.historySection, p.routineSection, p.memorySection)
 
