@@ -3,7 +3,6 @@ package gui
 import (
 	"fmt"
 	"image/color"
-	"strings"
 
 	"fyne.io/fyne/v2"
 )
@@ -39,101 +38,6 @@ func lineIcon(name, paths string, stroke color.Color) fyne.Resource {
 		`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%s" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">%s</svg>`,
 		colorHex(stroke), paths,
 	)))
-}
-
-// Mascot drawing geometry. The mascot is a soft rounded head/body with an inset
-// "screen" face showing the >_ prompt, an antenna with a bulb, two arms with
-// hands, and two legs. It is authored in a 0..64 body grid and placed into a
-// larger square canvas that leaves headroom for big whole-body motions (jumps,
-// flips, walking) applied via a transform group. The terminal-faced design ties
-// the mascot to the product identity while staying clean and contemporary.
-const (
-	mascotAntennaX  = 32.0 // antenna/head centre x in the body grid
-	mascotZapStroke = 1.8  // thinner stroke for the antenna zap bolt
-
-	mascotCanvas = 96.0 // square SVG canvas, with room around the body to move
-	mascotBodyX  = 16.0 // body-grid origin in the canvas: centres the body...
-	mascotBodyY  = 20.0 // ...and leaves headroom above for jumps and flips
-)
-
-// renderMascotPose renders one frame of the line-art mascot from a pose. The
-// body bob shifts the upper body (head, face, arms, antenna) vertically while
-// the feet stay planted, so the legs compress and extend like a real gait; the
-// pose's whole-body transform (squash about the feet, rotation about the centre,
-// then translation) is applied on top for the bigger acts. See the act library
-// in mascot_animation.go for how poses are animated.
-func renderMascotPose(stroke color.Color, pose mascotPose) fyne.Resource {
-	hex := colorHex(stroke)
-	by := pose.bob                        // upper-body vertical offset (negative = up)
-	bx := mascotAntennaX + pose.antennaDX // antenna bulb centre x
-
-	var b strings.Builder
-	// Antenna: bulb (pulses) on a stalk rising from the head top.
-	fmt.Fprintf(&b, `<circle cx="%.2f" cy="%.2f" r="%.2f"/>`, bx, 5+by, pose.bulbR)
-	fmt.Fprintf(&b, `<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f"/>`, mascotAntennaX, 13+by, bx, 7.4+by)
-	// Antenna zap: a lightning bolt fired sideways from the bulb toward the host
-	// on the right. Its length scales with pose.zap (a full blast reaches ~1.5).
-	if pose.zap > 0 {
-		z := pose.zap
-		cy := 5 + by
-		sx := bx + pose.bulbR // start at the bulb's right edge
-		fmt.Fprintf(&b,
-			`<polyline stroke-width="%.1f" points="%.2f,%.2f %.2f,%.2f %.2f,%.2f %.2f,%.2f"/>`,
-			mascotZapStroke,
-			sx, cy,
-			sx+4*z, cy-2.5*z,
-			sx+7*z, cy+1.5*z,
-			sx+11*z, cy-2*z,
-		)
-	}
-	// Head / body.
-	fmt.Fprintf(&b, `<rect x="13" y="%.2f" width="38" height="34" rx="8"/>`, 13+by)
-	// Arms: shoulder fixed at the body edge, hand swings/waves on the y axis.
-	fmt.Fprintf(&b, `<line x1="13" y1="%.2f" x2="5" y2="%.2f"/>`, 30+by, 30+by+pose.armLDY)
-	fmt.Fprintf(&b, `<line x1="51" y1="%.2f" x2="59" y2="%.2f"/>`, 30+by, 30+by+pose.armRDY)
-	// Inset terminal "screen" face with the >_ prompt; the cursor blinks.
-	fmt.Fprintf(&b, `<rect x="19" y="%.2f" width="26" height="18" rx="3"/>`, 20+by)
-	fmt.Fprintf(&b, `<polyline points="24,%.2f 28,%.2f 24,%.2f"/>`, 26+by, 29+by, 32+by)
-	if pose.cursorOn {
-		fmt.Fprintf(&b, `<line x1="31" y1="%.2f" x2="39" y2="%.2f"/>`, 33+by, 33+by)
-	}
-	// Legs: the hip rides with the body bob; the feet stay on the ground.
-	fmt.Fprintf(&b, `<line x1="25" y1="%.2f" x2="%.2f" y2="60"/>`, 47+by, 25+pose.legLDX)
-	fmt.Fprintf(&b, `<line x1="39" y1="%.2f" x2="%.2f" y2="60"/>`, 47+by, 39+pose.legRDX)
-
-	// Whole-body transform, applied right-to-left to the body grid: place it in
-	// the canvas, squash about the feet, rotate about the centre, then translate.
-	sq := pose.squash
-	if sq == 0 {
-		sq = 1
-	}
-	feetX, feetY := mascotBodyX+32, mascotBodyY+60
-	cx, cy := mascotBodyX+32, mascotBodyY+30
-	transform := fmt.Sprintf(
-		"translate(%.2f %.2f) rotate(%.2f %.2f %.2f) translate(%.2f %.2f) scale(%.4f %.4f) translate(%.2f %.2f) translate(%.2f %.2f)",
-		pose.tx, pose.ty, pose.rot, cx, cy, feetX, feetY, 1/sq, sq, -feetX, -feetY, mascotBodyX, mascotBodyY,
-	)
-
-	return fyne.NewStaticResource(mascotPoseName(stroke, pose), []byte(fmt.Sprintf(
-		`<svg xmlns="http://www.w3.org/2000/svg" width="%.0f" height="%.0f" viewBox="0 0 %.0f %.0f" fill="none" stroke="%s" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><g transform="%s">%s</g></svg>`,
-		mascotCanvas, mascotCanvas, mascotCanvas, mascotCanvas, hex, transform, b.String(),
-	)))
-}
-
-// mascotPoseName is the identity (and raster cache key) of a rendered pose. It
-// varies with every field that changes the drawing, so applyMascotPose can
-// compare it and skip both the SVG build and the resource allocation when the
-// rounded pose is unchanged.
-func mascotPoseName(stroke color.Color, pose mascotPose) string {
-	return fmt.Sprintf("robot-%s-%.0f-%.0f-%.0f-%.0f-%.0f-%.0f-%.0f-%.0f-%t-%.0f-%.0f-%.0f-%.0f.svg",
-		colorHex(stroke), pose.bob*10, pose.antennaDX*10, pose.bulbR*10, pose.zap*100,
-		pose.armLDY*10, pose.armRDY*10, pose.legLDX*10, pose.legRDX*10, pose.cursorOn,
-		pose.tx*10, pose.ty*10, pose.rot*10, pose.squash*1000)
-}
-
-// robotMascot renders the resting mascot in the given color.
-func robotMascot(stroke color.Color) fyne.Resource {
-	return renderMascotPose(stroke, mascotRestPose())
 }
 
 // serverIcon renders the host/model endpoint with a slightly bolder stroke than

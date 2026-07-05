@@ -135,6 +135,12 @@ func (g *App) applyThemeVariant(variant fyne.ThemeVariant, devMode bool) {
 		g.loadRoutines()
 	}
 	g.render()
+	// rebuildContent tore down the old mascot and signal animations and built fresh,
+	// idle widgets. If a request is still in flight, restart the working visuals on
+	// them so a theme switch mid-request doesn't silently freeze the mascot and lane.
+	if g.state.isRunning {
+		g.popup.startWorking()
+	}
 	if g.state.isVisible {
 		g.FocusInput()
 	}
@@ -204,7 +210,7 @@ func (g *App) Quit() {
 }
 
 func (g *App) startIndicator() {
-	g.popup.startMascotAnimation()
+	g.popup.startWorking()
 	stop := make(chan struct{})
 	g.stopIndicator = stop
 	go func() {
@@ -235,7 +241,7 @@ func (g *App) startIndicator() {
 }
 
 func (g *App) stopIndicatorAnimation() {
-	g.popup.stopMascotAnimation()
+	g.popup.stopWorking()
 	select {
 	case <-g.stopIndicator:
 	default:
