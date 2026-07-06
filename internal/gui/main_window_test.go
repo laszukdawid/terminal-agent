@@ -153,6 +153,30 @@ func TestPromptInputRowsExpandsForNewlinesAndWrappedText(t *testing.T) {
 	}
 }
 
+func TestModelPillOpensSettings(t *testing.T) {
+	p := &popupWindow{}
+	opened := false
+	p.onSettings = func() { opened = true }
+
+	pill := p.buildModelPill()
+
+	if p.modelButton == nil {
+		t.Fatal("buildModelPill should retain the model button")
+	}
+	if p.modelButton.Text != "" {
+		t.Fatalf("model button text = %q, want empty before render", p.modelButton.Text)
+	}
+	if pill == nil {
+		t.Fatal("buildModelPill should return a canvas object")
+	}
+
+	p.modelButton.Tapped(nil)
+
+	if !opened {
+		t.Fatal("tapping model pill should open settings")
+	}
+}
+
 func TestResizeInputDoesNotOverrideManualWindowResize(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()

@@ -346,7 +346,7 @@ func (g *App) render() {
 
 	provider := g.cfg.GetDefaultProvider()
 	model := g.cfg.GetDefaultModelId()
-	g.popup.modelLabel.SetText("MODEL: " + provider + " / " + model)
+	g.popup.modelButton.SetText("MODEL: " + provider + " / " + model)
 	g.popup.setCwd(displayCwd(g.cfg.GetWorkingDir()))
 
 	browse := isBrowseMode(g.state.mode)

@@ -89,7 +89,7 @@ type popupWindow struct {
 	lastError       string
 	transcriptViews []transcriptBlockView
 
-	modelLabel *widget.Label
+	modelButton *widget.Button
 
 	listenButton   *widget.Button
 	listenLabel    *fyne.Container
@@ -241,8 +241,13 @@ func (p *popupWindow) buildWordmark() fyne.CanvasObject {
 func (p *popupWindow) buildModelPill() fyne.CanvasObject {
 	palette := currentBrandPalette()
 	modelDot := newStatusDot(palette.accentGreen)
-	p.modelLabel = widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true, Monospace: true})
-	return container.NewHBox(modelDot, p.modelLabel)
+	p.modelButton = widget.NewButton("", func() {
+		if p.onSettings != nil {
+			p.onSettings()
+		}
+	})
+	p.modelButton.Importance = widget.LowImportance
+	return container.NewHBox(modelDot, p.modelButton)
 }
 
 func (p *popupWindow) buildSidebar(devMode bool) fyne.CanvasObject {

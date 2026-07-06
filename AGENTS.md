@@ -6,19 +6,19 @@ Tool execution permissions can be set in `~/.config/terminal-agent/config.json` 
 
 Whether a tool prompts by default (when no `allow`/`deny`/`ask` rule matches) is driven by a per-tool **permission category** rather than a hardcoded list. Tools declare their category via the optional `tools.CategorizedTool` interface (`PermissionCategory()` returning `read`, `write`, or `execute`):
 
-- **read** (`read`, `file_search`, `websearch`, `ask_user`, `final_answer`) — generally does not prompt. `file_search` prompts when the requested root is outside the current read scope; if approved, that directory is added to the read scope for the rest of the run.
+- **read** (`read`, `file_search`, `websearch`, `user_clarification`, `final_answer`, `skill`, `memory_search`) — generally does not prompt. `file_search` prompts when the requested root is outside the current read scope; if approved, that directory is added to the read scope for the rest of the run.
 - **write** (`file_edit`) — does not prompt when the target path resolves inside the task workspace root; prompts otherwise. If the user approves an out-of-root file edit, that exact file path is added to the write scope for the rest of the run. Read-scope approvals do not grant write scope.
-- **execute** (`unix`, `python`) — always prompts; arbitrary effect.
+- **execute** (`unix`, `python`) — prompts by default; parser-verified read-only `unix` commands can run without prompting when no rule overrides the default.
 - **undeclared** (MCP tools, any new tool not implementing the interface) — treated as `execute` and gated by default. This is deliberate: a tool with no declared category must not run silently.
 
-The `allow`/`deny`/`ask` rule engine is unchanged and remains the override layer on top of these category defaults: `ask` always prompts, `deny` beats `allow` at equal-or-higher priority, and matched decisions are cached per run. The category only decides the fallback when no rule matches. See `permissionCategoryFor`/`confirmTool` in `internal/agent/task.go` and `ConfirmWithDefault` in `internal/agent/confirmation.go`.
+The `allow`/`deny`/`ask` rule engine is unchanged and remains the override layer on top of these category defaults: `ask` prompts during normal interactive task runs, `deny` beats `allow` at equal-or-higher priority, and matched decisions are cached per run. In `--auto-approve` or unattended runs, `ask` rules are bypassed but matching `deny` rules still block. The category only decides the fallback when no rule matches. See `permissionCategoryFor`/`confirmTool` in `internal/agent/task.go` and `ConfirmWithDefault`/`ConfirmWithPolicy` in `internal/agent/confirmation.go`.
 
 The repo is structured around the Go implementation of the binary (see `cmd/` and `internal/`), plus documentation in `docs/` that backs the published site. Installation can happen via Homebrew, downloading release archives, `go install`, or building from source with Taskfile tasks such as `task build`/`task install`.
 
 ## Contribution Conventions
 
 - Do **not** include design specs or implementation plans in pull requests or git commits. Keep them local only (e.g. under `docs/superpowers/`, which is git-ignored); a PR should contain only the production code, tests, and user-facing docs for the change.
-- Do **not** commit build artifacts (the `agent` / `agent-gui` binaries produced by `task build`). They are git-ignored; never `git add` them into a commit.
+- Do **not** commit build artifacts (the `bin/agent` / `bin/agent-gui` binaries produced by `task build`). They are git-ignored; never `git add` them into a commit.
 - Prefer named constants over magic strings and numbers. If a value has product meaning, is reused, or is part of configuration/default behavior, define it as a const and reference the const in production code and tests.
 - Keep source files focused. Do not let files grow into catch-all buckets; when a file starts mixing separate responsibilities, split it along durable product or implementation boundaries.
 - Periodically revisit filenames as code evolves. A file name should still describe what the file holds today, not only the original intent from when it was created.
@@ -34,11 +34,12 @@ The repo is structured around the Go implementation of the binary (see `cmd/` an
 
 `internal/app` is the shared application-service layer used by both the CLI and the GUI.
 
-- CLI commands in `internal/commands/` call `internal/app` service methods such as `Ask`, `AskEvents`, `Chat`, and `TaskEvents`.
-- GUI code in `internal/gui/` also depends on the same `internal/app` service interface rather than talking directly to connectors or prompt helpers.
+- CLI commands in `internal/commands/` call `internal/app` service methods such as `Ask`, `AskEvents`, `Chat`, and `TaskEvents`, plus the app-layer `RoutineService` for routines.
+- GUI code in `internal/gui/` also depends on the same `internal/app` service interfaces rather than talking directly to connectors, prompt helpers, or routine stores.
 - Changes in `internal/app` should therefore be reviewed as cross-surface changes even when only one entrypoint appears to be affected.
 - The `llama` provider is a direct local runtime, not an HTTP API integration. It resolves model aliases from config and loads GGUF files plus a local llama.cpp shared library inside the current process.
 - Task execution is event-driven at the app layer. `internal/agent` orchestrates task steps and tool use, while confirmation and clarification transport is handled outside the agent core.
+- Routines are saved unattended task runs managed through `internal/app.RoutineService`, shared by the CLI, GUI, and daemon. They run with auto-approve while honoring explicit deny rules, disable external-facing tools by default unless explicitly listed, and store definitions/state through `internal/routines`.
 
 Task tool output has two separate paths:
 
@@ -52,7 +53,7 @@ Prompt and runtime behavior is also shared through this layer, with one importan
 - `ask` and `chat` use ask-prompt resolution and may include memory/context features.
 - `task` should resolve only the task prompt it needs.
 - Do not couple task execution to ask-prompt resolution or ask-only features, because a broken ask prompt should not block task execution.
-- The current `llama` provider supports direct local query generation for `ask`/GUI flows, but not `task` tool calling yet.
+- The direct local `llama` provider supports direct query generation and `task` runs. For `task`, it uses the agent-managed structured JSON action fallback rather than provider-native tool calling, so native tool-calling providers are still preferable for complex workflows.
 
 Task execution has a direct-output path for output-oriented tools:
 
@@ -63,11 +64,11 @@ Task execution has a direct-output path for output-oriented tools:
 
 ## Session Logging
 
-Every `ask`, `chat`, and `task` run writes an always-on, file-only execution log (one JSONL file per run) under `~/.local/share/terminal-agent/sessions/`, named `{timestamp}_{kind}_{shortid}.jsonl`. See `internal/sessionlog` (the `Recorder`, `Meta` header, and unified `Record` schema) and the inline `recorder.Write` calls in each app-layer flow.
+Every interactive `ask`, `chat`, and `task` run writes an always-on, file-only execution log (one JSONL file per run) under `~/.local/share/terminal-agent/sessions/`, named `{timestamp}_{kind}_{shortid}.jsonl`. Routine runs use the same `internal/sessionlog` record schema, but write a full JSONL transcript plus a human-readable `.md` summary under `~/.local/share/terminal-agent/routines/<id>/logs/`, separate from the shared sessions directory. See `internal/sessionlog` (the `Recorder`, `Meta` header, and unified `Record` schema) and the inline `recorder.Write` calls in each app-layer flow.
 
-When debugging a recent or current run, inspect the relevant JSONL session log in `~/.local/share/terminal-agent/sessions/` directly instead of asking the user to provide logs. Use the newest matching `{timestamp}_{kind}_{shortid}.jsonl` file unless the user points to a specific run.
+When debugging a recent or current interactive run, inspect the relevant JSONL session log in `~/.local/share/terminal-agent/sessions/` directly instead of asking the user to provide logs. Use the newest matching `{timestamp}_{kind}_{shortid}.jsonl` file unless the user points to a specific run. For routines, inspect the routine-specific log files under `~/.local/share/terminal-agent/routines/<id>/logs/`.
 
-- The recorder is created per run at the app boundary (`AskEvents`/`ChatEvents`/`TaskEvents`) and writes a `meta` provenance header first (`user`, `cwd`, `provider`, `model`, `command`, `created_at` — intentionally no hostname).
+- The recorder is created per run at the app boundary (`AskEvents`/`ChatEvents`/`TaskEvents`/`RoutineService.Run`) and writes a `meta` provenance header first (`user`, `cwd`, `provider`, `model`, `command`, `created_at`, plus `task_timeout` / `routine_id` when applicable — intentionally no hostname).
 - For `ask`/`chat`, recording is inlined at each call site (request, completed, failed). For `task`, app-layer records are also inlined, while agent-internal steps (thoughts, tool calls, results) are captured via an `OnStep` callback in `TaskOptions` that writes through `taskStepToRecord`.
 - `taskExecutionState.appendStep` is the single chokepoint that both appends to history (for prompt building) and forwards the enriched step to the `OnStep` callback.
 - Logging must never break a run: `Recorder.Write` swallows errors (warn-log only) and is mutex-guarded for concurrent writers and monotonic `seq`.
@@ -77,9 +78,10 @@ When debugging a recent or current run, inspect the relevant JSONL session log i
 
 Testing is orchestrated through [Taskfile](https://taskfile.dev/). Common flows:
 
-- `task test` – full suite (unit + integration) and what CI runs before tagging a release.
-- `task test:unit` – fast feedback loop for Go unit tests.
-- `task test:integration` – spins up the Docker-backed integration environment.
+- `task test` – legacy focused Go test subset for core CLI/app packages; it does not include every package, GUI tests, race tests, or integration tests.
+- `task test:unit` – broad Go unit suite, including GUI/voice packages, followed by race tests for `internal/voice` and `internal/gui`.
+- `task test:integration` – runs the integration-tagged Go tests against the local integration fixtures; `task test:integration:env` runs them inside the Docker-backed environment.
+- `task screenshots:gui` – regenerates deterministic GUI screenshots under `docs/assets/screenshots/`.
 
 Test code should prefer table-driven tests: define test case tables for related scenarios and iterate with `t.Run`. Use standalone test functions only when the setup or assertion flow is genuinely unique enough that a table would make the test less clear.
 
@@ -90,7 +92,7 @@ Documentation is built with MkDocs Material. Use `uvx --with mkdocs-material mkd
 ## Local Development Tips
 
 - Install Task (`brew install go-task/tap/go-task` or follow upstream docs) and Docker before running integration tests.
-- `task build` produces the `agent` binary; `task install` additionally copies it to `~/.local/bin/agent`.
+- `task build` produces `bin/agent` and `bin/agent-gui`; `task install` additionally copies `bin/agent` to `~/.local/bin/agent`. GUI desktop integration is installed through the platform-specific `task integration:*` targets.
 - Configuration helpers live under `task run:set:*` (e.g., `task run:set:openai`) for quickly switching providers during manual testing.
 - The direct local `llama` provider currently requires `YZMA_LIB` to point at the directory containing the llama.cpp shared libraries, plus `llama_models` aliases in `~/.config/terminal-agent/config.json`. The documented Linux install path uses llama.cpp runtime build `b9180`.
 
@@ -111,11 +113,13 @@ Prompt-building code should prefer templates with named variables over positiona
 
 3. **Custom prompts** — can override the default role prompt via:
    - `--prompt` CLI flag (highest priority)
-   - File-based prompt in the configured working directory (`ask/system.prompt` or `task/system.prompt`)
+   - File-based prompt in the configured working directory (`ask/system.prompt` / `ask_system.prompt` or `task/system.prompt` / `task_system.prompt`)
    - All custom prompts still support `{{header}}` substitution.
 
-4. **Memory** (ask only) — when enabled via config (`memory: true`) or the `--memory`/`-M` flag, stored memory entries from `~/.config/terminal-agent/memory.jsonl` are formatted as `<memory>…</memory>` and prepended to the system prompt. See `internal/memory/main.go` and `internal/commands/ask_cmd.go:BuildAskPrompt`.
+4. **Ask memory** — when enabled via config (`memory: true`) or the `--memory`/`-M` flag, stored memory entries from `~/.config/terminal-agent/memory.jsonl` are formatted as `<memory>…</memory>` and prepended to the ask/chat system prompt. See `internal/memory/main.go` and `internal/app/prompt.go:BuildAskPrompt`.
 
 5. **Context files** (ask only) — the `--context`/`-c` flag reads files and wraps each in `<context>…</context>` tags, prepended to the **user message** (not the system prompt).
+
+Task runs have separate context mechanisms: optional project context from `AGENTS.md`/`CLAUDE.md`/`.agentrules` when `project_context` is enabled, skill discovery/loading for `.terminal-agent/skills`, and task memory retrieval/indexing through the SQLite task memory store (`~/.local/share/terminal-agent/task_memory.db` by default). These are task-specific and should not be coupled to ask memory or ask context-file handling.
 
 For more context (features, provider setup, MCP configuration), refer to `README.md` and the docs site referenced there.
