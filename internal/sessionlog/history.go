@@ -1,7 +1,6 @@
 package sessionlog
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,8 +12,6 @@ import (
 	"github.com/laszukdawid/terminal-agent/internal/utils"
 	"go.uber.org/zap"
 )
-
-const scannerMaxTokenSize = 64 * 1024 * 1024
 
 // Summary is the compact, user-facing shape of a per-run session log.
 type Summary struct {
@@ -80,8 +77,7 @@ func readSummary(path string) (Summary, bool, error) {
 	defer f.Close()
 
 	summary := Summary{Path: path}
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 64*1024), scannerMaxTokenSize)
+	scanner := utils.NewJSONLScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {

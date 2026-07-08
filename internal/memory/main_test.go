@@ -3,9 +3,11 @@ package memory
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTempMemory(t *testing.T) (string, func()) {
@@ -146,6 +148,62 @@ func TestMemoryFormatAsPrompt(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Empty(t, prompt, "Non-existent memory file should return empty prompt")
 	})
+}
+
+func TestMemoryListRobustReads(t *testing.T) {
+	const first = `{"content":"first","timestamp":"2024-01-01T00:00:00Z"}`
+	const second = `{"content":"second","timestamp":"2024-01-02T00:00:00Z"}`
+	bigContent := strings.Repeat("y", 200*1024) // > default 64 KB scanner limit
+	bigLine := `{"content":"` + bigContent + `","timestamp":"2024-01-03T00:00:00Z"}`
+
+	tests := []struct {
+		name         string
+		lines        []string
+		wantContents []string
+	}{
+		{
+			name:         "all valid",
+			lines:        []string{first, second},
+			wantContents: []string{"first", "second"},
+		},
+		{
+			name:         "corrupt json line mid-file is skipped",
+			lines:        []string{first, "{broken", second},
+			wantContents: []string{"first", "second"},
+		},
+		{
+			name:         "truncated last line is skipped",
+			lines:        []string{first, second, `{"content":"trunc`},
+			wantContents: []string{"first", "second"},
+		},
+		{
+			name:         "blank lines are ignored",
+			lines:        []string{first, "", "  ", second},
+			wantContents: []string{"first", "second"},
+		},
+		{
+			name:         "entry larger than 64KB is read",
+			lines:        []string{first, bigLine},
+			wantContents: []string{"first", bigContent},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "memory.jsonl")
+			require.NoError(t, os.WriteFile(path, []byte(strings.Join(tc.lines, "\n")), 0o644))
+
+			m := NewMemory(path)
+			entries, err := m.List()
+			require.NoError(t, err)
+
+			gotContents := make([]string, 0, len(entries))
+			for _, e := range entries {
+				gotContents = append(gotContents, e.Content)
+			}
+			assert.Equal(t, tc.wantContents, gotContents)
+		})
+	}
 }
 
 func TestMemoryPersistence(t *testing.T) {

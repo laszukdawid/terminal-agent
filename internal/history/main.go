@@ -1,13 +1,14 @@
 package history
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/utils"
+	"go.uber.org/zap"
 )
 
 type History interface {
@@ -56,7 +57,13 @@ func (h *history) Query(hQuery HistoryQuery) ([]HistoryLog, error) {
 	for _, log := range logs {
 		t, err := time.Parse(time.RFC3339, log.Timestamp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse timestamp: %w", err)
+			// One corrupt entry must not fail the whole query; skip it.
+			utils.Warn("skipping history log with unparseable timestamp",
+				zap.String("path", h.path),
+				zap.String("timestamp", log.Timestamp),
+				zap.Error(err),
+			)
+			continue
 		}
 
 		// If `After` is set, skip if `t` is before `After`
@@ -80,13 +87,24 @@ func readAllLogs(filePath string) ([]HistoryLog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
+	defer file.Close()
 
 	var logs []HistoryLog
-	scanner := bufio.NewScanner(file)
+	scanner := utils.NewJSONLScanner(file)
 	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
 		var log HistoryLog
-		if err := json.Unmarshal(scanner.Bytes(), &log); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal log: %w", err)
+		if err := json.Unmarshal(line, &log); err != nil {
+			// A single corrupt append (e.g. a truncated line from a crash
+			// mid-write) must not make the whole file unreadable; skip it.
+			utils.Warn("skipping malformed history log line",
+				zap.String("path", filePath),
+				zap.Error(err),
+			)
+			continue
 		}
 		logs = append(logs, log)
 	}

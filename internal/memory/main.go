@@ -1,7 +1,7 @@
 package memory
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/laszukdawid/terminal-agent/internal/utils"
+	"go.uber.org/zap"
 )
 
 type Memory interface {
@@ -73,11 +74,21 @@ func (m *memory) List() ([]MemoryEntry, error) {
 	defer file.Close()
 
 	var entries []MemoryEntry
-	scanner := bufio.NewScanner(file)
+	scanner := utils.NewJSONLScanner(file)
 	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
 		var entry MemoryEntry
-		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal entry: %w", err)
+		if err := json.Unmarshal(line, &entry); err != nil {
+			// A single corrupt append must not make the whole file
+			// unreadable; skip it.
+			utils.Warn("skipping malformed memory entry",
+				zap.String("path", m.path),
+				zap.Error(err),
+			)
+			continue
 		}
 		entries = append(entries, entry)
 	}
