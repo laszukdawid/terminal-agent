@@ -137,7 +137,7 @@ func convertToolsToAnthropic(tools map[string]tools.Tool) []anthropic.ToolParam 
 			continue
 		}
 		extraProps := make(map[string]any)
-		if required, ok := inputSchema["required"].([]string); ok {
+		if required := requiredFields(inputSchema); len(required) > 0 {
 			extraProps["required"] = required
 		}
 		anthropicTool := anthropic.ToolParam{

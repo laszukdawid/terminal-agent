@@ -170,12 +170,10 @@ func convertInputSchemaToGenaiSchema(inputSchema map[string]any) (*genai.Schema,
 
 		schema.Properties[propName] = genaiSchema
 
-		if requiredSlice, ok := inputSchema["required"].([]string); ok {
-			for _, requiredProp := range requiredSlice {
-				if requiredProp == propName {
-					schema.Required = append(schema.Required, propName)
-					break
-				}
+		for _, requiredProp := range requiredFields(inputSchema) {
+			if requiredProp == propName {
+				schema.Required = append(schema.Required, propName)
+				break
 			}
 		}
 	}
