@@ -23,15 +23,18 @@ type TaskStep struct {
 }
 
 type AsyncIndexer struct {
-	store Store
-	env   Environment
-	ch    chan Record
-	done  chan struct{}
-	once  sync.Once
+	store  Store
+	env    Environment
+	ch     chan Record
+	done   chan struct{}
+	ctx    context.Context
+	cancel context.CancelFunc
+	once   sync.Once
 }
 
 func NewAsyncIndexer(store Store, env Environment) *AsyncIndexer {
-	idx := &AsyncIndexer{store: store, env: env, ch: make(chan Record, 256), done: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	idx := &AsyncIndexer{store: store, env: env, ch: make(chan Record, 256), done: make(chan struct{}), ctx: ctx, cancel: cancel}
 	go idx.run()
 	return idx
 }
@@ -39,7 +42,10 @@ func NewAsyncIndexer(store Store, env Environment) *AsyncIndexer {
 func (i *AsyncIndexer) run() {
 	defer close(i.done)
 	for rec := range i.ch {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Derive each per-record timeout from the indexer context so Close can
+		// cancel an in-flight (and all remaining) Add at shutdown, letting the
+		// loop exit promptly instead of the caller closing the store underneath it.
+		ctx, cancel := context.WithTimeout(i.ctx, time.Second)
 		if err := i.store.Add(ctx, rec); err != nil {
 			log.Warnw("failed to index task memory", "kind", rec.Kind, "error", err)
 		}
@@ -62,19 +68,29 @@ func (i *AsyncIndexer) Add(rec Record) {
 	}
 }
 
+// Close stops accepting records and waits for the run loop to exit before
+// returning, so a caller can safely close the store afterward without racing an
+// in-flight Add. It first lets the queue drain for up to wait; if that deadline
+// passes it cancels the indexer context (aborting the in-flight and remaining
+// Adds) and then joins the loop, which by then exits promptly. Records still
+// queued at the deadline are dropped by design, but the store is never closed
+// while an Add is running.
 func (i *AsyncIndexer) Close(wait time.Duration) {
 	if i == nil {
 		return
 	}
 	i.once.Do(func() { close(i.ch) })
-	if wait <= 0 {
-		return
+	if wait > 0 {
+		select {
+		case <-i.done:
+			i.cancel()
+			return
+		case <-time.After(wait):
+			log.Warnw("task memory indexing did not finish before timeout; cancelling", "timeout", wait.String())
+		}
 	}
-	select {
-	case <-i.done:
-	case <-time.After(wait):
-		log.Warnw("task memory indexing did not finish before timeout", "timeout", wait.String())
-	}
+	i.cancel()
+	<-i.done
 }
 
 func RequestRecord(runID string, request string, env Environment) Record {

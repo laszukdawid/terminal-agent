@@ -3,11 +3,87 @@ package taskmemory
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// blockingStore is a Store whose Add blocks until released or its context is
+// cancelled, so tests can control indexer shutdown timing.
+type blockingStore struct {
+	mu        sync.Mutex
+	addActive bool
+	addCalls  int
+	release   chan struct{}
+}
+
+func (s *blockingStore) Add(ctx context.Context, _ Record) error {
+	s.mu.Lock()
+	s.addActive = true
+	s.addCalls++
+	s.mu.Unlock()
+	defer func() { s.mu.Lock(); s.addActive = false; s.mu.Unlock() }()
+	select {
+	case <-s.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *blockingStore) addRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.addActive
+}
+
+func (s *blockingStore) Search(context.Context, Query) ([]Match, error) { return nil, nil }
+func (s *blockingStore) Recent(context.Context, int) ([]Record, error)  { return nil, nil }
+func (s *blockingStore) Stats(context.Context) (Stats, error)           { return Stats{}, nil }
+func (s *blockingStore) Clear(context.Context) error                    { return nil }
+func (s *blockingStore) Close() error                                   { return nil }
+
+// TestAsyncIndexerCloseJoinsRunLoop guards BUG-15: Close must not return while an
+// Add is in flight, even when the drain deadline passes, so the caller can close
+// the store afterward without a race.
+func TestAsyncIndexerCloseJoinsRunLoop(t *testing.T) {
+	store := &blockingStore{release: make(chan struct{})} // Add blocks until ctx cancel
+	idx := NewAsyncIndexer(store, Environment{OS: "linux"})
+	idx.Add(Record{Kind: KindToolSuccess, SearchableText: "x"})
+
+	// Wait until the run loop is actually inside Add so the deadline path is exercised.
+	require.Eventually(t, store.addRunning, time.Second, time.Millisecond, "Add should be in flight")
+
+	done := make(chan struct{})
+	go func() { idx.Close(50 * time.Millisecond); close(done) }()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not return; run loop was not joined/cancelled")
+	}
+
+	// The core guarantee: once Close returns, no Add is running, so closing the
+	// store next cannot race an in-flight Add.
+	assert.False(t, store.addRunning(), "Close must join the run loop before returning")
+}
+
+// TestAsyncIndexerCloseDrainsQueuedRecords verifies the clean-drain path still
+// indexes queued records when Add completes promptly.
+func TestAsyncIndexerCloseDrainsQueuedRecords(t *testing.T) {
+	store := &blockingStore{release: make(chan struct{})}
+	close(store.release) // Add returns immediately
+	idx := NewAsyncIndexer(store, Environment{OS: "linux"})
+	for i := 0; i < 3; i++ {
+		idx.Add(Record{Kind: KindToolSuccess, SearchableText: "x"})
+	}
+	idx.Close(2 * time.Second)
+	assert.Equal(t, 3, store.addCalls, "all queued records should be indexed on a clean drain")
+	assert.False(t, store.addRunning())
+}
 
 func TestStepRecordKinds(t *testing.T) {
 	env := Environment{OS: "linux", Arch: "amd64", CWD: "/tmp"}
