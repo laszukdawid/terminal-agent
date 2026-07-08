@@ -16,7 +16,22 @@ const (
 	AnthropicProvider = "anthropic"
 
 	DefaultAnthropicModel = "claude-sonnet-4-6"
+
+	// defaultAnthropicMaxTokens is the fallback output cap used when a caller
+	// leaves QueryParams.MaxTokens unset (<= 0). Anthropic requires max_tokens > 0
+	// (unlike Bedrock, which can omit it), so passing zero is rejected by the API.
+	defaultAnthropicMaxTokens = 4096
 )
+
+// anthropicMaxTokens resolves the effective max_tokens for a request, flooring a
+// missing/non-positive value to defaultAnthropicMaxTokens so the API is never
+// sent an invalid max_tokens <= 0.
+func anthropicMaxTokens(maxTokens int) int64 {
+	if maxTokens <= 0 {
+		return defaultAnthropicMaxTokens
+	}
+	return int64(maxTokens)
+}
 
 type AnthropicConnector struct {
 	modelID string
@@ -179,7 +194,7 @@ func (ac *AnthropicConnector) Query(ctx context.Context, qParams *QueryParams) (
 	}
 
 	msgParams := anthropic.MessageNewParams{
-		MaxTokens: int64(qParams.MaxTokens),
+		MaxTokens: anthropicMaxTokens(qParams.MaxTokens),
 		System: []anthropic.TextBlockParam{
 			{Text: *qParams.SysPrompt},
 		},
@@ -224,7 +239,7 @@ func (ac *AnthropicConnector) QueryWithTool(ctx context.Context, qParams *QueryP
 	message, err := ac.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     ac.modelID,
 		System:    []anthropic.TextBlockParam{{Text: *qParams.SysPrompt}},
-		MaxTokens: int64(qParams.MaxTokens),
+		MaxTokens: anthropicMaxTokens(qParams.MaxTokens),
 		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(*qParams.UserPrompt))},
 		Tools:     tools,
 	})
