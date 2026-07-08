@@ -835,7 +835,7 @@ func TestTaskWithOptionsResultCallerCancellationTakesPrecedenceOverTimeout(t *te
 }
 
 func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {
-	prompt := buildTaskPrompt(&TaskState{
+	prompt, err := buildTaskPrompt(&TaskState{
 		OriginalQuery: "trace repeated tool calls",
 		Iterations:    3,
 		ToolCalls:     2,
@@ -873,6 +873,7 @@ func TestBuildTaskPromptUsesOrderedStructuredHistory(t *testing.T) {
 			},
 		},
 	})
+	require.NoError(t, err)
 
 	assert.Contains(t, prompt, "Ordered step history:")
 	assert.Contains(t, prompt, "Decide internally whether another tool call is needed")
@@ -986,12 +987,13 @@ func TestTaskWithOptionsResultReturnsDirectRawOutputForFinalTool(t *testing.T) {
 
 func TestTaskActionPromptFinalGuidanceIsSelective(t *testing.T) {
 	userPrompt := "task context"
-	prompt := (&Agent{}).buildTaskActionPrompt(
+	prompt, err := (&Agent{}).buildTaskActionPrompt(
 		&connector.QueryParams{UserPrompt: &userPrompt},
 		map[string]tools.Tool{},
 		"",
 		nil,
 	)
+	require.NoError(t, err)
 
 	assert.Contains(t, prompt, `Use "final": true ONLY when raw output is definitely the complete final user-facing answer`)
 	assert.Contains(t, prompt, `Never use "final": true for exploratory commands, listings, searches, validation checks`)

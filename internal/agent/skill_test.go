@@ -22,7 +22,8 @@ func TestTaskPromptIncludesAvailableSkillsSection(t *testing.T) {
 		LoadedSkills:  []internalskills.Skill{{Name: "code-reviewer", Content: "Read diffs carefully."}},
 	}
 
-	prompt := buildTaskPrompt(state)
+	prompt, err := buildTaskPrompt(state)
+	require.NoError(t, err)
 	assert.Contains(t, prompt, "Current working directory: /repo")
 	assert.Contains(t, prompt, "Available skills")
 	assert.Contains(t, prompt, "code-reviewer")

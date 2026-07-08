@@ -61,8 +61,8 @@ type taskFinalSummaryTemplateData struct {
 	HistorySection string
 }
 
-func buildTaskPrompt(state *TaskState) string {
-	return strings.TrimSpace(renderTaskTemplate(taskPromptTemplate, taskPromptTemplateData{
+func buildTaskPrompt(state *TaskState) (string, error) {
+	rendered, err := renderTaskTemplate(taskPromptTemplate, taskPromptTemplateData{
 		OriginalQuery:          state.OriginalQuery,
 		Phase:                  state.Phase,
 		Iterations:             state.Iterations,
@@ -75,16 +75,23 @@ func buildTaskPrompt(state *TaskState) string {
 		AvailableSkillsSection: formatTaskPromptSkills(state.Skills),
 		LoadedSkillsSection:    formatTaskPromptLoadedSkills(state.LoadedSkills),
 		HistorySection:         formatTaskPromptHistory(renderTaskHistoryForPrompt(state.Steps)),
-	}))
+	})
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(rendered), nil
 }
 
 func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, error) {
-	summary := renderTaskTemplate(taskFinalSummaryTemplate, taskFinalSummaryTemplateData{
+	summary, err := renderTaskTemplate(taskFinalSummaryTemplate, taskFinalSummaryTemplateData{
 		OriginalQuery:  state.OriginalQuery,
 		RootDir:        state.Dirs.RootDir,
 		CurrentDir:     state.Dirs.CurrentDir,
 		HistorySection: formatTaskPromptHistory(renderTaskHistoryForSummary(state.Steps)),
 	})
+	if err != nil {
+		return "", err
+	}
 	qParams := connector.QueryParams{
 		UserPrompt: StringPtr(summary),
 		SysPrompt:  a.systemPromptTask,
@@ -100,12 +107,12 @@ func (a *Agent) finalizeSummary(ctx context.Context, state *TaskState) (string, 
 	return response, nil
 }
 
-func renderTaskTemplate(tmpl *template.Template, data any) string {
+func renderTaskTemplate(tmpl *template.Template, data any) (string, error) {
 	var out bytes.Buffer
 	if err := tmpl.Execute(&out, data); err != nil {
-		panic(fmt.Sprintf("failed to render task prompt template: %v", err))
+		return "", fmt.Errorf("render task prompt template %q: %w", tmpl.Name(), err)
 	}
-	return out.String()
+	return out.String(), nil
 }
 
 func formatTaskPromptHistory(history string) string {

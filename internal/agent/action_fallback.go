@@ -106,7 +106,10 @@ func (a *Agent) queryTaskActionFallback(ctx context.Context, params *connector.Q
 		if err := ctx.Err(); err != nil {
 			return connector.LlmResponseWithTools{}, err
 		}
-		prompt := a.buildTaskActionPrompt(params, taskTools, lastRaw, lastErr)
+		prompt, err := a.buildTaskActionPrompt(params, taskTools, lastRaw, lastErr)
+		if err != nil {
+			return connector.LlmResponseWithTools{}, err
+		}
 		fallbackParams.UserPrompt = &prompt
 
 		raw, err := a.Connector.Query(ctx, &fallbackParams)
@@ -168,7 +171,7 @@ func buildTaskActionResponse(parsed taskActionFallbackResponse) (connector.LlmRe
 	return response, nil
 }
 
-func (a *Agent) buildTaskActionPrompt(params *connector.QueryParams, taskTools map[string]tools.Tool, previousRaw string, previousErr error) string {
+func (a *Agent) buildTaskActionPrompt(params *connector.QueryParams, taskTools map[string]tools.Tool, previousRaw string, previousErr error) (string, error) {
 	toolsText := formatTaskActionTools(taskTools)
 	contextText := formatTaskActionContext(params)
 	if previousErr == nil {

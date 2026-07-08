@@ -389,7 +389,10 @@ func (a *Agent) runTaskIteration(ctx context.Context, logger *zap.SugaredLogger,
 func (a *Agent) queryTaskResponse(ctx context.Context, run *taskExecutionState) (connector.LlmResponseWithTools, error) {
 	run.refreshRelevantMemories(ctx)
 	run.refreshSkills()
-	promptWithState := buildTaskPrompt(run.state)
+	promptWithState, err := buildTaskPrompt(run.state)
+	if err != nil {
+		return connector.LlmResponseWithTools{}, err
+	}
 	qParams := connector.QueryParams{
 		UserPrompt: &promptWithState,
 		SysPrompt:  a.systemPromptTask,
