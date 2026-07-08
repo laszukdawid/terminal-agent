@@ -7,8 +7,23 @@ import (
 
 type Service interface {
 	Ask(ctx context.Context, req AskRequest) (AskResult, error)
-	AskEvents(ctx context.Context, req AskRequest) (<-chan Event, error)
 	Chat(ctx context.Context, req ChatRequest) (ChatResult, error)
+
+	// AskEvents, ChatEvents, and TaskEvents each run the request on a producer
+	// goroutine and return an unbuffered Event channel that is closed when the
+	// run finishes.
+	//
+	// Consumer contract: consume the channel until it is closed, or cancel ctx to
+	// stop early. The producer sends on an unbuffered channel and only unblocks on
+	// a successful send or ctx cancellation (TaskEvents also blocks awaiting a
+	// reply to a confirmation/clarification event), so abandoning the channel
+	// mid-run without cancelling ctx blocks the producer forever — leaking the
+	// goroutine and skipping its deferred cleanup (e.g. closing the task memory
+	// indexer or chat session store). Absent cancellation, a run ends with a
+	// terminal EventCompleted or EventFailed followed by the channel close, so a
+	// consumer may stop once it observes a terminal event; stopping before one
+	// requires cancelling ctx.
+	AskEvents(ctx context.Context, req AskRequest) (<-chan Event, error)
 	ChatEvents(ctx context.Context, req ChatRequest) (<-chan Event, error)
 	TaskEvents(ctx context.Context, req TaskRequest) (<-chan Event, error)
 }

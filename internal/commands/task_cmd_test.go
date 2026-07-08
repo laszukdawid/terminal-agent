@@ -776,6 +776,52 @@ func TestTaskCommandProgressOutput(t *testing.T) {
 	})
 }
 
+// TestTaskCommandCancelsProducerOnEarlyReturn guards BUG-14: when the command
+// returns early after TaskEvents has started (here via an invalid --progress
+// value), it must cancel the context so the producer goroutine — blocked on an
+// unbuffered send, mirroring emitEvent — is released rather than leaked.
+func TestTaskCommandCancelsProducerOnEarlyReturn(t *testing.T) {
+	originalNewService := newService
+	defer func() { newService = originalNewService }()
+
+	var capturedCtx context.Context
+	producerDone := make(chan struct{})
+	newService = func() app.Service {
+		return &fakeTaskService{events: func(ctx context.Context, _ app.TaskRequest) (<-chan app.Event, error) {
+			capturedCtx = ctx
+			ch := make(chan app.Event) // unbuffered, like the real producer
+			go func() {
+				defer close(producerDone)
+				defer close(ch)
+				select {
+				case ch <- app.Event{Type: app.EventStarted}:
+				case <-ctx.Done():
+				}
+			}()
+			return ch, nil
+		}}
+	}
+
+	cmd := NewTaskCommand(config.NewDefaultConfig())
+	cmd.SetIn(bytes.NewBufferString(""))
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	cmd.Flags().String("device", "", "")
+	cmd.SetArgs([]string{"--progress=nope", "inspect", "repo"})
+
+	require.Error(t, cmd.ExecuteContext(context.Background()))
+
+	require.NotNil(t, capturedCtx, "TaskEvents should have been called")
+	assert.Error(t, capturedCtx.Err(), "context must be cancelled on early return")
+
+	select {
+	case <-producerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("producer goroutine leaked: not released after early return")
+	}
+}
+
 func TestTaskProgressPrinterOutput(t *testing.T) {
 	tests := []struct {
 		name        string

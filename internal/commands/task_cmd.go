@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -68,6 +69,13 @@ func NewTaskCommand(config config.Config) *cobra.Command {
 			if err != nil {
 				autoApprove = false
 			}
+
+			// Derive a cancellable context so any early return below (progress
+			// validation, a prompt/reply I/O error, EventFailed) cancels the
+			// producer goroutine instead of leaving it blocked on an unbuffered
+			// send or a confirmation reply-wait. See the Service consumer contract.
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 
 			events, err := service.TaskEvents(ctx, app.TaskRequest{
 				Message:        userRequest,
