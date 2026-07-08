@@ -58,11 +58,19 @@ type ClaudeRequest struct {
 type QueryParams struct {
 	UserPrompt *string
 	SysPrompt  *string
-	Messages   []Message
-	Stream     bool
-	MaxTokens  int
-	Device     string
-	OnStream   func(string) error
+	// Messages carries prior conversation history. Every connector includes it on
+	// the plain Query path (ask/chat). On the QueryWithTool path support is
+	// inconsistent across connectors (most build the request from SysPrompt +
+	// UserPrompt only, while a few also include Messages), so tool-calling callers
+	// must not rely on it: carry any needed history or tool results in UserPrompt
+	// instead. All current QueryWithTool callers do this — the task loop renders
+	// the full step history into the prompt and the ask web-search loop threads
+	// tool results into it.
+	Messages  []Message
+	Stream    bool
+	MaxTokens int
+	Device    string
+	OnStream  func(string) error
 }
 
 type LlmResponseWithTools struct {
@@ -80,5 +88,10 @@ type LLMConnector interface {
 type ToolCallingConnector interface {
 	LLMConnector
 	SupportsNativeToolCalling() bool
+	// QueryWithTool runs a single tool-calling turn. Callers must include any
+	// conversation history or prior tool results in params.UserPrompt: whether
+	// params.Messages is honored on this path varies by connector (see the note
+	// there), so it must not be relied upon for tool-calling turns. Caller
+	// streaming callbacks (params.Stream / params.OnStream) are not honored.
 	QueryWithTool(ctx context.Context, params *QueryParams, tools map[string]tools.Tool) (LlmResponseWithTools, error)
 }

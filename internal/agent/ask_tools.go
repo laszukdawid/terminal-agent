@@ -47,9 +47,10 @@ type AskOptions struct {
 // calling and the websearch tool is available (TAVILY_KEY set). Otherwise it
 // falls back to a plain single-shot answer that streams normally.
 //
-// Tool results are threaded back as text in the user prompt because connectors
-// do not carry tool history through QueryParams.Messages, and QueryWithTool does
-// not honor streaming. The loop therefore runs non-streaming and emits the final
+// Tool results are threaded back as text in the user prompt because
+// QueryWithTool must not be relied on to carry history through
+// QueryParams.Messages (support varies by connector) and does not honor caller
+// streaming callbacks. The loop therefore runs non-streaming and emits the final
 // answer once when streaming was requested.
 func (a *Agent) QuestionWithWebSearch(ctx context.Context, opts AskOptions) (string, error) {
 	if strings.TrimSpace(opts.Query) == "" {
