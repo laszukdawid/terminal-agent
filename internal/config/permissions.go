@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 const localConfigFileName = ".terminal-agent.json"
@@ -249,12 +251,7 @@ func updateLocalPermissionsFileBatch(path string, actions []string, allow bool) 
 	}
 	payload["permissions"] = permissions
 
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	return encoder.Encode(payload)
+	// Reading into a map above preserves any unknown keys in the local config;
+	// write it back atomically so a crash mid-write cannot corrupt the file.
+	return utils.WriteJSONAtomic(path, payload)
 }

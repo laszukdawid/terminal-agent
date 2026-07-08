@@ -261,18 +261,10 @@ func LoadConfig() (*config, error) {
 }
 
 func SaveConfig(config *config) error {
-	configPath := getConfigPath()
-	if err := ensurePathExists(configPath); err != nil {
-		return err
-	}
-	file, err := os.Create(configPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	return encoder.Encode(config)
+	// Write via temp file + atomic rename so a crash mid-write cannot corrupt
+	// config.json (every setter rewrites the whole file). WriteJSONAtomic creates
+	// the parent directory, so no separate ensurePathExists step is needed.
+	return log.WriteJSONAtomic(getConfigPath(), config)
 }
 
 func (config *config) GetDefaultProvider() string {

@@ -1,38 +1,11 @@
 package routines
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
 )
-
-// writeJSONAtomic encodes v to path via a temp file in the same directory and an
-// atomic rename, so a concurrent reader never observes a partially written file.
-func writeJSONAtomic(path string, v any) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once the rename succeeds
-
-	encoder := json.NewEncoder(tmp)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(v); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
-}
 
 // withLock runs fn while holding an exclusive advisory lock on lockPath, so
 // independently launched processes (scheduled runs and interactive commands)

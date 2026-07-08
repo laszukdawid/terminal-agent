@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 // ErrNotFound is returned when a routine cannot be resolved by id or name.
@@ -100,7 +102,7 @@ func (s *Store) Upsert(r Routine) error {
 			}
 			file.Routines = append(file.Routines, r)
 		}
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 }
 
@@ -125,7 +127,7 @@ func (s *Store) Add(r Routine) error {
 		}
 		r.UpdatedAt = now
 		file.Routines = append(file.Routines, r)
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 }
 
@@ -149,7 +151,7 @@ func (s *Store) Delete(id string) (bool, error) {
 			return nil
 		}
 		file.Routines = kept
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 	return removed, err
 }

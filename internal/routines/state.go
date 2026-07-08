@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"time"
+
+	"github.com/laszukdawid/terminal-agent/internal/utils"
 )
 
 // Run outcomes recorded for a routine's most recent execution.
@@ -132,7 +134,7 @@ func (s *StateStore) Record(id string, rec RunRecord) error {
 			rec.NextRunAt = prior.NextRunAt
 		}
 		file.Runs[id] = rec
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 }
 
@@ -147,7 +149,7 @@ func (s *StateStore) SetNextRun(id string, next time.Time) error {
 		rec := file.Runs[id]
 		rec.NextRunAt = next
 		file.Runs[id] = rec
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 }
 
@@ -162,7 +164,7 @@ func (s *StateStore) Delete(id string) error {
 			return nil
 		}
 		delete(file.Runs, id)
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 }
 
@@ -198,7 +200,7 @@ func (s *StateStore) MarkSeen() error {
 			return err
 		}
 		file.LastSeenAt = time.Now().UTC()
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 }
 
@@ -227,7 +229,7 @@ func (s *StateStore) ClaimPending() ([]SeenNotice, error) {
 			return nil
 		}
 		file.LastSeenAt = newest
-		return writeJSONAtomic(s.path, file)
+		return utils.WriteJSONAtomic(s.path, file)
 	})
 	if err != nil {
 		return nil, err
