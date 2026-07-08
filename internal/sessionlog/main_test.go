@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -177,5 +178,39 @@ func TestRecentSkipsMalformedSessionLogs(t *testing.T) {
 	}
 	if runs[0].Request != "hello" || runs[0].Response != "world" {
 		t.Fatalf("summary = %+v, want valid run", runs[0])
+	}
+}
+
+// TestRecorderConcurrentWritesAreSeqOrdered guards BUG-17: with the mutex held
+// across the physical append, concurrent writers land their lines in seq order,
+// so the file order matches ascending Seq.
+func TestRecorderConcurrentWritesAreSeqOrdered(t *testing.T) {
+	dir := t.TempDir()
+	rec := New(dir, Meta{Kind: "task"})
+
+	const writers = 8
+	const perWriter = 25
+	var wg sync.WaitGroup
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < perWriter; i++ {
+				rec.Write(Record{Type: RecordToolCall})
+			}
+		}()
+	}
+	wg.Wait()
+
+	records := readRecords(t, rec.Path())
+	// +1 for the meta header written by New (seq 1); the concurrent writes are
+	// seq 2..N, so index i must still carry seq i+1 (file order == seq order).
+	if want := 1 + writers*perWriter; len(records) != want {
+		t.Fatalf("got %d records, want %d", len(records), want)
+	}
+	for i, r := range records {
+		if r.Seq != i+1 {
+			t.Fatalf("line %d has seq %d, want %d (file order must match seq order)", i, r.Seq, i+1)
+		}
 	}
 }

@@ -130,7 +130,12 @@ func (r *Recorder) Write(rec Record) {
 		return
 	}
 
+	// Hold the mutex across the physical append, not just the seq/field stamping,
+	// so concurrent writers land their lines in seq order (each append is already
+	// individually atomic via O_APPEND, but without this the seq order and file
+	// order could diverge).
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.seq++
 	rec.Seq = r.seq
 	if rec.RunID == "" {
@@ -142,13 +147,11 @@ func (r *Recorder) Write(rec Record) {
 	if rec.Timestamp.IsZero() {
 		rec.Timestamp = time.Now()
 	}
-	path := r.path
-	r.mu.Unlock()
 
-	if err := utils.WriteToJSONLFile(path, rec); err != nil {
+	if err := utils.WriteToJSONLFile(r.path, rec); err != nil {
 		utils.GetLogger().Warn("failed to write session log record",
 			zap.String("run_id", r.runID),
-			zap.String("path", path),
+			zap.String("path", r.path),
 			zap.Error(err),
 		)
 	}
