@@ -257,11 +257,12 @@ func (oc *OpenAIConnector) Query(ctx context.Context, qParams *QueryParams) (str
 	if err != nil {
 		return "", err
 	}
-
-	if completion != nil {
-		price := computePriceOpenai(oc.modelID, &completion.Usage)
-		oc.logger.Sugar().Debugw("Usage", "usage", completion.Usage, "price", price)
+	if completion == nil || len(completion.Choices) == 0 {
+		return "", ErrNoProviderResponse
 	}
+
+	price := computePriceOpenai(oc.modelID, &completion.Usage)
+	oc.logger.Sugar().Debugw("Usage", "usage", completion.Usage, "price", price)
 
 	return completion.Choices[0].Message.Content, nil
 }
@@ -285,6 +286,9 @@ func (oc *OpenAIConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 	completion, err := oc.client.Chat.Completions.New(ctx, oParams)
 	if err != nil {
 		return response, err
+	}
+	if completion == nil || len(completion.Choices) == 0 {
+		return response, ErrNoProviderResponse
 	}
 
 	price := computePriceOpenai(oc.modelID, &completion.Usage)

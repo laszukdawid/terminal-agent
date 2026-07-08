@@ -256,3 +256,31 @@ func TestNewGoogleConnectorNoModelID(t *testing.T) {
 		t.Errorf("Expected modelID to be gemini-3.1-flash-lite, got %s", connector.modelID)
 	}
 }
+
+func TestFirstCandidateTextNilSafety(t *testing.T) {
+	tests := []struct {
+		name     string
+		resp     *genai.GenerateContentResponse
+		wantText string
+		wantOK   bool
+	}{
+		{name: "nil response", resp: nil, wantOK: false},
+		{name: "no candidates", resp: &genai.GenerateContentResponse{}, wantOK: false},
+		{name: "nil candidate pointer", resp: &genai.GenerateContentResponse{Candidates: []*genai.Candidate{nil}}, wantOK: false},
+		{name: "nil content (safety-blocked)", resp: &genai.GenerateContentResponse{Candidates: []*genai.Candidate{{Content: nil}}}, wantOK: false},
+		{name: "empty parts", resp: &genai.GenerateContentResponse{Candidates: []*genai.Candidate{{Content: &genai.Content{}}}}, wantOK: false},
+		{
+			name:     "valid text",
+			resp:     &genai.GenerateContentResponse{Candidates: []*genai.Candidate{{Content: &genai.Content{Parts: []genai.Part{genai.Text("hello")}}}}},
+			wantText: "hello",
+			wantOK:   true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			text, ok := firstCandidateText(tc.resp)
+			assert.Equal(t, tc.wantOK, ok)
+			assert.Equal(t, tc.wantText, text)
+		})
+	}
+}

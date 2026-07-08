@@ -216,10 +216,10 @@ func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (str
 		if err != nil {
 			return "", fmt.Errorf("error sending message to Google AI: %w", err)
 		}
-		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-			return fmt.Sprint(resp.Candidates[0].Content.Parts[0]), nil
+		if text, ok := firstCandidateText(resp); ok {
+			return text, nil
 		}
-		return "", fmt.Errorf("no response from Google AI")
+		return "", ErrNoProviderResponse
 	}
 
 	resp, err := gc.model.GenerateContent(ctx, genai.Text(*qParams.UserPrompt))
@@ -227,11 +227,27 @@ func (gc *GoogleConnector) Query(ctx context.Context, qParams *QueryParams) (str
 		return "", fmt.Errorf("error sending message to Google AI: %w", err)
 	}
 
-	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-		return fmt.Sprint(resp.Candidates[0].Content.Parts[0]), nil
+	if text, ok := firstCandidateText(resp); ok {
+		return text, nil
 	}
 
-	return "", fmt.Errorf("no response from Google AI")
+	return "", ErrNoProviderResponse
+}
+
+// firstCandidateText returns the first text part of the response's first usable
+// candidate. It is nil-safe at every level (nil response, nil candidate
+// pointer, withheld/nil content, no parts): genai's Candidates is a []*Candidate
+// and Candidate.Content is a *Content that Gemini leaves nil for filtered or
+// safety-blocked responses, so each must be checked before dereferencing.
+func firstCandidateText(resp *genai.GenerateContentResponse) (string, bool) {
+	if resp == nil || len(resp.Candidates) == 0 {
+		return "", false
+	}
+	candidate := resp.Candidates[0]
+	if candidate == nil || candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+		return "", false
+	}
+	return fmt.Sprint(candidate.Content.Parts[0]), true
 }
 
 func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryParams, execTools map[string]tools.Tool) (LlmResponseWithTools, error) {
@@ -255,12 +271,17 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 		return response, fmt.Errorf("error sending message to Google AI: %w", err)
 	}
 	logger.Sugar().Debugw("Received response from Google AI", "response", resp)
-	if len(resp.Candidates) == 0 {
-		return response, fmt.Errorf("no response from Google AI")
+	if resp == nil || len(resp.Candidates) == 0 {
+		return response, ErrNoProviderResponse
 	}
 
+	sawContent := false
 	for _, candidate := range resp.Candidates {
+		if candidate == nil || candidate.Content == nil {
+			continue
+		}
 		for _, part := range candidate.Content.Parts {
+			sawContent = true
 			funcall, ok := part.(genai.FunctionCall)
 
 			if ok {
@@ -271,6 +292,13 @@ func (gc *GoogleConnector) QueryWithTool(ctx context.Context, qParams *QueryPara
 				response.Response += fmt.Sprint(part) + "\n"
 			}
 		}
+	}
+
+	// A response whose candidates were all withheld (nil content) or empty is
+	// not a valid answer; surface it as an error instead of a silent empty
+	// result that looks like a successful blank reply.
+	if !sawContent {
+		return response, ErrNoProviderResponse
 	}
 
 	return response, nil
