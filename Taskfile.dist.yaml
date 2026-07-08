@@ -94,7 +94,10 @@ tasks:
   test:
     desc: Run all tests
     cmds:
-      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/tools ./internal/utils
+      - go test -v ./cmd/agent ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/history ./internal/memory ./internal/taskmemory ./internal/tools ./internal/utils
+      # Exercise the FTS5 code path; taskmemory's full-text index is only
+      # compiled in with the sqlite_fts5 build tag (lexical fallback otherwise).
+      - go test -tags sqlite_fts5 ./internal/taskmemory
 
   # Application related
   run:
@@ -323,7 +326,10 @@ tasks:
   # Tests
   test:unit:
     cmds:
-      - go test -v ./cmd/agent ./cmd/agent-gui ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/gui ./internal/history ./internal/memory ./internal/tools ./internal/utils ./internal/voice ./internal/voice/audio ./internal/voice/stt
+      - go test -v ./cmd/agent ./cmd/agent-gui ./internal/agent ./internal/app ./internal/chat ./internal/commands ./internal/config ./internal/connector ./internal/gui ./internal/history ./internal/memory ./internal/taskmemory ./internal/tools ./internal/utils ./internal/voice ./internal/voice/audio ./internal/voice/stt
+      # Exercise the FTS5 code path; taskmemory's full-text index is only
+      # compiled in with the sqlite_fts5 build tag (lexical fallback otherwise).
+      - go test -tags sqlite_fts5 ./internal/taskmemory
       - go test -race ./internal/voice ./internal/gui
 
   test:integration:

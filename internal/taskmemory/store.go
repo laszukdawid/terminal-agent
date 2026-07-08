@@ -6,15 +6,18 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	log "github.com/laszukdawid/terminal-agent/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -27,8 +30,27 @@ const (
 	defaultSearchLimit = 5
 	maxIndexedOutput   = 4000
 	maxSnippetOutput   = 600
-	dbSchemaVersion    = "1"
+
+	// dbSchemaVersion is the current on-disk schema version. It is stored in
+	// task_memory_meta and read on open to gate stepwise migrations.
+	dbSchemaVersion = 2
+	// ftsExternalContentVersion is the schema version that moved the full-text
+	// index to an external-content FTS5 table. Databases below it have their FTS
+	// index dropped and rebuilt on open (see migrateToExternalContentFTS).
+	ftsExternalContentVersion = 2
 )
+
+// createTaskMemoryFTS defines the full-text index as an external-content FTS5
+// table over task_memories. External content means FTS5 stores only the
+// inverted index and reads the document text from task_memories via rowid, so
+// the searchable text is never stored twice and the index cannot silently
+// diverge from the base table.
+const createTaskMemoryFTS = `CREATE VIRTUAL TABLE IF NOT EXISTS task_memory_fts USING fts5(
+	searchable_text,
+	content='task_memories',
+	content_rowid='rowid',
+	tokenize='unicode61'
+)`
 
 var tokenPattern = regexp.MustCompile(`[\pL\pN_./~$-]+`)
 
@@ -122,6 +144,8 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		}
 	}
 
+	// Base tables and indexes are version-independent; the only thing that has
+	// changed across schema versions is the shape of the FTS index below.
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS task_memory_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS task_memories (
@@ -149,13 +173,103 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		}
 	}
 
-	if _, err := s.db.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS task_memory_fts USING fts5(id UNINDEXED, searchable_text, tokenize='unicode61')`); err == nil {
-		s.ftsEnabled = true
-	} else {
-		s.ftsEnabled = false
+	s.ftsEnabled = fts5Available(ctx, s.db)
+
+	version, err := s.readSchemaVersion(ctx)
+	if err != nil {
+		return err
 	}
-	_, _ = s.db.ExecContext(ctx, `INSERT OR REPLACE INTO task_memory_meta(key, value) VALUES('schema_version', ?)`, dbSchemaVersion)
+
+	// The full-text index is an optional accelerator: any failure to build or
+	// migrate it degrades to lexical search rather than breaking the store.
+	if version < ftsExternalContentVersion {
+		// Older databases indexed a contentful FTS5 table that could accumulate
+		// duplicate rows and stored the searchable text twice. Rebuild it as an
+		// external-content index, which also dedupes any existing drift.
+		if err := s.migrateToExternalContentFTS(ctx); err != nil {
+			log.Warnw("task memory FTS migration failed; falling back to lexical search", "error", err)
+			s.ftsEnabled = false
+			return nil
+		}
+		// Only advance the recorded version once the FTS layout is actually
+		// current. Without FTS5 in this build we cannot rebuild the index, so we
+		// leave the version behind and let a later FTS5-enabled open finish the
+		// migration rather than marking it done prematurely.
+		if s.ftsEnabled {
+			if err := s.writeSchemaVersion(ctx, dbSchemaVersion); err != nil {
+				return err
+			}
+		}
+	} else if s.ftsEnabled {
+		// Already migrated: ensure the external-content table exists (it should).
+		if _, err := s.db.ExecContext(ctx, createTaskMemoryFTS); err != nil {
+			log.Warnw("task memory FTS table unavailable; falling back to lexical search", "error", err)
+			s.ftsEnabled = false
+		}
+	}
 	return nil
+}
+
+// migrateToExternalContentFTS (re)builds the full-text index as an
+// external-content FTS5 table. It drops any pre-existing index (legacy
+// contentful layout, possibly carrying duplicate rows) and rebuilds it from
+// task_memories, so the index ends up with exactly one entry per base row. It
+// is a no-op when FTS5 is unavailable in this build.
+func (s *SQLiteStore) migrateToExternalContentFTS(ctx context.Context) error {
+	if !s.ftsEnabled {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `DROP TABLE IF EXISTS task_memory_fts`); err != nil {
+		return fmt.Errorf("drop legacy task memory search index: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, createTaskMemoryFTS); err != nil {
+		return fmt.Errorf("create task memory search index: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO task_memory_fts(task_memory_fts) VALUES('rebuild')`); err != nil {
+		return fmt.Errorf("rebuild task memory search index: %w", err)
+	}
+	return nil
+}
+
+// readSchemaVersion returns the stored on-disk schema version, or 0 when the
+// database predates versioning or the stored value is unrecognized.
+func (s *SQLiteStore) readSchemaVersion(ctx context.Context) (int, error) {
+	var raw string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM task_memory_meta WHERE key = 'schema_version'`).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read task memory schema version: %w", err)
+	}
+	version, convErr := strconv.Atoi(strings.TrimSpace(raw))
+	if convErr != nil {
+		return 0, nil
+	}
+	return version, nil
+}
+
+func (s *SQLiteStore) writeSchemaVersion(ctx context.Context, version int) error {
+	if _, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO task_memory_meta(key, value) VALUES('schema_version', ?)`, strconv.Itoa(version)); err != nil {
+		return fmt.Errorf("write task memory schema version: %w", err)
+	}
+	return nil
+}
+
+// fts5Available reports whether the FTS5 module is compiled into the sqlite
+// build. It probes with a temporary virtual table on a single pinned
+// connection so the check never persists state or races the connection pool.
+func fts5Available(ctx context.Context, db *sql.DB) bool {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS temp.fts5_probe USING fts5(probe)`); err != nil {
+		return false
+	}
+	_, _ = conn.ExecContext(ctx, `DROP TABLE IF EXISTS temp.fts5_probe`)
+	return true
 }
 
 func (s *SQLiteStore) Add(ctx context.Context, rec Record) error {
@@ -174,7 +288,7 @@ func (s *SQLiteStore) Add(ctx context.Context, rec Record) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO task_memories(
+	res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO task_memories(
 		id, kind, source_run_id, source_seq, source_kind, os, arch, shell, cwd,
 		tool_name, tool_input_json, final_output, searchable_text, created_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -184,9 +298,22 @@ func (s *SQLiteStore) Add(ctx context.Context, rec Record) error {
 		return err
 	}
 	if s.ftsEnabled {
-		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO task_memory_fts(id, searchable_text) VALUES (?, ?)`, rec.ID, rec.SearchableText)
+		// Index the FTS row only when the base row was actually inserted. The
+		// external-content index is keyed by the base row's rowid, so re-adding a
+		// record whose deterministic ID already exists (base insert ignored) must
+		// not append a second index entry.
+		inserted, err := res.RowsAffected()
 		if err != nil {
 			return err
+		}
+		if inserted > 0 {
+			rowID, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO task_memory_fts(rowid, searchable_text) VALUES (?, ?)`, rowID, rec.SearchableText); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()
@@ -250,7 +377,7 @@ func (s *SQLiteStore) searchFTS(ctx context.Context, q Query) ([]Match, error) {
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.kind, m.source_run_id, m.source_seq, m.source_kind, m.os, m.arch, m.shell, m.cwd,
 		m.tool_name, m.tool_input_json, m.final_output, m.searchable_text, m.created_at, bm25(task_memory_fts) AS rank
-		FROM task_memory_fts JOIN task_memories m ON m.id = task_memory_fts.id
+		FROM task_memory_fts JOIN task_memories m ON m.rowid = task_memory_fts.rowid
 		WHERE task_memory_fts MATCH ?
 		ORDER BY rank LIMIT ?`, matchQuery, max(q.Limit*8, q.Limit))
 	if err != nil {
@@ -450,7 +577,9 @@ func (s *SQLiteStore) Clear(ctx context.Context) error {
 		return err
 	}
 	if s.ftsEnabled {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM task_memory_fts`); err != nil {
+		// External-content FTS5 tables do not support a plain DELETE; the
+		// 'delete-all' command is the supported way to clear the index.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO task_memory_fts(task_memory_fts) VALUES('delete-all')`); err != nil {
 			return err
 		}
 	}
