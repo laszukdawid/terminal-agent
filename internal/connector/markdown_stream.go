@@ -20,42 +20,22 @@ const (
 
 // MarkdownStreamRenderer handles streaming markdown content with proper formatting
 type MarkdownStreamRenderer struct {
-	totalBuffer   strings.Builder
 	pendingBuffer strings.Builder
-	inCodeBlock   bool
 }
 
 // NewMarkdownStreamRenderer creates a new markdown stream renderer
 func NewMarkdownStreamRenderer() (*MarkdownStreamRenderer, error) {
-	return &MarkdownStreamRenderer{
-		totalBuffer:   strings.Builder{},
-		pendingBuffer: strings.Builder{},
-		inCodeBlock:   false,
-	}, nil
+	return &MarkdownStreamRenderer{}, nil
 }
 
 // ProcessChunk processes a chunk of text and outputs formatted markdown
 func (m *MarkdownStreamRenderer) ProcessChunk(chunk string) {
-	// Add to both buffers
-	m.totalBuffer.WriteString(chunk)
 	m.pendingBuffer.WriteString(chunk)
 
-	// Process the pending buffer for complete markdown elements
+	// Process the pending buffer for complete markdown elements. Only the pending
+	// buffer (which is reset once an element completes or exceeds a small
+	// threshold) is inspected, so each chunk costs O(chunk), not O(response).
 	pending := m.pendingBuffer.String()
-
-	// Check for code blocks
-	codeBlockCount := strings.Count(m.totalBuffer.String(), "```")
-	if codeBlockCount%2 == 1 {
-		if !m.inCodeBlock {
-			// We just entered a code block
-			m.inCodeBlock = true
-		}
-	} else {
-		if m.inCodeBlock {
-			// We just exited a code block
-			m.inCodeBlock = false
-		}
-	}
 
 	// For better streaming, process smaller chunks more frequently
 	if strings.Contains(pending, "```") {
