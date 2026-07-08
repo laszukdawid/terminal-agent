@@ -25,7 +25,7 @@ type GoogleConnector struct {
 	modelID string
 }
 
-func NewGoogleConnector(modelID *string) *GoogleConnector {
+func NewGoogleConnector(modelID *string) (*GoogleConnector, error) {
 	logger := *utils.GetLogger()
 	logger.Debug("NewGoogleConnector")
 
@@ -36,28 +36,24 @@ func NewGoogleConnector(modelID *string) *GoogleConnector {
 
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		logger.Error("GEMINI_API_KEY is required to use Google Gemini models")
-		return nil
+		return nil, fmt.Errorf("GEMINI_API_KEY is required to use Google Gemini models")
 	}
 
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("error creating Google AI client: %v", err))
-		return nil
+		return nil, fmt.Errorf("error creating Google AI client: %w", err)
 	}
 
 	model := client.GenerativeModel(*modelID)
 	// model.SetTemperature(0.9) //configurable?
 
-	connector := &GoogleConnector{
+	return &GoogleConnector{
 		client:  client,
 		model:   model,
 		logger:  logger,
 		modelID: *modelID,
-	}
-
-	return connector
+	}, nil
 }
 
 func deduceGenaiType(typeStr string) genai.Type {

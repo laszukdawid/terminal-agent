@@ -25,7 +25,7 @@ func NewConnector(provider string, modelID string, cfg config.Config) (LLMConnec
 	case AnthropicProvider:
 		connector = NewAnthropicConnector(&modelID)
 	case GoogleProvider:
-		connector = NewGoogleConnector(&modelID)
+		connector, err = NewGoogleConnector(&modelID)
 	case LlamaProvider:
 		connector = NewLlamaConnector(&modelID, cfg)
 	case OllamaProvider:

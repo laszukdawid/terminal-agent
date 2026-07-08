@@ -49,6 +49,28 @@ func TestNewConnectorReturnsMistralInitializationError(t *testing.T) {
 	assert.Contains(t, err.Error(), "MISTRAL_API_KEY")
 }
 
+func TestNewConnectorReturnsGoogleInitializationError(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
+
+	conn, err := NewConnector(GoogleProvider, "gemini-3.1-flash-lite", nil)
+
+	require.Error(t, err)
+	assert.Nil(t, conn)
+	// The factory must surface the specific reason rather than a generic
+	// "failed to initialize" message, and the constructor must not os.Exit.
+	assert.Contains(t, err.Error(), "failed to initialize google connector")
+	assert.Contains(t, err.Error(), "GEMINI_API_KEY")
+}
+
+func TestNewConnectorCreatesGoogleConnector(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "test-key")
+
+	conn, err := NewConnector(GoogleProvider, "gemini-3.1-flash-lite", nil)
+
+	require.NoError(t, err)
+	assert.IsType(t, &GoogleConnector{}, conn)
+}
+
 func TestNewConnectorCreatesMiMoConnector(t *testing.T) {
 	t.Setenv("MIMO_API_KEY", "test-key")
 

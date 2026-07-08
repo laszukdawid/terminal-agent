@@ -6,6 +6,7 @@ import (
 	genai "github.com/google/generative-ai-go/genai"
 	"github.com/laszukdawid/terminal-agent/internal/tools"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertToolsToGoogle(t *testing.T) {
@@ -217,7 +218,8 @@ func TestNewGoogleConnector(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test")
 	modelID := "gemini-3.1-flash-lite"
 
-	connector := NewGoogleConnector(&modelID)
+	connector, err := NewGoogleConnector(&modelID)
+	require.NoError(t, err)
 
 	if connector == nil {
 		t.Fatal("Expected connector to be created, got nil")
@@ -232,16 +234,19 @@ func TestNewGoogleConnectorNoKey(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
 	modelID := "gemini-3.1-flash-lite"
 
-	connector := NewGoogleConnector(&modelID)
+	connector, err := NewGoogleConnector(&modelID)
 
 	assert.Nil(t, connector, "Expected connector to be nil when GEMINI_API_KEY is not set")
+	require.Error(t, err, "Expected a descriptive error when GEMINI_API_KEY is not set")
+	assert.Contains(t, err.Error(), "GEMINI_API_KEY", "error must name the missing variable")
 }
 
 func TestNewGoogleConnectorNoModelID(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test")
 	var modelID *string
 
-	connector := NewGoogleConnector(modelID)
+	connector, err := NewGoogleConnector(modelID)
+	require.NoError(t, err)
 
 	if connector == nil {
 		t.Fatal("Expected connector to be created, got nil")
