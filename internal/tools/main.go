@@ -61,6 +61,7 @@ func GetAllBuiltinTools(config config.Config) map[string]Tool {
 	fileSearchTool := NewFileSearchTool(workDir)
 	pythonTool := NewPythonTool(workDir)
 	readTool := NewReadTool(workDir)
+	notifyUserTool := NewNotifyUserTool()
 
 	tools := map[string]Tool{
 		unixTool.Name():       unixTool,
@@ -68,6 +69,7 @@ func GetAllBuiltinTools(config config.Config) map[string]Tool {
 		fileSearchTool.Name(): fileSearchTool,
 		pythonTool.Name():     pythonTool,
 		readTool.Name():       readTool,
+		notifyUserTool.Name(): notifyUserTool,
 	}
 
 	websearchTool := NewWebsearchTool()

@@ -7,4 +7,5 @@ const (
 	ToolNamePython     = "python"
 	ToolNameRead       = "read"
 	ToolNameWebsearch  = "websearch"
+	ToolNameNotifyUser = "notify_user"
 )
