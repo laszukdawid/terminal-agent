@@ -38,6 +38,20 @@ Input schema:
 
 This tool returns search results with links and snippets. It is listed even when unconfigured, but requires `TAVILY_KEY` to execute searches.
 
+### notify_user
+
+The `notify_user` tool delegates user-facing alerts to an external `notify` command. Terminal Agent does not implement platform-specific notification backends.
+
+The v1 command contract is:
+
+```sh
+notify --title "Terminal Agent" --message "CPU usage crossed 50%"
+```
+
+`--message` is required. `--title` defaults to `Terminal Agent`; `--urgency` is optional and may be `low`, `normal`, or `critical` when supported by the external utility.
+
+Install a compatible `notify` utility and ensure it is available on `PATH` before using notifications. The tool is execute-category and follows the same confirmation policy as other side-effecting tools.
+
 ## Using Tools Directly
 
 You can directly execute tools using the `tool exec` command:
